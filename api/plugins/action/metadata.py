@@ -40,21 +40,39 @@ class ActionModule(ActionBase):
         result['result'] = []
         result['invalid'] = []
 
+        if not isinstance(data, list) and not isinstance(data, dict):
+            return {
+                'failed': True,
+                'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
+            }
+
         if state == 'present':
-            for item in data:
-                if 'key' not in item or 'value' not in item:
-                    result['invalid'] = item
-                    continue
-                result['result'].append(lagoon.update_metadata(
-                    project_id, item['key'], item['value']))
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict):
+                        result['invalid'].append(item)
+                        continue
+
+                    if 'key' not in item and 'value' not in item:
+                        result['invalid'].append(item)
+                        continue
+
+                    result['result'].append(lagoon.update_metadata(project_id, item['key'], item['value']))
+
+
+            else:
+                for key, value in data.items():
+                    result['result'].append(lagoon.update_metadata(project_id, key, value))
 
         elif state == 'absent':
-            for item in data:
-                if 'key' not in item:
-                    result['invalid'] = item
-                    continue
-                result['result'].append(
-                    lagoon.remove_metadata(project_id, item['key']))
+            if isinstance(data, list):
+                for key in data:
+                    result['result'].append(
+                        lagoon.remove_metadata(project_id, key))
+            else:
+                for key, value in data.items():
+                    result['result'].append(
+                        lagoon.remove_metadata(project_id, key))
 
         if len(result['result']) > 0:
             result['changed'] = True
