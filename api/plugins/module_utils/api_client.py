@@ -257,6 +257,54 @@ class ApiClient:
         result = self.make_api_call(json.dumps(query) % (id, key))
         return '%s' % (key)
 
+    def add_project_notification(self, project, notification, type='SLACK'):
+        query = {
+            'query': """mutation notification(
+                $project: String!
+                $type: NotificationType!
+                $name: String!
+            ) {
+                addNotificationToProject(input: {
+                    project: $project
+                    notificationType: $type
+                    notificationName: $name
+                }) {
+                    id
+                    name
+                }
+            }""",
+            'variables': """{
+                "project": "%s",
+                "name": "%s",
+                "type": "%s"
+            }"""
+        }
+        return self.make_api_call(json.dumps(query) % (project, notification, type))
+
+    def remove_project_notification(self, project, notification, type):
+        query = {
+            'query': """mutation notification(
+                $project: String!
+                $type: NotificationType!
+                $name: String!
+            ) {
+                removeNotificationFromProject(input: {
+                    project: $project
+                    notificationType: $type
+                    notificationName: $name
+                }) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "project": "%s",
+                "name": "%s",
+                "type": "%s"
+            }"""
+        }
+
+        return self.make_api_call(json.dumps(query) % (project, notification, type))
+
     def make_api_call(self, payload):
         display.v("Payload: %s" % payload)
         try:
