@@ -274,14 +274,12 @@ class ApiClient:
                 }
             }""",
             'variables': """{
-                "project": %s,
-                "name": %s,
-                "type": %s
+                "project": "%s",
+                "name": "%s",
+                "type": "%s"
             }"""
         }
-        result = self.make_api_call(json.dumps(query) % (project, notification, type))
-        return result['notification']['id']
-
+        return self.make_api_call(json.dumps(query) % (project, notification, type))
 
     def remove_project_notification(self, project, notification, type):
         query = {
@@ -294,12 +292,18 @@ class ApiClient:
                     project: $project
                     notificationType: $type
                     notificationName: $name
-                })
+                }) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "project": "%s",
+                "name": "%s",
+                "type": "%s"
             }"""
         }
 
-        result = self.make_api_call(json.dumps(query) % (project, notification, type))
-        return True
+        return self.make_api_call(json.dumps(query) % (project, notification, type))
 
     def make_api_call(self, payload):
         display.v("Payload: %s" % payload)

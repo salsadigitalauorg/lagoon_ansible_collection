@@ -32,10 +32,10 @@ class ActionModule(ActionBase):
             'headers': headers
         })
 
-        project = self._task.args.get('notification')
+        project = self._task.args.get('project')
         notification = self._task.args.get('notification')
         type = self._task.args.get('type', 'SLACK')
-        notification = self._task.args.get('notification')
+
         state = self._task.args.get('state', 'present')
 
         result = {}
@@ -57,9 +57,23 @@ class ActionModule(ActionBase):
             )
 
         if state == 'present':
-            result['result'] = lagoon.addNotification(notification, project, type)
+            api_result = lagoon.add_project_notification(
+                project, notification, type)
+
+            if 'errors' in api_result:
+                message = api_result['errors'][0]['message']
+
+                if 'Duplicate' in message:
+                    result['changed'] = False
+                    return result
+
+                raise AnsibleError(
+                    "Unable to add notification %s" % (
+                        api_result['errors'][0]['message'])
+                )
+
         elif state == 'absent':
-            result['result'] = lagoon.removeNotification(notification, project, type)
+            lagoon.remove_project_notification(project, notification, type)
 
         result['changed'] = True
 
