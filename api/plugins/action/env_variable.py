@@ -21,16 +21,11 @@ class ActionModule(ActionBase):
 
         display.v("Task args: %s" % self._task.args)
 
-        headers = self._task.args.get('headers', {})
-        headers['Content-Type'] = 'application/json'
-        headers['Authorization'] = 'Bearer ' + \
-            task_vars.get('lagoon_api_token')
-        self._task.args['headers'] = headers
-
-        lagoon = ApiClient({
-            'endpoint': task_vars.get('lagoon_api_endpoint'),
-            'headers': headers
-        })
+        lagoon = ApiClient(
+            task_vars.get('lagoon_api_endpoint'),
+            task_vars.get('lagoon_api_token'),
+            {'headers': self._task.args.get('headers', {})}
+        )
 
         type = self._task.args.get('type')
         type_name = self._task.args.get('type_name')
