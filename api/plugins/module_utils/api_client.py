@@ -387,6 +387,51 @@ class ApiClient:
 
         return self.make_api_call(json.dumps(query) % (project, notification, type))
 
+    def user_add_group(email, group_name, role):
+        query = {
+            'query': """mutation group(
+                $email: String!
+                $group: String!
+                $role: String!
+            ) {
+                addUserToGroup(input: {
+                    user: { email: $email }
+                    group: { name: $name }
+                    role: $role
+                }) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "email": "%s",
+                "name": "%s",
+            }"""
+        }
+
+        result = self.make_api_call(json.dumps(query) % (email, group_name, role.upper()))
+        return result['data']['addUserToGroup']['id']
+
+    def user_remove_group(email, group_name):
+        query = {
+            'query': """mutation group(
+                $email: String!
+                $group: String!
+            ) {
+                removeUserFromGroup(input: {
+                    user: { email: $email }
+                    group: { name: $name }
+                }) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "email": "%s",
+                "name": "%s",
+            }"""
+        }
+
+        return self.make_api_call(json.dumps(query) % (email, group_name))
+
     def make_api_call(self, payload):
         display.v("Payload: %s" % payload)
         try:
