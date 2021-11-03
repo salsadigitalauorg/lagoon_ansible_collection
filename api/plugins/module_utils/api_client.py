@@ -14,8 +14,72 @@ display = Display()
 
 class ApiClient:
 
-    def __init__(self, options={}) -> None:
+    def __init__(self, endpoint, token, options={}) -> None:
         self.options = options
+
+        if 'headers' not in self.options:
+            self.options['headers'] = {}
+        elif not isinstance(self.options['headers'], dict):
+            raise AnsibleError("Expecting client headers to be dictionary.")
+
+        self.options['headers']['Content-Type'] = 'application/json'
+        self.options['headers']['Authorization'] = "Bearer %s" % token
+        self.options['endpoint'] = endpoint
+
+    def projects_all(self):
+        query = {
+            'query': """query {
+                allProjects {
+                    id
+                    name
+                    gitUrl
+                    branches
+                    autoIdle
+                    pullrequests
+                    developmentEnvironmentsLimit
+                    activeSystemsTask
+                    activeSystemsMisc
+                    activeSystemsDeploy
+                    activeSystemsRemove
+                    productionEnvironment
+                    metadata
+                    environments { id name environmentType updated created route }
+                }
+            }"""
+        }
+        result = self.make_api_call(json.dumps(query))
+        return result['data']['allProjects']
+
+    ###
+    # Get projects from specific groups.
+    ###
+    def projects_in_group(self, group):
+        query = {
+            'query': """query ($group: String!) {
+                allProjectsInGroup(input: { name: $group }) {
+                    id
+                    name
+                    gitUrl
+                    branches
+                    autoIdle
+                    pullrequests
+                    developmentEnvironmentsLimit
+                    activeSystemsTask
+                    activeSystemsMisc
+                    activeSystemsDeploy
+                    activeSystemsRemove
+                    productionEnvironment
+                    metadata
+                    environments { id name environmentType updated created route }
+                }
+            }""",
+            'variables': """{
+                "group": "%s"
+            }"""
+        }
+
+        result = self.make_api_call(json.dumps(query) % group)
+        return filter(None, result['data']['allProjectsInGroup'])
 
     def project(self, project):
         query = {
@@ -86,6 +150,24 @@ class ApiClient:
             raise AnsibleError(
                 "Unable to get variables for %s; please make sure the project name is correct" % project)
         return result['data']['projectByName']['envVariables']
+
+    def project_get_groups(self, project):
+        query = {
+            'query': """query projectByName($name: String!) {
+                projectByName(name: $name) {
+                    groups { name }
+                }
+            }
+            """,
+            'variables': '{"name": "%s"}'
+        }
+        result = self.make_api_call(json.dumps(query) % project)
+
+        if result['data']['projectByName'] == None:
+            raise AnsibleError(
+                "Unable to get groups for %s; please make sure the project name is correct" % project)
+
+        return result['data']['projectByName']['groups']
 
     def project_deploy(self, project, branch, wait=False, delay=60, retries=30):
         query = {

@@ -20,17 +20,11 @@ class ActionModule(ActionBase):
 
         del tmp  # tmp no longer has any effect
 
-        headers = self._task.args.get('headers', {})
-        headers['Content-Type'] = 'application/json'
-        headers['Authorization'] = 'Bearer ' + \
-            task_vars.get('lagoon_api_token')
-
-        self._task.args['headers'] = headers
-
-        lagoon = ApiClient({
-            'endpoint': task_vars.get('lagoon_api_endpoint'),
-            'headers': headers
-        })
+        lagoon = ApiClient(
+            task_vars.get('lagoon_api_endpoint'),
+            task_vars.get('lagoon_api_token'),
+            {'headers': self._task.args.get('headers', {})}
+        )
 
         state = self._task.args.get('state', 'present')
         data = self._task.args.get('data', None)
