@@ -20,18 +20,17 @@ DOCUMENTATION = """
     var_name:
       description: Specific variable name to fetch
       type: string
-    endpoint:
+    lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
       type: string
       required: True
       vars:
         - name: lagoon_api_endpoint
-    endpoint_token:
+    lagoon_api_token:
       description: The token for Lagoon graphql API
       type: string
       required: True
       vars:
-        - name: graphql_token
         - name: lagoon_api_token
     validate_certs:
       description: Flag to control SSL certificate validation
@@ -82,44 +81,40 @@ display = Display()
 
 class LookupModule(LookupBase):
 
-    def run(self, terms, variables=None, **kwargs):
+  def run(self, terms, variables=None, **kwargs):
 
-        ret = []
+    ret = []
 
-        self.set_options(var_options=variables, direct=kwargs)
+    self.set_options(var_options=variables, direct=kwargs)
+    lagoon = ApiClient(
+        self.get_option('lagoon_api_endpoint'),
+        self.get_option('lagoon_api_token'),
+        {'headers': self.get_option('headers', {})}
+    )
+    environment = self.get_option('environment')
 
-        headers = self.get_option('headers')
-        headers['Content-Type'] = 'application/json'
-        headers['Authorization'] = 'Bearer ' + \
-            self.get_option('endpoint_token')
-        self.set_option('headers', headers)
+    for term in terms:
+      if environment:
+        env_name = term + '-' + environment
+        display.v("Lagoon variable lookup environment: %s" % env_name)
+        env_vars = lagoon.environment_get_variables(env_name)
+      else:
+        display.v("Lagoon variable lookup project: %s" % term)
+        env_vars = lagoon.project_get_variables(term)
 
-        environment = self.get_option('environment')
+      if self.get_option('return_dict'):
+        vars_dict = {}
+        for var in env_vars:
+          vars_dict[var['name']] = var
+        ret.append(vars_dict)
+      elif self.get_option('var_name'):
+        display.v("Lagoon variable lookup name: %s" %
+                  self.get_option('var_name'))
+        for var in env_vars:
+          if var['name'] == self.get_option('var_name'):
+            ret.append(var)
+            break
+      else:
+        ret.append(env_vars)
 
-        lagoon = ApiClient(self._options)
-
-        for term in terms:
-            if environment:
-                env_name = term + '-' + environment
-                display.v("Lagoon variable lookup environment: %s" % env_name)
-                env_vars = lagoon.environment_get_variables(env_name)
-            else:
-                display.v("Lagoon variable lookup project: %s" % term)
-                env_vars = lagoon.project_get_variables(term)
-
-            if self.get_option('return_dict'):
-                vars_dict = {}
-                for var in env_vars:
-                    vars_dict[var['name']] = var
-                ret.append(vars_dict)
-            elif self.get_option('var_name'):
-                display.v("Lagoon variable lookup name: %s" %
-                          self.get_option('var_name'))
-                for var in env_vars:
-                    if var['name'] == self.get_option('var_name'):
-                        ret.append(var)
-                        break
-            else:
-                ret.append(env_vars)
-
-        return ret
+    return ret

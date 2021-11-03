@@ -187,17 +187,17 @@ class ApiClient:
             return result['data']['deployEnvironmentLatest']
 
         display.display(
-            "\033[30;1mWait for deployment completion (%s retries left).\033[0m" % retries)
-        return self.project_check_deploy_status(project, branch, delay, retries)
+            "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
+        return self.project_check_deploy_status(project, branch, wait, delay, retries)
 
-    def project_check_deploy_status(self, project, branch, delay=60, retries=30, current_try=1):
+    def project_check_deploy_status(self, project, branch, wait=False, delay=60, retries=30, current_try=1):
         time.sleep(delay)
         environment = self.environment(
             project + '-' + branch.replace('/', '-'))
 
-        if (len(environment['deployments']) and
+        if (not wait or (len(environment['deployments']) and
             'status' in environment['deployments'][0] and
-                environment['deployments'][0]['status'] in ['complete', 'failed', 'new', 'cancelled']):
+                         environment['deployments'][0]['status'] in ['complete', 'failed', 'new', 'cancelled'])):
             return environment['deployments'][0]['status']
 
         if retries - current_try == 0:
@@ -205,8 +205,8 @@ class ApiClient:
                 'Maximium number of retries reached; view deployment logs for more information.')
 
         display.display(
-            "\033[30;1mRETRYING: Wait for deployment completion (%s retries left).\033[0m" % (retries - current_try))
-        return self.project_check_deploy_status(project, branch, delay, retries, current_try + 1)
+            "\033[30;1mRETRYING: Wait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries - current_try))
+        return self.project_check_deploy_status(project, branch, wait, delay, retries, current_try + 1)
 
     def project_update(self, project_id, patch):
         query = {
@@ -280,6 +280,25 @@ class ApiClient:
                 "Unable to get variables for %s; please make sure the environment name is correct" % environment)
         return result['data']['environmentByOpenshiftProjectName']['envVariables']
 
+    def environment_update(self, environment_id, patch):
+        query = {
+            'query': """mutation updateEnvironment($environmentId: Int!) {
+                updateEnvironment(input: {id: $environmentId, patch: %s}) {
+                    id
+                    name
+                    openshift {
+                        id
+                        name
+                    }
+                }
+            }""" % self.__patch_dict_to_string(patch),
+            'variables': '{"environmentId": %s}' % environment_id
+        }
+        display.v('Query: %s' % query)
+        result = self.make_api_call(json.dumps(query))
+        display.v("Environment update result: %s" % result)
+        return result['data']['updateEnvironment']
+
     def add_variable(self, type, type_id, name, value, scope):
         query = {
             'query': """mutation AddEnvVar($type: EnvVariableType!, $type_id: Int!, $name: String!, $value: String!, $scope: EnvVariableScope!) {
@@ -307,6 +326,9 @@ class ApiClient:
         }
         result = self.make_api_call(json.dumps(query) % id)
         return result['data']['deleteEnvVariable']
+
+    def metadata(self, project_name):
+        return json.loads(self.project(project_name)['metadata'])
 
     def update_metadata(self, id, key, value):
         query = {
