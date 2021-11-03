@@ -43,7 +43,7 @@ class ActionModule(ActionBase):
             if not key in project:
                 update_required = True
                 break
-            if value != project[key]:
+            if str(value) != str(project[key]):
                 update_required = True
                 break
 
