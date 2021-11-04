@@ -1,23 +1,21 @@
 from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 __metaclass__ = type
 
 DOCUMENTATION = """
-  name: project
+  name: metadata
   author: Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
-  short_description: get a lagoon project
+  short_description: get metadata for a project
   description:
-      - This lookup returns the information for a Lagoon project.
+      - This lookup returns the information for a Lagoon project's metadata.
   options:
     _terms:
-      description: The project to query (or environment if from_environment is True)
+      description: The metadata variables to fetch
       required: True
-    from_environment:
-      description: Flag to lookup the project from an environment.
-      type: boolean
-      default: False
+    project:
+      description: The project name
+      required: True
+    default:
+      description: An optional default value to set if the metadata does not exist
     lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
       type: string
@@ -53,12 +51,14 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a project's information
-  debug: msg="{{ lookup('lagoon.api.project', 'vanilla-govcms9-beta') }}"
+  debug: msg="{{ lookup('lagoon.api.metadata', project='vanilla-govcms8-beta', 'project-status') }}"
 """
 
+from ansible.utils.display import Display
+from ansible.plugins.lookup import LookupBase
+from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
 
 display = Display()
-
 
 class LookupModule(LookupBase):
 
@@ -72,12 +72,13 @@ class LookupModule(LookupBase):
         self.get_option('lagoon_api_token'),
         {'headers': self.get_option('headers', {})}
     )
+    project = self.get_option('project')
 
+    metadata = lagoon.metadata(project)
     for term in terms:
-      if self.get_option('from_environment'):
-        project = lagoon.project_from_environment(term)
-      else:
-        project = lagoon.project(term)
-      ret.append(project)
+      if term in metadata:
+        ret.append(metadata[term])
+      elif self.has_option('default'):
+        ret.append(self.get_option('default'))
 
     return ret

@@ -8,7 +8,6 @@ from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiCl
 
 display = Display()
 
-
 class ActionModule(ActionBase):
 
     def run(self, tmp=None, task_vars=None):
@@ -21,11 +20,12 @@ class ActionModule(ActionBase):
 
         display.vvv("Task args: %s" % self._task.args)
 
-        project_name = self._task.args.get('project')
+        environment_name = self._task.args.get('environment')
+        environment_id = self._task.args.get('environment_id')
         patch_values = self._task.args.get('values')
 
-        if not project_name:
-            raise AnsibleError("Project name is required.")
+        if not environment_name and not environment_id:
+            raise AnsibleError("Environment name or id is required.")
 
         if not patch_values:
             raise AnsibleError("No value to update.")
@@ -36,22 +36,25 @@ class ActionModule(ActionBase):
             {'headers': self._task.args.get('headers', {})}
         )
 
-        project = lagoon.project(project_name)
+        if environment_name:
+            environment = lagoon.environment(environment_name)
+        else:
+            environment = lagoon.environment_by_id(environment_name)
 
         update_required = False
         for key, value in patch_values.items():
-            if not key in project:
+            if not key in environment:
                 update_required = True
                 break
-            if str(value) != str(project[key]):
+            if str(value) != str(environment[key]):
                 update_required = True
                 break
 
         if not update_required:
-            result['update'] = project
+            result['update'] = environment
             return result
 
-        result['update'] = lagoon.project_update(project['id'], patch_values)
+        result['update'] = lagoon.environment_update(environment['id'], patch_values)
         result['changed'] = True
         display.v("Update: %s" % result['update'])
 

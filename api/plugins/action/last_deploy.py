@@ -1,13 +1,11 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-import time
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
 from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
 
 display = Display()
-
 
 class ActionModule(ActionBase):
 
@@ -27,7 +25,7 @@ class ActionModule(ActionBase):
             {'headers': self._task.args.get('headers', {})}
         )
 
-        result['deploy_status'] = lagoon.project_deploy(
+        result['deploy_status'] = lagoon.project_check_deploy_status(
             self._task.args.get('project'),
             self._task.args.get('branch'),
             self._task.args.get('wait', False),
@@ -35,10 +33,5 @@ class ActionModule(ActionBase):
             self._task.args.get('retries', 30)
         )
         display.v("Deploy status: %s" % result['deploy_status'])
-
-        # This is a way to delay concurrent deployments to Lagoon.
-        stagger = self._task.args.get('stagger', 0)
-        if stagger > 0:
-            time.sleep(stagger)
 
         return result

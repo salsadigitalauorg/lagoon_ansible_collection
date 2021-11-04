@@ -11,7 +11,6 @@ from ansible.utils.display import Display
 
 display = Display()
 
-
 class ApiClient:
 
     def __init__(self, endpoint, token, options={}) -> None:
@@ -84,22 +83,22 @@ class ApiClient:
     def project(self, project):
         query = {
             'query': """query projectInfo($name: String!) {
-        projectByName(name: $name) {
-          id
-          name
-          autoIdle
-          branches
-          gitUrl
-          metadata
-          openshift {
-            id
-            name
-          }
-          environments {
-            name
-          }
-        }
-      }""",
+                projectByName(name: $name) {
+                    id
+                    name
+                    autoIdle
+                    branches
+                    gitUrl
+                    metadata
+                    openshift {
+                        id
+                        name
+                    }
+                    environments {
+                        name
+                    }
+                }
+            }""",
             'variables': '{"name": "%s"}'
         }
         result = self.make_api_call(json.dumps(query) % project)
@@ -111,17 +110,17 @@ class ApiClient:
     def project_from_environment(self, environment):
         query = {
             'query': """query projectInfoFromEnv($name: String!) {
-        environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
-          project {
-            id
-            name
-            autoIdle
-            branches
-            gitUrl
-            metadata
-          }
-        }
-      }""",
+                environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
+                    project {
+                        id
+                        name
+                        autoIdle
+                        branches
+                        gitUrl
+                        metadata
+                    }
+                }
+            }""",
             'variables': '{"name": "%s"}'
         }
         result = self.make_api_call(json.dumps(query) % environment)
@@ -134,15 +133,15 @@ class ApiClient:
     def project_get_variables(self, project):
         query = {
             'query': """query projectVars($name: String!) {
-        projectByName(name: $name) {
-          envVariables {
-            id
-            name
-            value
-            scope
-          }
-        }
-      }""",
+                projectByName(name: $name) {
+                    envVariables {
+                        id
+                        name
+                        value
+                        scope
+                    }
+                }
+            }""",
             'variables': '{"name": "%s"}'
         }
         result = self.make_api_call(json.dumps(query) % project)
@@ -172,13 +171,13 @@ class ApiClient:
     def project_deploy(self, project, branch, wait=False, delay=60, retries=30):
         query = {
             'query': """mutation deploy($govcms_project: String!, $govcms_branch: String!) {
-        deployEnvironmentLatest (input: {
-          environment: {
-            project: { name: $govcms_project },
-            name: $govcms_branch
-          }
-        })
-      }""",
+                deployEnvironmentLatest (input: {
+                    environment: {
+                        project: { name: $govcms_project },
+                        name: $govcms_branch
+                    }
+                })
+            }""",
             'variables': '{"govcms_project": "%s", "govcms_branch": "%s"}' %
             (project, branch)
         }
@@ -187,17 +186,17 @@ class ApiClient:
             return result['data']['deployEnvironmentLatest']
 
         display.display(
-            "\033[30;1mWait for deployment completion (%s retries left).\033[0m" % retries)
-        return self.project_check_deploy_status(project, branch, delay, retries)
+            "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
+        return self.project_check_deploy_status(project, branch, wait, delay, retries)
 
-    def project_check_deploy_status(self, project, branch, delay=60, retries=30, current_try=1):
+    def project_check_deploy_status(self, project, branch, wait=False, delay=60, retries=30, current_try=1):
         time.sleep(delay)
         environment = self.environment(
             project + '-' + branch.replace('/', '-'))
 
-        if (len(environment['deployments']) and
+        if (not wait or (len(environment['deployments']) and
             'status' in environment['deployments'][0] and
-                environment['deployments'][0]['status'] in ['complete', 'failed', 'new', 'cancelled']):
+            environment['deployments'][0]['status'] in ['complete', 'failed', 'new', 'cancelled'])):
             return environment['deployments'][0]['status']
 
         if retries - current_try == 0:
@@ -205,28 +204,28 @@ class ApiClient:
                 'Maximium number of retries reached; view deployment logs for more information.')
 
         display.display(
-            "\033[30;1mRETRYING: Wait for deployment completion (%s retries left).\033[0m" % (retries - current_try))
-        return self.project_check_deploy_status(project, branch, delay, retries, current_try + 1)
+            "\033[30;1mRETRYING: Wait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries - current_try))
+        return self.project_check_deploy_status(project, branch, wait, delay, retries, current_try + 1)
 
     def project_update(self, project_id, patch):
         query = {
             'query': """mutation UpdateProjectDeploymentCluster($projectId: Int!) {
-        updateProject(input: {id: $projectId, patch: %s}) {
-          id
-          name
-          autoIdle
-          branches
-          gitUrl
-          metadata
-          openshift {
-            id
-            name
-          }
-          environments {
-            name
-          }
-        }
-      }""" % self.__patch_dict_to_string(patch),
+                updateProject(input: {id: $projectId, patch: %s}) {
+                    id
+                    name
+                    autoIdle
+                    branches
+                    gitUrl
+                    metadata
+                    openshift {
+                        id
+                        name
+                    }
+                    environments {
+                        name
+                    }
+                }
+            }""" % self.__patch_dict_to_string(patch),
             'variables': '{"projectId": %s}' % project_id
         }
         display.v('Query: %s' % query)
@@ -237,41 +236,67 @@ class ApiClient:
     def environment(self, environment):
         query = {
             'query': """query environmentInfo($name: String!) {
-        environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
-          id
-          name
-          autoIdle
-          deployments {
-            name
-            status
-            started
-            completed
-          }
-          project {
-            id
-          }
+                environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
+                    id
+                    name
+                    autoIdle
+                    deployments {
+                        name
+                        status
+                        started
+                        completed
+                    }
+                    project {
+                        id
+                    }
+                }
+            }""",
+            'variables': '{"name": "%s"}' % environment
         }
-      }""",
-            'variables': '{"name": "%s"}'
-        }
-        result = self.make_api_call(json.dumps(query) % environment)
+        result = self.make_api_call(json.dumps(query))
         if result['data']['environmentByKubernetesNamespaceName'] == None:
             raise AnsibleError(
                 "Unable to get details for environment %s; please make sure the environment name is correct" % environment)
         return result['data']['environmentByKubernetesNamespaceName']
 
+    def environment_by_id(self, environment_id):
+        query = {
+            'query': """query environmentInfo($envId: Int!) {
+                environmentById(id: $envId) {
+                    id
+                    name
+                    autoIdle
+                    deployments {
+                        name
+                        status
+                        started
+                        completed
+                    }
+                    project {
+                        id
+                    }
+                }
+            }""",
+            'variables': '{"envId": %s}' % environment_id
+        }
+        result = self.make_api_call(json.dumps(query))
+        if result['data']['environmentById'] == None:
+            raise AnsibleError(
+                "Unable to get details for environment %s; please make sure the environment id is correct" % environment_id)
+        return result['data']['environmentById']
+
     def environment_get_variables(self, environment):
         query = {
             'query': """query envVars($name: String!) {
-        environmentByOpenshiftProjectName(openshiftProjectName: $name) {
-          envVariables {
-            id
-            name
-            value
-            scope
-          }
-        }
-      }""",
+                environmentByOpenshiftProjectName(openshiftProjectName: $name) {
+                    envVariables {
+                        id
+                        name
+                        value
+                        scope
+                    }
+                }
+            }""",
             'variables': '{"name": "%s"}'
         }
         result = self.make_api_call(json.dumps(query) % environment)
@@ -280,20 +305,39 @@ class ApiClient:
                 "Unable to get variables for %s; please make sure the environment name is correct" % environment)
         return result['data']['environmentByOpenshiftProjectName']['envVariables']
 
+    def environment_update(self, environment_id, patch):
+        query = {
+            'query': """mutation updateEnvironment($environmentId: Int!) {
+                updateEnvironment(input: {id: $environmentId, patch: %s}) {
+                    id
+                    name
+                    openshift {
+                        id
+                        name
+                    }
+                }
+            }""" % self.__patch_dict_to_string(patch),
+            'variables': '{"environmentId": %s}' % environment_id
+        }
+        display.v('Query: %s' % query)
+        result = self.make_api_call(json.dumps(query))
+        display.v("Environment update result: %s" % result)
+        return result['data']['updateEnvironment']
+
     def add_variable(self, type, type_id, name, value, scope):
         query = {
             'query': """mutation AddEnvVar($type: EnvVariableType!, $type_id: Int!, $name: String!, $value: String!, $scope: EnvVariableScope!) {
-        addEnvVariable(input: {type: $type, typeId: $type_id, scope: $scope, name: $name, value: $value}) {
-          id
-        }
-      }""",
+                addEnvVariable(input: {type: $type, typeId: $type_id, scope: $scope, name: $name, value: $value}) {
+                    id
+                }
+            }""",
             'variables': """{
-        "type": "%s",
-        "type_id": %s,
-        "name": "%s",
-        "value": "%s",
-        "scope": "%s"
-      }"""
+                "type": "%s",
+                "type_id": %s,
+                "name": "%s",
+                "value": "%s",
+                "scope": "%s"
+            }"""
         }
         result = self.make_api_call(json.dumps(query) % (
             type, type_id, name, value, scope))
@@ -308,33 +352,36 @@ class ApiClient:
         result = self.make_api_call(json.dumps(query) % id)
         return result['data']['deleteEnvVariable']
 
+    def metadata(self, project_name):
+        return json.loads(self.project(project_name)['metadata'])
+
     def update_metadata(self, id, key, value):
         query = {
             'query': """mutation UpdateMeta($id: Int!, $key: String!, $value: String!) {
-              updateProjectMetadata(input: { id: $id, patch: { key: $key, value: $value }}) {
-                  id
-              }
-          }""",
+                updateProjectMetadata(input: { id: $id, patch: { key: $key, value: $value }}) {
+                    id
+                }
+            }""",
             'variables': """{
-              "id": %s,
-              "key": "%s",
-              "value": "%s"
-          }"""
+                "id": %s,
+                "key": "%s",
+                "value": "%s"
+            }"""
         }
-        result = self.make_api_call(json.dumps(query) % (id, key, value))
+        self.make_api_call(json.dumps(query) % (id, key, value))
         return '%s:%s' % (key, value)
 
     def remove_metadata(self, id, key):
         query = {
             'query': """mutation RemoveMeta($id: Int!, $key: String!) {
-              removeProjectMetadataByKey(input: { id: $id, key: $key }) {
-                  id
-              }
-          }""",
+                removeProjectMetadataByKey(input: { id: $id, key: $key }) {
+                    id
+                }
+            }""",
             'variables': """{
-              "id": %s,
-              "key": "%s"
-          }"""
+                "id": %s,
+                "key": "%s"
+            }"""
         }
         result = self.make_api_call(json.dumps(query) % (id, key))
         return '%s' % (key)
