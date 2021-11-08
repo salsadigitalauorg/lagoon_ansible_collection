@@ -240,6 +240,8 @@ class ApiClient:
                     id
                     name
                     autoIdle
+                    route
+                    routes
                     deployments {
                         name
                         status
@@ -257,7 +259,14 @@ class ApiClient:
         if result['data']['environmentByKubernetesNamespaceName'] == None:
             raise AnsibleError(
                 "Unable to get details for environment %s; please make sure the environment name is correct" % environment)
-        return result['data']['environmentByKubernetesNamespaceName']
+
+        environment = result['data']['environmentByKubernetesNamespaceName']
+
+        if 'routes' in environment:
+            environment['routes'] = environment['routes'].split(',')
+
+        return environment
+
 
     def environment_by_id(self, environment_id):
         query = {
