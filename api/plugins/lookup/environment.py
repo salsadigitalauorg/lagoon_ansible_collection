@@ -25,7 +25,6 @@ DOCUMENTATION = """
       type: string
       required: True
       vars:
-        - name: graphql_token
         - name: lagoon_api_token
     validate_certs:
       description: Flag to control SSL certificate validation
