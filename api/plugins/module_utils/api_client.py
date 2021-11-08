@@ -452,7 +452,7 @@ class ApiClient:
             ) {
                 addUserToGroup(input: {
                     user: { email: $email }
-                    group: { name: $name }
+                    group: { name: $group }
                     role: $role
                 }) {
                     id
@@ -460,7 +460,8 @@ class ApiClient:
             }""",
             'variables': """{
                 "email": "%s",
-                "name": "%s",
+                "group": "%s",
+                "role": "%s",
             }"""
         }
 
@@ -475,14 +476,14 @@ class ApiClient:
             ) {
                 removeUserFromGroup(input: {
                     user: { email: $email }
-                    group: { name: $name }
+                    group: { name: $group }
                 }) {
                     id
                 }
             }""",
             'variables': """{
                 "email": "%s",
-                "name": "%s",
+                "group": "%s",
             }"""
         }
 
