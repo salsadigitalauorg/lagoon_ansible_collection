@@ -1,10 +1,11 @@
 namespace: lagoon
 name: api
-version: 1.0.0
+version: 1.0.1
 readme: README.md
 
 authors:
   - Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
+  - Steve Worley <steven.worley@salsadigital.com.au>
 
 description: A collection to interact with the Lagoon API
 
