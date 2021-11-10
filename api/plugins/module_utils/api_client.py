@@ -97,6 +97,10 @@ class ApiClient:
                     }
                     environments {
                         name
+                        openshift {
+                            id
+                            name
+                        }
                     }
                     deployTargetConfigs {
                         id
