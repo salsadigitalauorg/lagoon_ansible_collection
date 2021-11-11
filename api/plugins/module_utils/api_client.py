@@ -2,6 +2,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import json
+import re
 import time
 from ansible.errors import AnsibleError
 from ansible.module_utils.urls import open_url, ConnectionError, SSLValidationError
@@ -46,7 +47,7 @@ class ApiClient:
                 }
             }"""
         }
-        result = self.make_api_call(json.dumps(query))
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         return result['data']['allProjects']
 
     ###
@@ -77,7 +78,7 @@ class ApiClient:
             }"""
         }
 
-        result = self.make_api_call(json.dumps(query) % group)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % group)
         return filter(None, result['data']['allProjectsInGroup'])
 
     def project(self, project):
@@ -96,12 +97,29 @@ class ApiClient:
                     }
                     environments {
                         name
+                        openshift {
+                            id
+                            name
+                        }
+                    }
+                    deployTargetConfigs {
+                        id
+                        weight
+                        branches
+                        pullrequests
+                        deployTarget {
+                            name
+                            id
+                        }
+                        project{
+                            name
+                        }
                     }
                 }
             }""",
             'variables': '{"name": "%s"}'
         }
-        result = self.make_api_call(json.dumps(query) % project)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % project)
         if result['data']['projectByName'] == None:
             raise AnsibleError(
                 "Unable to get details for project %s; please make sure the project name is correct" % project)
@@ -123,8 +141,7 @@ class ApiClient:
             }""",
             'variables': '{"name": "%s"}'
         }
-        result = self.make_api_call(json.dumps(query) % environment)
-        display.v("Project from environment result: %s" % result)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % environment)
         if result['data']['environmentByKubernetesNamespaceName']['project'] == None:
             raise AnsibleError(
                 "Unable to get project details for environment %s; please make sure the environment name is correct" % environment)
@@ -144,7 +161,7 @@ class ApiClient:
             }""",
             'variables': '{"name": "%s"}'
         }
-        result = self.make_api_call(json.dumps(query) % project)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % project)
         if result['data']['projectByName'] == None:
             raise AnsibleError(
                 "Unable to get variables for %s; please make sure the project name is correct" % project)
@@ -160,7 +177,7 @@ class ApiClient:
             """,
             'variables': '{"name": "%s"}'
         }
-        result = self.make_api_call(json.dumps(query) % project)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % project)
 
         if result['data']['projectByName'] == None:
             raise AnsibleError(
@@ -181,7 +198,7 @@ class ApiClient:
             'variables': '{"govcms_project": "%s", "govcms_branch": "%s"}' %
             (project, branch)
         }
-        result = self.make_api_call(json.dumps(query))
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         if not wait:
             return result['data']['deployEnvironmentLatest']
 
@@ -228,9 +245,7 @@ class ApiClient:
             }""" % self.__patch_dict_to_string(patch),
             'variables': '{"projectId": %s}' % project_id
         }
-        display.v('Query: %s' % query)
-        result = self.make_api_call(json.dumps(query))
-        display.v("Project update result: %s" % result)
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         return result['data']['updateProject']
 
     def environment(self, environment):
@@ -255,7 +270,7 @@ class ApiClient:
             }""",
             'variables': '{"name": "%s"}' % environment
         }
-        result = self.make_api_call(json.dumps(query))
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         if result['data']['environmentByKubernetesNamespaceName'] == None:
             raise AnsibleError(
                 "Unable to get details for environment %s; please make sure the environment name is correct" % environment)
@@ -288,7 +303,7 @@ class ApiClient:
             }""",
             'variables': '{"envId": %s}' % environment_id
         }
-        result = self.make_api_call(json.dumps(query))
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         if result['data']['environmentById'] == None:
             raise AnsibleError(
                 "Unable to get details for environment %s; please make sure the environment id is correct" % environment_id)
@@ -308,7 +323,7 @@ class ApiClient:
             }""",
             'variables': '{"name": "%s"}'
         }
-        result = self.make_api_call(json.dumps(query) % environment)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % environment)
         if result['data']['environmentByOpenshiftProjectName'] == None:
             raise AnsibleError(
                 "Unable to get variables for %s; please make sure the environment name is correct" % environment)
@@ -328,9 +343,7 @@ class ApiClient:
             }""" % self.__patch_dict_to_string(patch),
             'variables': '{"environmentId": %s}' % environment_id
         }
-        display.v('Query: %s' % query)
-        result = self.make_api_call(json.dumps(query))
-        display.v("Environment update result: %s" % result)
+        result = self.make_api_call(self.__prepare_graphql_query(query))
         return result['data']['updateEnvironment']
 
     def add_variable(self, type, type_id, name, value, scope):
@@ -348,7 +361,7 @@ class ApiClient:
                 "scope": "%s"
             }"""
         }
-        result = self.make_api_call(json.dumps(query) % (
+        result = self.make_api_call(self.__prepare_graphql_query(query) % (
             type, type_id, name, value, scope))
         return result['data']['addEnvVariable']['id']
 
@@ -358,7 +371,7 @@ class ApiClient:
         deleteEnvVariable(input:  { id: $id }) }""",
             'variables': '{"id": %s}'
         }
-        result = self.make_api_call(json.dumps(query) % id)
+        result = self.make_api_call(self.__prepare_graphql_query(query) % id)
         return result['data']['deleteEnvVariable']
 
     def metadata(self, project_name):
@@ -377,7 +390,7 @@ class ApiClient:
                 "value": "%s"
             }"""
         }
-        self.make_api_call(json.dumps(query) % (id, key, value))
+        self.make_api_call(self.__prepare_graphql_query(query) % (id, key, value))
         return '%s:%s' % (key, value)
 
     def remove_metadata(self, id, key):
@@ -392,7 +405,7 @@ class ApiClient:
                 "key": "%s"
             }"""
         }
-        result = self.make_api_call(json.dumps(query) % (id, key))
+        self.make_api_call(self.__prepare_graphql_query(query) % (id, key))
         return '%s' % (key)
 
     def add_project_notification(self, project, notification, type='SLACK'):
@@ -417,7 +430,7 @@ class ApiClient:
                 "type": "%s"
             }"""
         }
-        return self.make_api_call(json.dumps(query) % (project, notification, type))
+        return self.make_api_call(self.__prepare_graphql_query(query) % (project, notification, type))
 
     def remove_project_notification(self, project, notification, type):
         query = {
@@ -441,9 +454,9 @@ class ApiClient:
             }"""
         }
 
-        return self.make_api_call(json.dumps(query) % (project, notification, type))
+        return self.make_api_call(self.__prepare_graphql_query(query) % (project, notification, type))
 
-    def user_add_group(email, group_name, role):
+    def user_add_group(self, email, group_name, role):
         query = {
             'query': """mutation group(
                 $email: String!
@@ -465,10 +478,10 @@ class ApiClient:
             }"""
         }
 
-        result = self.make_api_call(json.dumps(query) % (email, group_name, role.upper()))
+        result = self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name, role.upper()))
         return result['data']['addUserToGroup']['id']
 
-    def user_remove_group(email, group_name):
+    def user_remove_group(self, email, group_name):
         query = {
             'query': """mutation group(
                 $email: String!
@@ -487,16 +500,67 @@ class ApiClient:
             }"""
         }
 
-        return self.make_api_call(json.dumps(query) % (email, group_name))
+        return self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name))
+
+    def deploy_target_config_add(self, project_id, configs):
+        query_configs = []
+        for idx, config in enumerate(configs):
+            query_configs.append("""
+                deployTarget%d: addDeployTargetConfig(
+                    input: {
+                        project: %d
+                        branches: "%s"
+                        pullrequests: "%s"
+                        deployTarget: %d
+                        weight: %d
+                    }
+                ) {
+                    id
+                    weight
+                    branches
+                    pullrequests
+                    deployTarget {
+                        name
+                        id
+                    }
+                    project {
+                        name
+                    }
+                }
+            """ % (idx, project_id, config['branches'], config['pullrequests'],
+                int(config['deployTarget']), config['weight']))
+        query = {
+            'query': """mutation addDeployTargetConfigs { %s }""" % self.__join_mutations(query_configs)
+        }
+        result = self.make_api_call(self.__prepare_graphql_query(query))
+        return result['data']
+
+    def deploy_target_config_delete(self, project_id, config_ids):
+        query_configs = []
+        if isinstance(config_ids, list):
+            for config_id in config_ids:
+                query_configs.append(self.deploy_target_config_delete_mutation(project_id, config_id))
+        else:
+            query_configs.append(self.deploy_target_config_delete_mutation(project_id, config_ids))
+
+        query = {
+            'query': """mutation deleteDeployTargetConfigs { %s }""" % self.__join_mutations(query_configs)
+        }
+        result = self.make_api_call(self.__prepare_graphql_query(query))
+        return result['data']
+
+    def deploy_target_config_delete_mutation(self, project_id, config_id):
+        return """deleteDeployTargetConfig%d: deleteDeployTargetConfig(
+		    input: { project: %d, id: %d })""" % (config_id, project_id, config_id)
 
     def make_api_call(self, payload):
-        display.v("Payload: %s" % payload)
+        display.v("API call payload: %s" % payload)
         try:
             response = open_url(self.options.get('endpoint'), data=payload,
                                 validate_certs=self.options.get(
                                     'validate_certs', False),
                                 headers=self.options.get('headers', {}),
-                                timeout=self.options.get('timeout', 10))
+                                timeout=self.options.get('timeout', 30))
         except HTTPError as e:
             raise AnsibleError(
                 "Received HTTP error: %s" % (to_native(e)))
@@ -509,7 +573,9 @@ class ApiClient:
         except ConnectionError as e:
             raise AnsibleError("Error connecting: %s" % (to_native(e)))
 
-        return json.loads(response.read())
+        result = json.loads(response.read())
+        display.v('API call result: %s' % result)
+        return result
 
     def __patch_dict_to_string(self, patch):
         value_list = []
@@ -525,3 +591,12 @@ class ApiClient:
                     value_item += '"' + value + '"'
             value_list.append(value_item)
         return '{' + ', '.join(value_list) + '}'
+
+    # Remove newlines, tabs & multiple spaces.
+    def __prepare_graphql_query(self, query):
+        query_str = json.dumps(query)
+        query_str = query_str.replace("\\n", "").replace("\\t", "")
+        return re.sub(' +', ' ', query_str)
+
+    def __join_mutations(self, mutations):
+        return " ".join(mutations)
