@@ -49,7 +49,7 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a environment's information
-  debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta') }}"
+  debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta-master') }}"
 """
 
 

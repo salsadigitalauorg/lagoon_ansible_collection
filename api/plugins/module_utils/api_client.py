@@ -266,6 +266,10 @@ class ApiClient:
                     project {
                         id
                     }
+                    openshift {
+                        id
+                        name
+                    }
                 }
             }""",
             'variables': '{"name": "%s"}' % environment
