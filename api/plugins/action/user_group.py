@@ -36,19 +36,19 @@ class ActionModule(ActionBase):
         result = {}
 
         if group_name is None:
-            raise AnsibleError("Missing required parameeter 'group'")
+            raise AnsibleError("Missing required parameter 'group'")
 
         if state == 'present':
 
             if role is None:
-                raise AnsibleError("Missing required parameeter 'role'")
+                raise AnsibleError("Missing required parameter 'role'")
 
             result['result'] = lagoon.user_add_group(email, group_name, role)
 
         if state == 'absent':
             result = lagoon.user_remove_group(email, group_name)
 
-            if 'error' in result.keys():
+            if 'error' in result:
                 result['changed'] = False
 
         if 'changed' not in result:
