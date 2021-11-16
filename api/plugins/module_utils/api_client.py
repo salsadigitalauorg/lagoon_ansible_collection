@@ -281,7 +281,7 @@ class ApiClient:
 
         environment = result['data']['environmentByKubernetesNamespaceName']
 
-        if 'routes' in environment:
+        if 'routes' in environment and environment['routes']:
             environment['routes'] = environment['routes'].split(',')
 
         return environment
