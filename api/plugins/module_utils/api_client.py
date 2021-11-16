@@ -460,12 +460,52 @@ class ApiClient:
 
         return self.make_api_call(self.__prepare_graphql_query(query) % (project, notification, type))
 
+    def group(self, name):
+        query = {
+            'query': """query group($name: String!) {
+                groupByName(name: $name) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "name": "%s"
+            }"""
+        }
+        result = self.make_api_call(
+            self.__prepare_graphql_query(query) % (name)
+        )
+        return result['data']['groupByName']
+
+    def group_add(self, name, parent=None):
+        query = {
+            'query': """mutation group($name: String!) {
+                addGroup(input: { name: $name }) {
+                    id
+                }
+            }""",
+            'variables': """{
+                "name": "%s"
+            }"""
+        }
+
+        result = self.make_api_call(
+            self.__prepare_graphql_query(query) % (name)
+        )
+
+        if result['errors']:
+            raise AnsibleError("Group '%s' exists" % (name))
+
+        return result['data']['addGroup']
+
+    def group_remove(self, id):
+        query = {}
+
     def user_add_group(self, email, group_name, role):
         query = {
             'query': """mutation group(
                 $email: String!
                 $group: String!
-                $role: String!
+                $role: GroupRole!
             ) {
                 addUserToGroup(input: {
                     user: { email: $email }
@@ -478,7 +518,7 @@ class ApiClient:
             'variables': """{
                 "email": "%s",
                 "group": "%s",
-                "role": "%s",
+                "role": "%s"
             }"""
         }
 
@@ -500,7 +540,7 @@ class ApiClient:
             }""",
             'variables': """{
                 "email": "%s",
-                "group": "%s",
+                "group": "%s"
             }"""
         }
 

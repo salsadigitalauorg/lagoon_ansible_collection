@@ -28,26 +28,27 @@ class ActionModule(ActionBase):
         )
 
         email = self._task.args.get('email')
-        group_name = self._task.args.get('group_name')
+        group_name = self._task.args.get('group')
         role = self._task.args.get('role')
 
         state = self._task.args.get('state', 'present')
 
         result = {}
 
+        if group_name is None:
+            raise AnsibleError("Missing required parameter 'group'")
+
         if state == 'present':
 
             if role is None:
-                result['failed'] = True
-                result['message'] = "Missing required 'role' option."
-                return result
+                raise AnsibleError("Missing required parameter 'role'")
 
             result['result'] = lagoon.user_add_group(email, group_name, role)
 
         if state == 'absent':
             result = lagoon.user_remove_group(email, group_name)
 
-            if result['error']:
+            if 'error' in result:
                 result['changed'] = False
 
         if 'changed' not in result:
