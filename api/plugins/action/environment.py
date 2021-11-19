@@ -19,7 +19,7 @@ class ActionModule(ActionBase):
         module_args = self._task.args.copy()
         module_args.update(lagoon_api_endpoint=task_vars.get('lagoon_api_endpoint'),
                            lagoon_api_token=task_vars.get('lagoon_api_token'))
-        module_return = self._execute_module(module_name='lagoon.api.deploy_target_config',
+        module_return = self._execute_module(module_name='lagoon.api.environment',
                                              module_args=module_args,
                                              task_vars=task_vars)
 
