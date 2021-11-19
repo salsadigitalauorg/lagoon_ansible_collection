@@ -94,8 +94,8 @@ def run_module():
     module_args = dict(
         lagoon_api_endpoint=dict(type='str', required=True),
         lagoon_api_token=dict(type='str', required=True, no_log=True),
-        project=dict(type='str', required=True),
         headers=dict(type='dict', required=False, default={}),
+        project=dict(type='str', required=True),
         configs=dict(type='list', elements='dict', required=False, default=[]),
         state=dict(type='str', required=False, default='present'),
         replace=dict(type='bool', required=False, default=False),
