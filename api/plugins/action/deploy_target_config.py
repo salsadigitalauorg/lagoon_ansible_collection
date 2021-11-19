@@ -24,6 +24,8 @@ class ActionModule(ActionBase):
                                              task_vars=task_vars)
 
         if module_return.get('failed'):
+            if self._play_context.verbosity >= 1 and module_return.get('module_stderr'):
+                display.error(module_return.get('module_stderr'))
             raise AnsibleError(module_return.get('msg'))
 
         result['changed'] = module_return['changed']
