@@ -46,7 +46,11 @@ class ActionModule(ActionBase):
             if not key in environment:
                 update_required = True
                 break
-            if str(value) != str(environment[key]):
+            if key in ['openshift', 'kubernetes']:
+                if str(value) != str(environment[key]['id']):
+                    update_required = True
+                    break
+            elif str(value) != str(environment[key]):
                 update_required = True
                 break
 
