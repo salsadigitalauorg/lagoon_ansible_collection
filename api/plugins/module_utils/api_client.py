@@ -95,9 +95,17 @@ class ApiClient:
                         id
                         name
                     }
+                    kubernetes {
+                        id
+                        name
+                    }
                     environments {
                         name
                         openshift {
+                            id
+                            name
+                        }
+                        kubernetes {
                             id
                             name
                         }
@@ -238,6 +246,10 @@ class ApiClient:
                         id
                         name
                     }
+                    kubernetes {
+                        id
+                        name
+                    }
                     environments {
                         name
                     }
@@ -267,6 +279,10 @@ class ApiClient:
                         id
                     }
                     openshift {
+                        id
+                        name
+                    }
+                    kubernetes {
                         id
                         name
                     }
@@ -316,7 +332,7 @@ class ApiClient:
     def environment_get_variables(self, environment):
         query = {
             'query': """query envVars($name: String!) {
-                environmentByOpenshiftProjectName(openshiftProjectName: $name) {
+                environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
                     envVariables {
                         id
                         name
@@ -328,10 +344,10 @@ class ApiClient:
             'variables': '{"name": "%s"}'
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % environment)
-        if result['data']['environmentByOpenshiftProjectName'] == None:
+        if result['data']['environmentByKubernetesNamespaceName'] == None:
             raise AnsibleError(
                 "Unable to get variables for %s; please make sure the environment name is correct" % environment)
-        return result['data']['environmentByOpenshiftProjectName']['envVariables']
+        return result['data']['environmentByKubernetesNamespaceName']['envVariables']
 
     def environment_update(self, environment_id, patch):
         query = {
@@ -340,6 +356,10 @@ class ApiClient:
                     id
                     name
                     openshift {
+                        id
+                        name
+                    }
+                    kubernetes {
                         id
                         name
                     }
