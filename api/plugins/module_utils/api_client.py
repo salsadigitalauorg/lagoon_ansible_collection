@@ -217,7 +217,7 @@ class ApiClient:
     def project_check_deploy_status(self, project, branch, wait=False, delay=60, retries=30, current_try=1):
         time.sleep(delay)
         environment = self.environment(
-            project + '-' + branch.replace('/', '-'))
+            project + '-' + branch.replace('/', '-').replace('_', '-'))
 
         if (not wait or (len(environment['deployments']) and
             'status' in environment['deployments'][0] and
