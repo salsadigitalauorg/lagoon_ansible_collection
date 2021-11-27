@@ -95,7 +95,7 @@ class LookupModule(LookupBase):
 
     for term in terms:
       if environment:
-        env_name = term + '-' + environment.replace('/', '-')
+        env_name = term + '-' + environment.replace('/', '-').replace('_', '-').replace('.', '-')
         display.v("Lagoon variable lookup environment: %s" % env_name)
         env_vars = lagoon.environment_get_variables(env_name)
       else:
