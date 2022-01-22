@@ -178,6 +178,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
     def add_environment(self, project, environment, lagoon):
         namespace = "%s-%s" % (project['name'], environment['name'])
 
+        # Replace "\" or "." in environment names with "-".
+        namespace = re.sub(r'[\/|.]+', '-', namespace)
+
         # Add host to the inventory.
         self.inventory.add_host(namespace)
 
@@ -213,8 +216,8 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
           # Ansible specific host variables these define how ansible
           # will connect to the remote host when the host is selected
           # for provisioning the play.
-          'ansible_user': '{project}-{environment}'.format(project=project['name'], environment=environment['name']),
-          'ansible_ssh_user': '{project}-{environment}'.format(project=project['name'], environment=environment['name']),
+          'ansible_user': namespace,
+          'ansible_ssh_user': namespace,
           'ansible_host': lagoon['ssh_host'],
           'ansible_port': lagoon['ssh_port'],
           'ansible_connection': 'local',
