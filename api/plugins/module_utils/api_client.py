@@ -91,6 +91,7 @@ class ApiClient:
                     branches
                     gitUrl
                     metadata
+                    developmentEnvironmentsLimit
                     openshift {
                         id
                         name
