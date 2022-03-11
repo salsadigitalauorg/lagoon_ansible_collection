@@ -371,6 +371,16 @@ class ApiClient:
         result = self.make_api_call(self.__prepare_graphql_query(query))
         return result['data']['updateEnvironment']
 
+    def environment_delete(self, project, name):
+        query = {
+            "query": """mutation deleteEnvironment($project: String!, $name: String!) {
+                deleteEnvironment(input:{name: $name, project: $project, execute: true})
+            }""",
+            "variables": '{"project": %s, "name": %s}' % (project, name)
+        }
+        self.make_api_call(self.__prepare_graphql_query(query))
+        return True
+
     def environment_delete(self, project_name, environment_name):
         query = {
             'query': """
