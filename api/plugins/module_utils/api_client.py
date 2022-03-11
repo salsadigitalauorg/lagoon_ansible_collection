@@ -43,7 +43,7 @@ class ApiClient:
                     activeSystemsRemove
                     productionEnvironment
                     metadata
-                    environments { id name environmentType updated created route }
+                    environments { id name environmentType autoIdle updated created route }
                 }
             }"""
         }
@@ -70,7 +70,7 @@ class ApiClient:
                     activeSystemsRemove
                     productionEnvironment
                     metadata
-                    environments { id name environmentType updated created route }
+                    environments { id name environmentType autoIdle updated created route }
                 }
             }""",
             'variables': """{
