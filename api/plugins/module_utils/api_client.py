@@ -371,16 +371,6 @@ class ApiClient:
         result = self.make_api_call(self.__prepare_graphql_query(query))
         return result['data']['updateEnvironment']
 
-    def environment_delete(self, project, name):
-        query = {
-            "query": """mutation deleteEnvironment($project: String!, $name: String!) {
-                deleteEnvironment(input:{name: $name, project: $project, execute: true})
-            }""",
-            "variables": '{"project": %s, "name": %s}' % (project, name)
-        }
-        self.make_api_call(self.__prepare_graphql_query(query))
-        return True
-
     def environment_delete(self, project_name, environment_name):
         query = {
             'query': """
@@ -393,7 +383,16 @@ class ApiClient:
                 "environment_name": "%s"
             }""" % (project_name, environment_name)
         }
-        return self.make_api_call(self.__prepare_graphql_query(query))
+        result = self.make_api_call(self.__prepare_graphql_query(query))
+
+        if "deleteEnvironment" not in result['data']:
+            return False
+
+        if 'errors' in result['data']:
+            display.v(json.dumps(result['data']['errors']))
+            return False
+
+        return True if result['data']['deleteEnvironment'] == 'success' else False
 
     def add_variable(self, type, type_id, name, value, scope):
         query = {
