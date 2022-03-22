@@ -8,9 +8,11 @@ from ansible.errors import AnsibleError
 from ansible.module_utils.urls import open_url, ConnectionError, SSLValidationError
 from ansible.module_utils._text import to_native
 from ansible.module_utils.six.moves.urllib.error import HTTPError, URLError
-from ansible.utils.display import Display
 
-display = Display()
+# This has been commented out due to modules failing because of it.
+# from ansible.utils.display import Display
+
+# display = Display()
 
 class ApiClient:
 
@@ -211,8 +213,8 @@ class ApiClient:
         if not wait:
             return result['data']['deployEnvironmentLatest']
 
-        display.display(
-            "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
+        # display.display(
+        #     "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
         return self.project_check_deploy_status(project, branch, wait, delay, retries)
 
     def project_check_deploy_status(self, project, branch, wait=False, delay=60, retries=30, current_try=1):
@@ -229,8 +231,8 @@ class ApiClient:
             raise AnsibleError(
                 'Maximium number of retries reached; view deployment logs for more information.')
 
-        display.display(
-            "\033[30;1mRETRYING: Wait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries - current_try))
+        # display.display(
+        #     "\033[30;1mRETRYING: Wait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries - current_try))
         return self.project_check_deploy_status(project, branch, wait, delay, retries, current_try + 1)
 
     def project_update(self, project_id, patch):
@@ -389,7 +391,7 @@ class ApiClient:
             return False
 
         if 'errors' in result['data']:
-            display.v(json.dumps(result['data']['errors']))
+            # display.v(json.dumps(result['data']['errors']))
             return False
 
         return True if result['data']['deleteEnvironment'] == 'success' else False
@@ -642,7 +644,7 @@ class ApiClient:
 		    input: { project: %d, id: %d })""" % (config_id, project_id, config_id)
 
     def make_api_call(self, payload):
-        display.v("API call payload: %s" % payload)
+        # display.v("API call payload: %s" % payload)
         try:
             response = open_url(self.options.get('endpoint'), data=payload,
                                 validate_certs=self.options.get(
@@ -662,7 +664,7 @@ class ApiClient:
             raise AnsibleError("Error connecting: %s" % (to_native(e)))
 
         result = json.loads(response.read())
-        display.v('API call result: %s' % result)
+        # display.v('API call result: %s' % result)
         return result
 
     def __patch_dict_to_string(self, patch):
