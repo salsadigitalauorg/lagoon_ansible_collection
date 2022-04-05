@@ -80,7 +80,7 @@ EXAMPLES = """
 
 display = Display()
 
-def get_vars_from_environment(*client: GqlClient, name: str) -> dict:
+def get_vars_from_environment(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
     res = client.execute_query(
         ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
@@ -99,7 +99,7 @@ def get_vars_from_environment(*client: GqlClient, name: str) -> dict:
 
     return res['environmentByKubernetesNamespaceName']['envVariables']
 
-def get_vars_from_project(*client: GqlClient, name: str) -> dict:
+def get_vars_from_project(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
     res = client.execute_query(
         ds.Query.projectByName(name=name).select(
@@ -139,7 +139,7 @@ class LookupModule(LookupBase):
         env_vars = get_vars_from_environment(client, env_name)
       else:
         display.v(f"Lagoon variable lookup project: {term}")
-        env_vars = get_vars_from_project(client, env_name)
+        env_vars = get_vars_from_project(client, term)
 
       if self.get_option('return_dict'):
         vars_dict = {}

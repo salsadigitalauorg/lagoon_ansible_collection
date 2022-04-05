@@ -64,7 +64,7 @@ EXAMPLES = """
 display = Display()
 
 
-def get_project(*client: GqlClient, name: str) -> dict:
+def get_project(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
     res = client.execute_query(
         ds.Query.projectByName(name=name).select(
@@ -114,7 +114,7 @@ def get_project(*client: GqlClient, name: str) -> dict:
     return res['projectByName']
 
 
-def get_project_from_environment(*client: GqlClient, name: str) -> dict:
+def get_project_from_environment(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
     res = client.execute_query(
         ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
@@ -148,12 +148,11 @@ class LookupModule(LookupBase):
         self.get_option('headers', {})
     )
 
-    with client as (_, ds):
-      for term in terms:
-        if self.get_option('from_environment'):
-          project = get_project_from_environment(term)
-        else:
-          project = get_project(term)
-        ret.append(project)
+    for term in terms:
+      if self.get_option('from_environment'):
+        project = get_project_from_environment(client, term)
+      else:
+        project = get_project(client, term)
+      ret.append(project)
 
     return ret
