@@ -125,7 +125,7 @@ class LookupModule(LookupBase):
     ret = []
 
     self.set_options(var_options=variables, direct=kwargs)
-    client = GqlClient(
+    lagoon = GqlClient(
         self.get_option('lagoon_api_endpoint'),
         self.get_option('lagoon_api_token'),
         self.get_option('headers', {})
@@ -136,10 +136,10 @@ class LookupModule(LookupBase):
       if environment:
         env_name = term + '-' + environment.replace('/', '-').replace('_', '-').replace('.', '-')
         display.v(f"Lagoon variable lookup environment: {env_name}")
-        env_vars = get_vars_from_environment(client, env_name)
+        env_vars = get_vars_from_environment(lagoon, env_name)
       else:
         display.v(f"Lagoon variable lookup project: {term}")
-        env_vars = get_vars_from_project(client, term)
+        env_vars = get_vars_from_project(lagoon, term)
 
       if self.get_option('return_dict'):
         vars_dict = {}

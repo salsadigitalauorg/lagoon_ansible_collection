@@ -50,16 +50,36 @@ DOCUMENTATION = """
 """
 
 EXAMPLES = """
-- name: retrieve a project's information
-  debug: msg="{{ lookup('lagoon.api.metadata', project='vanilla-govcms8-beta', 'project-status') }}"
+- name: retrieve a project's metadata
+  debug: msg="{{ lookup('lagoon.api.metadata', project='vanilla-govcms9-beta') }}"
+
+- name: retrieve a project's status
+  debug: msg="{{ lookup('lagoon.api.metadata', 'project-status', project='vanilla-govcms9-beta') }}"
 """
 
+import json
+from ansible.errors import AnsibleError
 from ansible.utils.display import Display
 from ansible.plugins.lookup import LookupBase
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 display = Display()
 
+
+def get_metadata(client: GqlClient, project_name: str) -> dict:
+  with client as (_, ds):
+    res = client.execute_query(
+        ds.Query.projectByName(name=project_name).select(
+            ds.Project.metadata,
+        )
+    )
+
+    display.v(f"GraphQL query result: {res}")
+    if res['projectByName'] == None:
+      raise AnsibleError(
+          f"Unable to get metadata for project {project_name}; please make sure the project name is correct")
+
+    return json.loads(res['projectByName']['metadata'])
 class LookupModule(LookupBase):
 
   def run(self, terms, variables=None, **kwargs):
@@ -67,18 +87,24 @@ class LookupModule(LookupBase):
     ret = []
 
     self.set_options(var_options=variables, direct=kwargs)
-    lagoon = ApiClient(
+    lagoon = GqlClient(
         self.get_option('lagoon_api_endpoint'),
         self.get_option('lagoon_api_token'),
-        {'headers': self.get_option('headers', {})}
+        self.get_option('headers', {})
     )
     project = self.get_option('project')
 
-    metadata = lagoon.metadata(project)
+    metadata = get_metadata(lagoon, project)
+    display.v(f"metadata: {metadata}")
+
+    if not len(terms):
+      for k in metadata:
+        ret.append({k: metadata[k]})
+
     for term in terms:
       if term in metadata:
-        ret.append(metadata[term])
+        ret.append({term: metadata[term]})
       elif self.has_option('default'):
-        ret.append(self.get_option('default'))
+        ret.append({term: self.get_option('default')})
 
     return ret

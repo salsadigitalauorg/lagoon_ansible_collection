@@ -142,7 +142,7 @@ class LookupModule(LookupBase):
 
     self.set_options(var_options=variables, direct=kwargs)
 
-    client = GqlClient(
+    lagoon = GqlClient(
         self.get_option('lagoon_api_endpoint'),
         self.get_option('lagoon_api_token'),
         self.get_option('headers', {})
@@ -150,9 +150,9 @@ class LookupModule(LookupBase):
 
     for term in terms:
       if self.get_option('from_environment'):
-        project = get_project_from_environment(client, term)
+        project = get_project_from_environment(lagoon, term)
       else:
-        project = get_project(client, term)
+        project = get_project(lagoon, term)
       ret.append(project)
 
     return ret
