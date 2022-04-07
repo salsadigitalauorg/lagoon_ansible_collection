@@ -1,13 +1,11 @@
 from __future__ import absolute_import, division, print_function
-from ansible.utils.display import Display
 import re
 import ast
 import json
-from ansible.errors import AnsibleError, AnsibleParserError, AnsibleOptionsError
-from ansible.plugins import inventory
+from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 __metaclass__ = type
 
@@ -73,14 +71,13 @@ keyed_groups:
 
 """
 
-display = Display()
-
 class InventoryModule(BaseInventoryPlugin, Constructable):
     NAME = 'lagoon.api.lagoon'
 
     def parse(self, inventory, loader, path, cache=True):
         super(InventoryModule, self).parse(inventory, loader, path, cache)
-        config = self._read_config_data(path)
+
+        self._read_config_data(path)
 
         # Fetch and process projects from Lagoon.
         self.fetch_objects(self.get_option('lagoons'))
@@ -123,20 +120,26 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
                 if not isinstance(lagoon, dict):
                     raise AnsibleError(
-                        "Expection lagoon to be a dictionary."
+                        "Expecting lagoon to be a dictionary."
                     )
 
-                if not {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(lagoon):
+                # Endpoint & token can be provided in the file directly,
+                # or in --extra-vars.
+                if {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(lagoon):
+                    lagoon_api_endpoint = lagoon['lagoon_api_endpoint']
+                    lagoon_api_token = lagoon['lagoon_api_token']
+                elif {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(self._vars):
+                    lagoon_api_endpoint = self._vars['lagoon_api_endpoint']
+                    lagoon_api_token = self._vars['lagoon_api_token']
+                else:
                     raise AnsibleError(
                         "Expecting lagoon_api_endpoint and lagoon_api_token."
                     )
 
-                lagoon_api = ApiClient(
-                    lagoon['lagoon_api_endpoint'],
-                    lagoon['lagoon_api_token'],
-                    {
-                        'headers': lagoon['headers'] if 'headers' in lagoon else {}
-                    }
+                lagoon_api = GqlClient(
+                    lagoon_api_endpoint,
+                    lagoon_api_token,
+                    lagoon['headers'] if 'headers' in lagoon else {}
                 )
 
                 project_list = []
@@ -144,29 +147,28 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
                 if 'lagoon_groups' in lagoon and lagoon['lagoon_groups']:
                     for group in lagoon['lagoon_groups']:
-                        for project in lagoon_api.projects_in_group(group):
+                        for project in get_projects_in_group(lagoon_api, group):
                             if project['name'] not in seen:
                                 project_list.append(project)
                                 seen.append(project['name'])
 
                 else:
-                    project_list = lagoon_api.projects_all()
+                    project_list = get_projects(lagoon_api)
 
                 for project in project_list:
                     project_group = re.sub(r'[\W-]+', '_', project['name'])
 
-                    project['variables'] = lagoon_api.project_get_variables(
-                        project['name']
-                    )
+                    project['variables'] = get_project_variables(lagoon_api, project['name'])
 
                     # Secondary lookup as group queries validate permissions
                     # on each trip and results in query timeouts if these
                     # were returned with the project list.
-                    project['groups'] = lagoon_api.project_get_groups(project['name'])
+                    project['groups'] = get_project_groups(lagoon_api, project['name'])
 
                     for environment in project['environments']:
                         try:
-                            environment['variables'] = lagoon_api.environment_get_variables(
+                            environment['variables'] = get_environment_variables(
+                                lagoon_api,
                                 "%s-%s" % (project['name'], environment['name'])
                             )
                         except:
@@ -185,7 +187,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
         try:
           hostvars = self.collect_host_vars(namespace, environment, project, lagoon)
           for key,value in hostvars.items():
-              self.inventory.set_variable(namespace, key, value)  
+              self.inventory.set_variable(namespace, key, value)
         except Exception as e:
             raise AnsibleParserError("failed to parse: %s " % (to_native(e)), orig_exc=e)
 
@@ -238,3 +240,109 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
           host_vars['metadata'] = inventory_meta
 
       return host_vars
+
+
+def get_projects(client: GqlClient) -> dict:
+    """Get all projects"""
+
+    res = client.execute_query(
+        """
+        query GetProjects {
+            allProjects {
+                id
+                name
+                gitUrl
+                environments { id name environmentType }
+            }
+        }
+        """
+    )
+    if res['allProjects'] == None:
+      raise AnsibleError(f"Unable to get projects.")
+    return res['allProjects']
+
+
+def get_projects_in_group(client: GqlClient, group: str):
+    """Get projects from specific groups."""
+
+    res = client.execute_query(
+        """
+        query ($group: String!) {
+            allProjectsInGroup(input: { name: $group }) {
+                id
+                name
+                gitUrl
+                environments { id name environmentType }
+            }
+        }
+        """,
+        {"group": group}
+    )
+    return filter(None, res['allProjectsInGroup'])
+
+
+def get_project_groups(client: GqlClient, project: str) -> dict:
+    """Get a project's groups"""
+
+    res = client.execute_query(
+        """
+        query projectByName($name: String!) {
+            projectByName(name: $name) {
+                groups { name }
+            }
+        }
+        """,
+        {"name": project}
+    )
+    if res['projectByName'] == None:
+        raise AnsibleError(
+            "Unable to get groups for %s; please make sure the project name is correct" % project)
+    return res['projectByName']['groups']
+
+
+def get_project_variables(client: GqlClient, project: str) -> dict:
+    """Get a project's variables"""
+
+    res = client.execute_query(
+        """
+        query projectVars($name: String!) {
+            projectByName(name: $name) {
+                envVariables {
+                    id
+                    name
+                    value
+                    scope
+                }
+            }
+        }
+        """,
+        {"name": project}
+    )
+    if res['projectByName'] == None:
+        raise AnsibleError(
+            "Unable to get variables for %s; please make sure the project name is correct" % project)
+    return res['projectByName']['envVariables']
+
+
+def get_environment_variables(client: GqlClient, environment: str) -> dict:
+    """Get a project environment's variables"""
+
+    res = client.execute_query(
+        """
+        query envVars($name: String!) {
+            environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
+                envVariables {
+                    id
+                    name
+                    value
+                    scope
+                }
+            }
+        }
+        """,
+        {"name": environment}
+    )
+    if res['environmentByKubernetesNamespaceName'] == None:
+        raise AnsibleError(
+            "Unable to get variables for %s; please make sure the environment name is correct" % environment)
+    return res['environmentByKubernetesNamespaceName']['envVariables']

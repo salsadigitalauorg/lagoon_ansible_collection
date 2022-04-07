@@ -1,12 +1,12 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+
 from ansible.errors import AnsibleError
 from gql.transport.requests import RequestsHTTPTransport
-from gql import Client
+from gql import Client, gql
 from gql.dsl import DSLField, DSLSchema, DSLQuery, dsl_gql
-
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 class GqlClient:
     """ This client aims to facilitate the usage of the gql package, based on
@@ -38,6 +38,7 @@ class GqlClient:
             fetch_schema_from_transport=True
         )
 
+
     def __enter__(self):
         """This method and the next (__exit__) allow the use of the `with`
         statement with the class.
@@ -54,7 +55,12 @@ class GqlClient:
     def __exit__(self, *args):
         self.client.__exit__(args)
 
-    def execute_query(self, field_query: DSLField) -> Dict[str, Any]:
+    def execute_query(self, query: str, variables: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Executes a query using the graphql string provided.
+        """
+        return self.client.execute(gql(query), variable_values=variables)
+
+    def execute_query_dynamic(self, field_query: DSLField) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.
 
         See https://gql.readthedocs.io/en/latest/advanced/dsl_module.html for

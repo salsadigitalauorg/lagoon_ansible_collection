@@ -66,7 +66,7 @@ display = Display()
 
 def get_project(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
-    res = client.execute_query(
+    res = client.execute_query_dynamic(
         ds.Query.projectByName(name=name).select(
             ds.Project.id,
             ds.Project.name,
@@ -116,7 +116,7 @@ def get_project(client: GqlClient, name: str) -> dict:
 
 def get_project_from_environment(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
-    res = client.execute_query(
+    res = client.execute_query_dynamic(
         ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
             ds.Environment.project.select(
                 ds.Project.id,

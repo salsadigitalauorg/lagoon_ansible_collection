@@ -68,7 +68,7 @@ display = Display()
 
 def get_metadata(client: GqlClient, project_name: str) -> dict:
   with client as (_, ds):
-    res = client.execute_query(
+    res = client.execute_query_dynamic(
         ds.Query.projectByName(name=project_name).select(
             ds.Project.metadata,
         )

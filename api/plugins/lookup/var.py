@@ -82,7 +82,7 @@ display = Display()
 
 def get_vars_from_environment(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
-    res = client.execute_query(
+    res = client.execute_query_dynamic(
         ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
             ds.Environment.envVariables.select(
                 ds.EnvKeyValue.id,
@@ -101,7 +101,7 @@ def get_vars_from_environment(client: GqlClient, name: str) -> dict:
 
 def get_vars_from_project(client: GqlClient, name: str) -> dict:
   with client as (_, ds):
-    res = client.execute_query(
+    res = client.execute_query_dynamic(
         ds.Query.projectByName(name=name).select(
             ds.Project.envVariables.select(
                 ds.EnvKeyValue.id,
