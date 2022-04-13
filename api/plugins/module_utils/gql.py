@@ -1,7 +1,6 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-
 from ansible.errors import AnsibleError
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
@@ -38,7 +37,6 @@ class GqlClient:
             fetch_schema_from_transport=True
         )
 
-
     def __enter__(self):
         """This method and the next (__exit__) allow the use of the `with`
         statement with the class.
@@ -55,7 +53,7 @@ class GqlClient:
     def __exit__(self, *args):
         self.client.__exit__(args)
 
-    def execute_query(self, query: str, variables: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def execute_query(self, query: str, variables: Optional[Dict[str, Any]]={}) -> Dict[str, Any]:
         """Executes a query using the graphql string provided.
         """
         return self.client.execute(gql(query), variable_values=variables)

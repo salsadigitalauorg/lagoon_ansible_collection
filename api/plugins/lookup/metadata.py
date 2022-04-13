@@ -80,6 +80,7 @@ def get_metadata(client: GqlClient, project_name: str) -> dict:
           f"Unable to get metadata for project {project_name}; please make sure the project name is correct")
 
     return json.loads(res['projectByName']['metadata'])
+
 class LookupModule(LookupBase):
 
   def run(self, terms, variables=None, **kwargs):

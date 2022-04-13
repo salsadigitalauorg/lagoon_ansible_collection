@@ -6,7 +6,15 @@ EXAMPLES = r'''
       lagoon.api.token:
         ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
       register: token
-    - debug: var=token.token
+      vars:
+        lagoon_ssh_host: ssh.lagoon.amazeeio.cloud
+        lagoon_ssh_port: 32222
+    - name: Verify the user.
+      lagoon.api.whoami: {}
+      vars:
+        lagoon_api_token: "{{ token.token }}"
+      register: whoami
+    - debug: var=whoami
 '''
 
 from ansible.plugins.action import ActionBase
@@ -31,8 +39,8 @@ class ActionModule(ActionBase):
             LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
 
         rc, result['token'], result['error'] = LagoonToken.fetch_token(
-            task_vars.get('lagoon_ssh_host'),
-            task_vars.get('lagoon_ssh_port'),
+            self._templar.template(task_vars.get('lagoon_ssh_host')),
+            self._templar.template(task_vars.get('lagoon_ssh_port')),
             self._task.args.get('ssh_options', ""),
             lagoon_ssh_private_key_file
         )

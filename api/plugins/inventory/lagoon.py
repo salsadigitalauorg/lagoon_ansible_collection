@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
-import re
 import ast
 import json
+import re
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
@@ -123,15 +123,20 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
                         "Expecting lagoon to be a dictionary."
                     )
 
-                # Endpoint & token can be provided in the file directly,
-                # or in --extra-vars.
-                if {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(lagoon):
-                    lagoon_api_endpoint = lagoon['lagoon_api_endpoint']
-                    lagoon_api_token = lagoon['lagoon_api_token']
-                elif {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(self._vars):
-                    lagoon_api_endpoint = self._vars['lagoon_api_endpoint']
-                    lagoon_api_token = self._vars['lagoon_api_token']
-                else:
+                # Endpoint & token can be provided in the file directly
+                # or in --extra-vars. They could also be provided in separate
+                # places.
+                if 'lagoon_api_endpoint' in self._vars:
+                    lagoon_api_endpoint = self._vars.get('lagoon_api_endpoint')
+                elif 'lagoon_api_endpoint' in lagoon:
+                    lagoon_api_endpoint = lagoon.get('lagoon_api_endpoint')
+
+                if 'lagoon_api_token' in self._vars:
+                    lagoon_api_token = self._vars.get('lagoon_api_token')
+                elif 'lagoon_api_token' in lagoon:
+                    lagoon_api_token = lagoon.get('lagoon_api_token')
+
+                if not lagoon_api_endpoint or not lagoon_api_token:
                     raise AnsibleError(
                         "Expecting lagoon_api_endpoint and lagoon_api_token."
                     )
