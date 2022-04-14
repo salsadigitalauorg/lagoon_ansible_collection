@@ -114,9 +114,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
                 # Set default connections details to public Lagoon.
                 if 'ssh_host' not in lagoon:
-                    lagoon['ssh_host'] = ''
+                    lagoon['ssh_host'] = 'ssh.lagoon.amazeeio.cloud'
                 if 'ssh_port' not in lagoon:
-                    lagoon['ssh_port'] = ''
+                    lagoon['ssh_port'] = '32222'
 
                 if not isinstance(lagoon, dict):
                     raise AnsibleError(
@@ -126,11 +126,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
                 # Endpoint & token can be provided in the file directly
                 # or in --extra-vars. They could also be provided in separate
                 # places.
+                lagoon_api_endpoint = None
                 if 'lagoon_api_endpoint' in self._vars:
                     lagoon_api_endpoint = self._vars.get('lagoon_api_endpoint')
                 elif 'lagoon_api_endpoint' in lagoon:
                     lagoon_api_endpoint = lagoon.get('lagoon_api_endpoint')
 
+                lagoon_api_token = None
                 if 'lagoon_api_token' in self._vars:
                     lagoon_api_token = self._vars.get('lagoon_api_token')
                 elif 'lagoon_api_token' in lagoon:
@@ -141,7 +143,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
                         "Expecting lagoon_api_endpoint and lagoon_api_token."
                     )
 
-                lagoon_api = GqlClient(
+                self.lagoon_api = GqlClient(
                     lagoon_api_endpoint,
                     lagoon_api_token,
                     lagoon['headers'] if 'headers' in lagoon else {}
@@ -152,29 +154,24 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
                 if 'lagoon_groups' in lagoon and lagoon['lagoon_groups']:
                     for group in lagoon['lagoon_groups']:
-                        for project in get_projects_in_group(lagoon_api, group):
+                        for project in self.get_projects_in_group(group):
                             if project['name'] not in seen:
                                 project_list.append(project)
                                 seen.append(project['name'])
 
                 else:
-                    project_list = get_projects(lagoon_api)
+                    project_list = self.get_projects()
 
                 for project in project_list:
-                    project_group = re.sub(r'[\W-]+', '_', project['name'])
-
-                    project['variables'] = get_project_variables(lagoon_api, project['name'])
-
                     # Secondary lookup as group queries validate permissions
                     # on each trip and results in query timeouts if these
                     # were returned with the project list.
-                    project['groups'] = get_project_groups(lagoon_api, project['name'])
+                    project['groups'], project['variables'] = self.get_project_groups_and_variables(project['name'])
 
                     for environment in project['environments']:
                         try:
-                            environment['variables'] = get_environment_variables(
-                                lagoon_api,
-                                "%s-%s" % (project['name'], environment['name'])
+                            environment['variables'] = self.get_environment_variables(
+                                self.sanitised_name(f"{project['name']}-{environment['name']}")
                             )
                         except:
                             environment['variables'] = []
@@ -183,7 +180,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
     # Add the environment to the inventory set.
     def add_environment(self, project, environment, lagoon):
-        namespace = "%s-%s" % (project['name'], environment['name'])
+        namespace = self.sanitised_name(f"{project['name']}-{environment['name']}")
 
         # Add host to the inventory.
         self.inventory.add_host(namespace)
@@ -198,156 +195,123 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
     def collect_host_vars(self, namespace, environment, project, lagoon):
 
-      host_vars = {
-          'name': namespace,
-          'project_id': project['id'],
-          'project_name': project['name'],
-          'env_id': environment['id'],
-          'env_name': environment['name'],
-          'type': environment['environmentType'],
-          'git_url': project['gitUrl'],
+        host_vars = {
+            'name': namespace,
+            'project_id': project['id'],
+            'project_name': project['name'],
+            'env_id': environment['id'],
+            'env_name': environment['name'],
+            'type': environment['environmentType'],
+            'git_url': project['gitUrl'],
+            'cluster_id': environment['kubernetes']['id'],
+            'cluster_name': environment['kubernetes']['name'],
 
-          # Complex values.
-          'project_variables': project['variables'],
-          'env_variables': environment['variables'],
-          'lagoon_groups': project['groups'],
+            # Complex values.
+            'project_variables': project['variables'],
+            'env_variables': {env['name']: env['value'] for env in environment['variables']},
+            'lagoon_groups': project['groups'],
 
-          # This adds all information returned from the Lagoon query to the host variable
-          # list, this will by dynamic and keys are not guaranteed.
-          'lagoon_project': project,
-          'lagoon_environment': environment,
+            # This adds all information returned from the Lagoon query to the host variable
+            # list, this will by dynamic and keys are not guaranteed.
+            'lagoon_project': project,
+            'lagoon_environment': environment,
 
-          # Ansible specific host variables these define how ansible
-          # will connect to the remote host when the host is selected
-          # for provisioning the play.
-          'ansible_user': '{project}-{environment}'.format(project=project['name'], environment=environment['name']),
-          'ansible_ssh_user': '{project}-{environment}'.format(project=project['name'], environment=environment['name']),
-          'ansible_host': lagoon['ssh_host'],
-          'ansible_port': lagoon['ssh_port'],
-          'ansible_connection': 'local',
-          'ansible_ssh_common_args': '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"'
-      }
-
-      if 'metadata' in project:
-          lagoon_meta = json.loads(project['metadata'])
-          inventory_meta = {}
-          for key, value in lagoon_meta.items():
-              try:
-                  # Metadata can be inserted as valid JSON, the lagoon interpreter
-                  # will convert this to a JSON string and will escape with single quotes.
-                  value = ast.literal_eval(value)
-              except Exception as e: # noqa F841
-                  # We ignore an invalid decode - this will be a standard string value.
-                  pass
-
-              inventory_meta[key] = value
-
-          host_vars['metadata'] = inventory_meta
-
-      return host_vars
-
-
-def get_projects(client: GqlClient) -> dict:
-    """Get all projects"""
-
-    res = client.execute_query(
-        """
-        query GetProjects {
-            allProjects {
-                id
-                name
-                gitUrl
-                environments { id name environmentType }
-            }
+            # Ansible specific host variables these define how ansible
+            # will connect to the remote host when the host is selected
+            # for provisioning the play.
+            'ansible_user': namespace,
+            'ansible_ssh_user': namespace,
+            'ansible_host': lagoon['ssh_host'],
+            'ansible_port': lagoon['ssh_port'],
+            'ansible_connection': 'local',
+            'ansible_ssh_common_args': '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"'
         }
-        """
-    )
-    if res['allProjects'] == None:
-      raise AnsibleError(f"Unable to get projects.")
-    return res['allProjects']
 
+        if 'metadata' in project:
+            lagoon_meta = json.loads(project['metadata'])
+            inventory_meta = {}
+            for key, value in lagoon_meta.items():
+                try:
+                    # Metadata can be inserted as valid JSON, the lagoon interpreter
+                    # will convert this to a JSON string and will escape with single quotes.
+                    value = ast.literal_eval(value)
+                except Exception as e: # noqa F841
+                    # We ignore an invalid decode - this will be a standard string value.
+                    pass
 
-def get_projects_in_group(client: GqlClient, group: str):
-    """Get projects from specific groups."""
+                inventory_meta[key] = value
 
-    res = client.execute_query(
-        """
-        query ($group: String!) {
-            allProjectsInGroup(input: { name: $group }) {
-                id
-                name
-                gitUrl
-                environments { id name environmentType }
-            }
-        }
-        """,
-        {"group": group}
-    )
-    return filter(None, res['allProjectsInGroup'])
+            host_vars['metadata'] = inventory_meta
 
+        return host_vars
 
-def get_project_groups(client: GqlClient, project: str) -> dict:
-    """Get a project's groups"""
+    def sanitised_name(self, name):
+        return re.sub(r'[\W_-]+', '-', name)
 
-    res = client.execute_query(
-        """
-        query projectByName($name: String!) {
-            projectByName(name: $name) {
-                groups { name }
-            }
-        }
-        """,
-        {"name": project}
-    )
-    if res['projectByName'] == None:
-        raise AnsibleError(
-            "Unable to get groups for %s; please make sure the project name is correct" % project)
-    return res['projectByName']['groups']
+    def get_projects(self) -> dict:
+        """Get all projects"""
 
-
-def get_project_variables(client: GqlClient, project: str) -> dict:
-    """Get a project's variables"""
-
-    res = client.execute_query(
-        """
-        query projectVars($name: String!) {
-            projectByName(name: $name) {
-                envVariables {
+        res = self.lagoon_api.execute_query(
+            """
+            query GetProjects {
+                allProjects {
                     id
                     name
-                    value
-                    scope
+                    gitUrl
+                    metadata
+                    environments { id name environmentType kubernetes { id name } openshift { id name } }
                 }
             }
-        }
-        """,
-        {"name": project}
-    )
-    if res['projectByName'] == None:
-        raise AnsibleError(
-            "Unable to get variables for %s; please make sure the project name is correct" % project)
-    return res['projectByName']['envVariables']
+            """
+        )
+        return res['allProjects']
 
+    def get_projects_in_group(self, group: str):
+        """Get projects from specific groups."""
 
-def get_environment_variables(client: GqlClient, environment: str) -> dict:
-    """Get a project environment's variables"""
-
-    res = client.execute_query(
-        """
-        query envVars($name: String!) {
-            environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
-                envVariables {
+        res = self.lagoon_api.execute_query(
+            """
+            query ($group: String!) {
+                allProjectsInGroup(input: { name: $group }) {
                     id
                     name
-                    value
-                    scope
+                    gitUrl
+                    metadata
+                    environments { id name environmentType kubernetes { id name } openshift { id name }  }
                 }
             }
-        }
-        """,
-        {"name": environment}
-    )
-    if res['environmentByKubernetesNamespaceName'] == None:
-        raise AnsibleError(
-            "Unable to get variables for %s; please make sure the environment name is correct" % environment)
-    return res['environmentByKubernetesNamespaceName']['envVariables']
+            """,
+            {"group": group}
+        )
+        return filter(None, res['allProjectsInGroup'])
+
+    def get_project_groups_and_variables(self, project: str) -> dict:
+        """Get a project's groups"""
+
+        res = self.lagoon_api.execute_query(
+            """
+            query projectByName($name: String!) {
+                projectByName(name: $name) {
+                    groups { name }
+                    envVariables { name value }
+                }
+            }
+            """,
+            {"name": project}
+        )
+        return res['projectByName']['groups'], res['projectByName']['envVariables']
+
+    def get_environment_variables(self, environment: str) -> dict:
+        """Get a project environment's variables"""
+
+        res = self.lagoon_api.execute_query(
+            """
+            query envVars($name: String!) {
+                environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
+                    envVariables { name value }
+                }
+            }
+            """,
+            {"name": environment}
+        )
+        return res['environmentByKubernetesNamespaceName']['envVariables']
