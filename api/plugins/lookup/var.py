@@ -1,8 +1,10 @@
 from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+__metaclass__ = type
+
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible.plugins.lookup import LookupBase
 from ansible.utils.display import Display
-__metaclass__ = type
+from ansible.errors import AnsibleError
 
 DOCUMENTATION = """
   name: var
@@ -72,12 +74,49 @@ EXAMPLES = """
   debug: msg='{{ lookup('lagoon.api.var', 'vanilla-govcms9-beta', environment='master') }}'
 
 - name: retrieve a specific variable for a project environment
-  debug: msg='{{ lookup('lagoon.api.var', 'vanilla-govcms9-beta', environment='master', var_name='REDIS_HOST') }}'
+  debug: msg='{{ lookup('lagoon.api.var', 'vanilla-govcms9-beta', environment='master', var_name='GOVCMS_TEST_CANARY') }}'
 """
 
 
 display = Display()
 
+def get_vars_from_environment(client: GqlClient, name: str) -> dict:
+  with client as (_, ds):
+    res = client.execute_query_dynamic(
+        ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
+            ds.Environment.envVariables.select(
+                ds.EnvKeyValue.id,
+                ds.EnvKeyValue.name,
+                ds.EnvKeyValue.value,
+                ds.EnvKeyValue.scope,
+            )
+        )
+    )
+    display.v(f"GraphQL query result: {res}")
+    if res['environmentByKubernetesNamespaceName'] == None:
+        raise AnsibleError(
+            f"Unable to get variables for {name}; please make sure the environment name is correct")
+
+    return res['environmentByKubernetesNamespaceName']['envVariables']
+
+def get_vars_from_project(client: GqlClient, name: str) -> dict:
+  with client as (_, ds):
+    res = client.execute_query_dynamic(
+        ds.Query.projectByName(name=name).select(
+            ds.Project.envVariables.select(
+                ds.EnvKeyValue.id,
+                ds.EnvKeyValue.name,
+                ds.EnvKeyValue.value,
+                ds.EnvKeyValue.scope,
+            )
+        )
+    )
+    display.v(f"GraphQL query result: {res}")
+    if res['projectByName'] == None:
+      raise AnsibleError(
+          f"Unable to get variables for {name}; please make sure the project name is correct")
+
+    return res['projectByName']['envVariables']
 
 class LookupModule(LookupBase):
 
@@ -86,21 +125,21 @@ class LookupModule(LookupBase):
     ret = []
 
     self.set_options(var_options=variables, direct=kwargs)
-    lagoon = ApiClient(
+    lagoon = GqlClient(
         self.get_option('lagoon_api_endpoint'),
         self.get_option('lagoon_api_token'),
-        {'headers': self.get_option('headers', {})}
+        self.get_option('headers', {})
     )
     environment = self.get_option('environment')
 
     for term in terms:
       if environment:
         env_name = term + '-' + environment.replace('/', '-').replace('_', '-').replace('.', '-')
-        display.v("Lagoon variable lookup environment: %s" % env_name)
-        env_vars = lagoon.environment_get_variables(env_name)
+        display.v(f"Lagoon variable lookup environment: {env_name}")
+        env_vars = get_vars_from_environment(lagoon, env_name)
       else:
-        display.v("Lagoon variable lookup project: %s" % term)
-        env_vars = lagoon.project_get_variables(term)
+        display.v(f"Lagoon variable lookup project: {term}")
+        env_vars = get_vars_from_project(lagoon, term)
 
       if self.get_option('return_dict'):
         vars_dict = {}
@@ -108,8 +147,7 @@ class LookupModule(LookupBase):
           vars_dict[var['name']] = var
         ret.append(vars_dict)
       elif self.get_option('var_name'):
-        display.v("Lagoon variable lookup name: %s" %
-                  self.get_option('var_name'))
+        display.v(f"Lagoon variable lookup name: {self.get_option('var_name')}")
         for var in env_vars:
           if var['name'] == self.get_option('var_name'):
             ret.append(var)

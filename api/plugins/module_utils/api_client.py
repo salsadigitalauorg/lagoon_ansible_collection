@@ -28,30 +28,6 @@ class ApiClient:
         self.options['headers']['Authorization'] = "Bearer %s" % token
         self.options['endpoint'] = endpoint
 
-    def projects_all(self):
-        query = {
-            'query': """query {
-                allProjects {
-                    id
-                    name
-                    gitUrl
-                    branches
-                    autoIdle
-                    pullrequests
-                    developmentEnvironmentsLimit
-                    activeSystemsTask
-                    activeSystemsMisc
-                    activeSystemsDeploy
-                    activeSystemsRemove
-                    productionEnvironment
-                    metadata
-                    environments { id name environmentType autoIdle updated created route }
-                }
-            }"""
-        }
-        result = self.make_api_call(self.__prepare_graphql_query(query))
-        return result['data']['allProjects']
-
     ###
     # Get projects from specific groups.
     ###
@@ -423,9 +399,6 @@ class ApiClient:
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % id)
         return result['data']['deleteEnvVariable']
-
-    def metadata(self, project_name):
-        return json.loads(self.project(project_name)['metadata'])
 
     def update_metadata(self, id, key, value):
         query = {

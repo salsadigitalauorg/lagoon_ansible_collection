@@ -1,8 +1,10 @@
 from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+__metaclass__ = type
+
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible.plugins.lookup import LookupBase
 from ansible.utils.display import Display
-__metaclass__ = type
+from ansible.errors import AnsibleError
 
 DOCUMENTATION = """
   name: project
@@ -54,11 +56,83 @@ DOCUMENTATION = """
 EXAMPLES = """
 - name: retrieve a project's information
   debug: msg="{{ lookup('lagoon.api.project', 'vanilla-govcms9-beta') }}"
-"""
 
+- name: retrieve a project's information from an environment
+  debug: msg="{{ lookup('lagoon.api.project', 'vanilla-govcms9-beta-master', from_environment=true) }}"
+"""
 
 display = Display()
 
+
+def get_project(client: GqlClient, name: str) -> dict:
+  with client as (_, ds):
+    res = client.execute_query_dynamic(
+        ds.Query.projectByName(name=name).select(
+            ds.Project.id,
+            ds.Project.name,
+            ds.Project.autoIdle,
+            ds.Project.branches,
+            ds.Project.gitUrl,
+            ds.Project.metadata,
+            ds.Project.developmentEnvironmentsLimit,
+            ds.Project.openshift.select(
+                ds.Openshift.id,
+                ds.Openshift.name,
+            ),
+            ds.Project.kubernetes.select(
+                ds.Kubernetes.id,
+                ds.Kubernetes.name,
+            ),
+            ds.Project.environments.select(
+                ds.Environment.name,
+                ds.Environment.openshift.select(
+                    ds.Openshift.id,
+                    ds.Openshift.name,
+                ),
+                ds.Environment.kubernetes.select(
+                    ds.Kubernetes.id,
+                    ds.Kubernetes.name,
+                ),
+            ),
+            ds.Project.deployTargetConfigs.select(
+                ds.DeployTargetConfig.id,
+                ds.DeployTargetConfig.weight,
+                ds.DeployTargetConfig.branches,
+                ds.DeployTargetConfig.pullrequests,
+                ds.DeployTargetConfig.deployTarget.select(
+                    ds.Openshift.id,
+                    ds.Openshift.name,
+                ),
+            ),
+        )
+    )
+
+    display.v(f"GraphQL query result: {res}")
+    if res['projectByName'] == None:
+      raise AnsibleError(
+          f"Unable to get details for project {name}; please make sure the project name is correct")
+    return res['projectByName']
+
+
+def get_project_from_environment(client: GqlClient, name: str) -> dict:
+  with client as (_, ds):
+    res = client.execute_query_dynamic(
+        ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
+            ds.Environment.project.select(
+                ds.Project.id,
+                ds.Project.name,
+                ds.Project.autoIdle,
+                ds.Project.branches,
+                ds.Project.gitUrl,
+                ds.Project.metadata,
+            )
+        )
+    )
+    display.v(f"GraphQL query result: {res}")
+    if res['environmentByKubernetesNamespaceName']['project'] == None:
+      raise AnsibleError(
+          f"Unable to get project details for environment {name}; please make sure the environment name is correct")
+    return res['environmentByKubernetesNamespaceName']['project']
 
 class LookupModule(LookupBase):
 
@@ -67,17 +141,18 @@ class LookupModule(LookupBase):
     ret = []
 
     self.set_options(var_options=variables, direct=kwargs)
-    lagoon = ApiClient(
+
+    lagoon = GqlClient(
         self.get_option('lagoon_api_endpoint'),
         self.get_option('lagoon_api_token'),
-        {'headers': self.get_option('headers', {})}
+        self.get_option('headers', {})
     )
 
     for term in terms:
       if self.get_option('from_environment'):
-        project = lagoon.project_from_environment(term)
+        project = get_project_from_environment(lagoon, term)
       else:
-        project = lagoon.project(term)
+        project = get_project(lagoon, term)
       ret.append(project)
 
     return ret

@@ -1,12 +1,19 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+EXAMPLES = r'''
+- name: Add user to group.
+  lagoon.api.user_group:
+    email: user@example.com
+    group: test-group
+    role: GUEST
+  register: group_add
+- debug: var=group_add
+'''
+
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-
-display = Display()
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 
 class ActionModule(ActionBase):
@@ -19,12 +26,12 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = ApiClient(
+        self.lagoon = GqlClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            self._task.args.get('headers', {})
         )
 
         email = self._task.args.get('email')
@@ -43,10 +50,10 @@ class ActionModule(ActionBase):
             if role is None:
                 raise AnsibleError("Missing required parameter 'role'")
 
-            result['result'] = lagoon.user_add_group(email, group_name, role)
+            result['result'] = self.user_add_group(email, group_name, role)
 
         if state == 'absent':
-            result = lagoon.user_remove_group(email, group_name)
+            result = self.user_remove_group(email, group_name)
 
             if 'error' in result:
                 result['changed'] = False
@@ -55,3 +62,50 @@ class ActionModule(ActionBase):
             result['changed'] = True
 
         return result
+
+    def user_add_group(self, email: str, group: str, role: str) -> dict:
+        res = self.lagoon.execute_query(
+            """
+            mutation group(
+                $email: String!
+                $group: String!
+                $role: GroupRole!
+            ) {
+                addUserToGroup(input: {
+                    user: { email: $email }
+                    group: { name: $group }
+                    role: $role
+                }) {
+                    id
+                }
+            }""",
+            {
+                "email": email,
+                "group": group,
+                "role": role,
+            }
+        )
+        self._display.v(f"GraphQL query result: {res}")
+        return res['addUserToGroup']['id']
+
+    def user_remove_group(self, email: str, group: str):
+        res = self.lagoon.execute_query(
+            """
+            mutation group(
+                $email: String!
+                $group: String!
+            ) {
+                removeUserFromGroup(input: {
+                    user: { email: $email }
+                    group: { name: $group }
+                }) {
+                    id
+                }
+            }""",
+            {
+                "email": email,
+                "group": group,
+            }
+        )
+        self._display.v(f"GraphQL query result: {res}")
+        return res['removeUserFromGroup']['id']

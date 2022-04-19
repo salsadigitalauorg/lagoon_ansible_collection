@@ -1,14 +1,49 @@
 from __future__ import (absolute_import, division, print_function)
-from operator import truediv
 __metaclass__ = type
 
-import time
+EXAMPLES = r'''
+- name: Add Lagoon deploy target configs.
+  lagoon.api.list:
+    type: project
+  register: projects
+'''
+
+from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 display = Display()
 
+
+def getProjects(client: GqlClient) -> dict:
+
+    res = client.execute_query(
+        """
+        query GetProjects {
+            allProjects {
+                id
+                name
+                gitUrl
+                branches
+                autoIdle
+                pullrequests
+                developmentEnvironmentsLimit
+                activeSystemsTask
+                activeSystemsMisc
+                activeSystemsDeploy
+                activeSystemsRemove
+                productionEnvironment
+                metadata
+                environments { id name environmentType autoIdle updated created route }
+            }
+        }
+"""
+    )
+    display.v(f"GraphQL query result: {res}")
+    if res['allProjects'] == None:
+        raise AnsibleError(f"Unable to get projects.")
+    return res['allProjects']
 
 class ActionModule(ActionBase):
 
@@ -22,10 +57,10 @@ class ActionModule(ActionBase):
 
         display.v("Task args: %s" % self._task.args)
 
-        lagoon = ApiClient(
+        lagoon = GqlClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            self._task.args.get('headers', {})
         )
 
         type = task_vars.get('type', 'project')
@@ -34,6 +69,6 @@ class ActionModule(ActionBase):
             result['failed'] = True
             display.v("Only 'project' is supported")
         else:
-            result['result'] = lagoon.projects_all()
+            result['result'] = getProjects(lagoon)
 
         return result
