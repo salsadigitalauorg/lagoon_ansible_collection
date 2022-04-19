@@ -55,7 +55,7 @@ def is_variable_type(i):
     keys = i.keys()
 
     if 'name' not in keys and 'value' not in keys:
-        return False, 'REquired keys "name" and "value" missing'
+        return False, 'Required keys "name" and "value" missing'
 
     return True, None
 
