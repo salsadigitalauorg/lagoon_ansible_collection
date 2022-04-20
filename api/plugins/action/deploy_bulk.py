@@ -121,13 +121,13 @@ class ActionModule(ActionBase):
                 result['invalid_environment'].append(e[i])
                 display.v(f'Invalid environment detected: {r}')
                 display.v(json.dumps(e[i]))
-                del e[i]
+                continue
 
             envs.append({
                 "environment": e[i]
             })
 
-        if len(e) < 1:
+        if len(envs) < 1:
             result['failed'] = True
             result['message'] = 'No environments to deploy'
             return result
