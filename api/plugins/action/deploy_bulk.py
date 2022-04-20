@@ -109,10 +109,10 @@ class ActionModule(ActionBase):
         for i in range(len(b)):
             valid, r = is_variable_type(b[i])
             if not valid:
-                del b[i]
                 result['invalid_variable'].append(b[i])
                 display.v(f'Invalid project detected: {r}')
                 display.v(b[i])
+                del b[i]
 
         for i in range(len(e)):
             valid, r = is_environment_type(e[i])
