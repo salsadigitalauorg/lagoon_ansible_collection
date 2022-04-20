@@ -106,6 +106,14 @@ class ActionModule(ActionBase):
         result['invalid_variable'] = []
         result['invalid_environment'] = []
 
+        if b is None:
+            b = []
+
+        if e is None:
+            result['failed'] = True
+            result['message'] = 'Missing required "environments" parameter'
+            return result
+
         for i in range(len(b)):
             valid, r = is_variable_type(b[i])
             if not valid:
@@ -132,6 +140,10 @@ class ActionModule(ActionBase):
             result['message'] = 'No environments to deploy'
             return result
 
-        result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
-
+        try:
+            result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
+            result['changed'] = True
+        except:
+            result['failed'] = True
+            result['message'] = 'Unexpected Lagoon API response, unable to trigger a bulk deployment'
         return result
