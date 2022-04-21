@@ -315,7 +315,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             'ansible_ssh_user': namespace,
             'ansible_host': lagoon['ssh_host'],
             'ansible_port': lagoon['ssh_port'],
-            'ansible_connection': 'local',
             'ansible_ssh_common_args': '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"'
         }
 
