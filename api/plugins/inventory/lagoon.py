@@ -5,6 +5,7 @@ import re
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
+from ansible.utils import py3compat
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 __metaclass__ = type
@@ -127,15 +128,17 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
                 # or in --extra-vars. They could also be provided in separate
                 # places.
                 lagoon_api_endpoint = None
-                if 'lagoon_api_endpoint' in self._vars:
+                lagoon_api_endpoint = py3compat.environ.get('LAGOON_API_ENDPOINT')
+                if not lagoon_api_endpoint and 'lagoon_api_endpoint' in self._vars:
                     lagoon_api_endpoint = self._vars.get('lagoon_api_endpoint')
-                elif 'lagoon_api_endpoint' in lagoon:
+                elif not lagoon_api_endpoint and 'lagoon_api_endpoint' in lagoon:
                     lagoon_api_endpoint = lagoon.get('lagoon_api_endpoint')
 
                 lagoon_api_token = None
-                if 'lagoon_api_token' in self._vars:
+                lagoon_api_token = py3compat.environ.get('LAGOON_API_TOKEN')
+                if not lagoon_api_token and 'lagoon_api_token' in self._vars:
                     lagoon_api_token = self._vars.get('lagoon_api_token')
-                elif 'lagoon_api_token' in lagoon:
+                elif not lagoon_api_token and 'lagoon_api_token' in lagoon:
                     lagoon_api_token = lagoon.get('lagoon_api_token')
 
                 if not lagoon_api_endpoint or not lagoon_api_token:
