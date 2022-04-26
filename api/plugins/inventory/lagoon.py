@@ -3,10 +3,14 @@ import ast
 import json
 import re
 from ansible.errors import AnsibleError, AnsibleParserError
+from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
-from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
+from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
 from ansible.utils import py3compat
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from gql.dsl import DSLFragment, DSLQuery, dsl_gql
+from graphql import print_ast
+from typing import List
 
 __metaclass__ = type
 
@@ -15,6 +19,7 @@ DOCUMENTATION = """
     plugin_type: inventory
     extends_documentation_fragment:
         - constructed
+        - inventory_cache
     options:
       plugin:
          description: token that ensures this is a source file for the 'lagoon' plugin.
@@ -41,6 +46,20 @@ DOCUMENTATION = """
                 description: List of Lagoon groups to filter projects by
                 type: list
                 default: []
+            api_batch_group_size:
+                description:
+                - Create batches of this size when making multiple queries
+                  in a single GraphQL query for groups. This allows for more
+                  efficient querying while making less calls to the API.
+                type: int
+                default: 100
+            api_batch_environment_size:
+                description:
+                - Create batches of this size when making multiple queries
+                  in a single GraphQL query for environments. This allows for more
+                  efficient querying while making less calls to the API.
+                type: int
+                default: 200
     requirements:
     - "python >= 3"
     - "PyYAML >= 3.11"
@@ -62,6 +81,8 @@ lagoons:
     headers: {}
     lagoon_groups:
       - my-group
+    api_batch_group_size: 100
+    api_batch_environment_size: 200
 groups:
   development: type == 'development'
   production: type == 'production'
@@ -69,31 +90,66 @@ leading_separator: false
 keyed_groups:
   - key: lagoon_groups|map(attribute='name')
   - key: project_name
-
+cache: true
+cache_plugin: ansible.builtin.jsonfile
+cache_timeout: 7200
+cache_connection: /tmp/lagoon_inventory
+cache_prefix: lagoon
 """
 
-class InventoryModule(BaseInventoryPlugin, Constructable):
+
+class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
     NAME = 'lagoon.api.lagoon'
 
-    def parse(self, inventory, loader, path, cache=True):
+    def parse(self, inventory: InventoryData, loader, path, cache=True):
         super(InventoryModule, self).parse(inventory, loader, path, cache)
 
         self._read_config_data(path)
+        cache_key = self.get_cache_key(path)
 
-        # Fetch and process projects from Lagoon.
-        self.fetch_objects(self.get_option('lagoons'))
+        # cache may be True or False at this point to indicate if the inventory is being refreshed
+        # get the user's cache option too to see if we should save the cache if it is changing
+        user_cache_setting = self.get_option('cache')
+
+        # read if the user has caching enabled and the cache isn't being refreshed
+        attempt_to_read_cache = user_cache_setting and cache
+        # update if the user has caching enabled and the cache is being refreshed; update this value to True if the cache has expired below
+        cache_needs_update = user_cache_setting and not cache
+
+        self.all_objects = []
+
+        # attempt to read the cache if inventory isn't being refreshed and the user has caching enabled
+        if attempt_to_read_cache:
+            try:
+                self.all_objects = self._cache[cache_key]
+            except KeyError:
+                # This occurs if the cache_key is not in the cache or if the cache_key expired, so the cache needs to be updated
+                cache_needs_update = True
+
+        lagoons = self.get_option('lagoons')
+
+        if not attempt_to_read_cache or cache_needs_update:
+            # Fetch and process projects from Lagoon.
+            self.fetch_objects(lagoons)
+
+        if cache_needs_update:
+            self._cache[cache_key] = self.all_objects
 
         strict = self.get_option('strict')
+        self.populate()
 
         try:
             for host in inventory.hosts:
-              hostvars = inventory.hosts[host].get_vars()
-              # Create composed groups.
-              self._add_host_to_composed_groups(self.get_option('groups'), hostvars, host, strict=strict)
-              # Create keyed groups.
-              self._add_host_to_keyed_groups(self.get_option('keyed_groups'), hostvars, host, strict=strict)
+                hostvars = inventory.hosts[host].get_vars()
+                # Create composed groups.
+                self._add_host_to_composed_groups(self.get_option(
+                    'groups'), hostvars, host, strict=strict)
+                # Create keyed groups.
+                self._add_host_to_keyed_groups(self.get_option(
+                    'keyed_groups'), hostvars, host, strict=strict)
         except Exception as e:
-            raise AnsibleParserError("failed to parse %s: %s " % (to_native(path), to_native(e)), orig_exc=e)
+            raise AnsibleParserError("failed to parse %s: %s " % (
+                to_native(path), to_native(e)), orig_exc=e)
 
     def fetch_objects(self, lagoons):
 
@@ -146,40 +202,73 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
                         "Expecting lagoon_api_endpoint and lagoon_api_token."
                     )
 
+                self.api_batch_group_size = 100
+                if 'api_batch_group_size' in lagoon:
+                    self.api_batch_group_size = lagoon.get('api_batch_group_size')
+
+                self.api_batch_environment_size = 200
+                if 'api_batch_environment_size' in lagoon:
+                    self.api_batch_environment_size = lagoon.get('api_batch_environment_size')
+
                 self.lagoon_api = GqlClient(
                     lagoon_api_endpoint,
                     lagoon_api_token,
                     lagoon['headers'] if 'headers' in lagoon else {}
                 )
 
-                project_list = []
-                seen = []
+                objects = {
+                    'lagoon': lagoon,
+                    'project_list': [],
+                    'projects_groups_n_vars': {},
+                    'environments_vars': {}
+                }
 
+                seen = []
                 if 'lagoon_groups' in lagoon and lagoon['lagoon_groups']:
+                    self.display.v(f"Fetching list of projects for these groups: [{', '.join(lagoon['lagoon_groups'])}]")
                     for group in lagoon['lagoon_groups']:
                         for project in self.get_projects_in_group(group):
                             if project['name'] not in seen:
-                                project_list.append(project)
+                                objects['project_list'].append(project)
                                 seen.append(project['name'])
 
                 else:
-                    project_list = self.get_projects()
+                    self.display.v("Fetching list of all projects")
+                    objects['project_list'] = self.get_projects()
 
-                for project in project_list:
-                    # Secondary lookup as group queries validate permissions
-                    # on each trip and results in query timeouts if these
-                    # were returned with the project list.
-                    project['groups'], project['variables'] = self.get_project_groups_and_variables(project['name'])
-
+                project_names = []
+                environment_names = []
+                for project in objects['project_list']:
+                    project_names.append(project['name'])
                     for environment in project['environments']:
-                        try:
-                            environment['variables'] = self.get_environment_variables(
-                                self.sanitised_name(f"{project['name']}-{environment['name']}")
-                            )
-                        except:
-                            environment['variables'] = []
+                        environment_names.append(self.sanitised_name(f"{project['name']}-{environment['name']}"))
 
-                        self.add_environment(project, environment, lagoon)
+                # Secondary batch lookup as group queries validate permissions
+                # on each trip and results in query timeouts if these
+                # were returned with the project list.
+                objects['projects_groups_n_vars'] = self.batch_fetch_projects_groups_and_variables(project_names)
+
+                # Do the same for environment vars
+                objects['environments_vars'] = self.batch_get_env_vars(environment_names)
+
+                self.all_objects.append(objects)
+
+    def populate(self):
+        for objects in self.all_objects:
+            for project in objects['project_list']:
+                pgv = objects['projects_groups_n_vars'].get(
+                        self.sanitised_for_query_alias(project['name']))
+                project['groups'], project['envVariables'] = pgv['groups'], pgv['envVariables']
+
+                for environment in project['environments']:
+                    try:
+                        environment['envVariables'] = objects['environments_vars'].get(
+                            self.sanitised_for_query_alias(f"{project['name']}-{environment['name']}"))['envVariables']
+                    except:
+                        environment['envVariables'] = []
+
+                    self.add_environment(project, environment, objects['lagoon'])
+
 
     # Add the environment to the inventory set.
     def add_environment(self, project, environment, lagoon):
@@ -190,9 +279,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
         # Collect and set host variables.
         try:
-          hostvars = self.collect_host_vars(namespace, environment, project, lagoon)
-          for key,value in hostvars.items():
-              self.inventory.set_variable(namespace, key, value)
+            hostvars = self.collect_host_vars(namespace, environment, project, lagoon)
+            for key,value in hostvars.items():
+                self.inventory.set_variable(namespace, key, value)
         except Exception as e:
             raise AnsibleParserError("failed to parse: %s " % (to_native(e)), orig_exc=e)
 
@@ -210,8 +299,8 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
             'cluster_name': environment['kubernetes']['name'],
 
             # Complex values.
-            'project_variables': project['variables'],
-            'env_variables': {env['name']: env['value'] for env in environment['variables']},
+            'project_variables': {var['name']: var['value'] for var in project['envVariables']},
+            'environment_variables': {var['name']: var['value'] for var in environment['envVariables']},
             'lagoon_groups': project['groups'],
 
             # This adds all information returned from the Lagoon query to the host variable
@@ -226,7 +315,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
             'ansible_ssh_user': namespace,
             'ansible_host': lagoon['ssh_host'],
             'ansible_port': lagoon['ssh_port'],
-            'ansible_connection': 'local',
             'ansible_ssh_common_args': '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"'
         }
 
@@ -288,33 +376,121 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
         )
         return filter(None, res['allProjectsInGroup'])
 
-    def get_project_groups_and_variables(self, project: str) -> dict:
-        """Get a project's groups"""
+    def batch_fetch_projects_groups_and_variables(self, projects: List[str]) -> dict:
+        """
+        Get the groups & variables for a batch of projects.
+        """
 
-        res = self.lagoon_api.execute_query(
-            """
-            query projectByName($name: String!) {
-                projectByName(name: $name) {
-                    groups { name }
-                    envVariables { name value }
-                }
+        groups_n_vars = {}
+
+        # Create batches.
+        batches = []
+        for i in range(0, len(projects), self.api_batch_group_size):
+            batches.append(projects[i:i+self.api_batch_group_size])
+
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching groups & vars for batch {i+1}/{len(batches)}")
+            groups_n_vars.update(self.batch_fetch_groups_and_vars_execute(b))
+
+        return groups_n_vars
+
+    def batch_fetch_groups_and_vars_execute(self, batch: List[str]):
+        """
+        Build the query for a batch of projects.
+
+        The expected built query is as follows:
+        query {
+            project1_name: projectByName(name: "project1-name") {
+                ...GroupsNVars
             }
-            """,
-            {"name": project}
-        )
-        return res['projectByName']['groups'], res['projectByName']['envVariables']
-
-    def get_environment_variables(self, environment: str) -> dict:
-        """Get a project environment's variables"""
-
-        res = self.lagoon_api.execute_query(
-            """
-            query envVars($name: String!) {
-                environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
-                    envVariables { name value }
-                }
+            project2_name: projectByName(name: "project2-name") {
+                ...GroupsNVars
             }
-            """,
-            {"name": environment}
-        )
-        return res['environmentByKubernetesNamespaceName']['envVariables']
+        }
+        fragment GroupsNVars on Project {
+            groups { name }
+            envVariables { name value }
+        }
+
+        """
+        self.display.vv(f"Fetching groups & vars for [{', '.join(batch)}]")
+        with self.lagoon_api as (_, ds):
+            # Build the fragment.
+            groupsnvars_fields = DSLFragment("GroupsNVars")
+            groupsnvars_fields.on(ds.Project)
+            groupsnvars_fields.select(
+                ds.Project.groups.select(ds.GroupInterface.name),
+                ds.Project.envVariables.select(
+                    ds.EnvKeyValue.name,
+                    ds.EnvKeyValue.value,
+                ),
+            )
+
+            field_queries = []
+            for pname in batch:
+                # Build the main query.
+                field_query = ds.Query.projectByName.args(
+                    name=pname).alias(self.sanitised_for_query_alias(pname))
+                field_query.select(groupsnvars_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(groupsnvars_fields, DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            return self.lagoon_api.client.session.execute(query)
+
+    def batch_get_env_vars(self, environments: List[str]) -> dict:
+        """
+        Get the variables for a batch of environments.
+        """
+
+        env_vars = {}
+
+        # Create batches.
+        batches = []
+        for i in range(0, len(environments), self.api_batch_environment_size):
+            batches.append(environments[i:i+self.api_batch_environment_size])
+
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching env vars for batch {i+1}/{len(batches)}")
+            env_vars.update(self.batch_get_env_vars_execute(b))
+
+        return env_vars
+
+    def batch_get_env_vars_execute(self, batch: List[str]):
+        """
+        Build the query for a batch of environments
+
+        The expected built query is as follows:
+        query {
+            project_env_1: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "project-env-1") {
+                ...EnvVars
+            }
+            project_env_2: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "project-env-2") {
+                ...EnvVars
+            }
+        }
+        fragment EnvVars on Environment {
+            envVariables { name value }
+        }
+        """
+
+        self.display.vv(f"Fetching env vars for [{', '.join(batch)}]")
+        query = "query {"
+        for env in batch:
+            query += f"""
+    {self.sanitised_for_query_alias(env)}: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "{self.sanitised_name(env)}") {{
+        ...EnvVars
+    }}
+    """
+        query += """
+}
+
+fragment EnvVars on Environment {
+    envVariables { name value }
+}
+        """
+        self.display.vvvv(f"Query: \n{query}")
+        return self.lagoon_api.execute_query(query)
+
+    def sanitised_for_query_alias(self, name):
+        return re.sub(r'[\W-]+', '_', name)
