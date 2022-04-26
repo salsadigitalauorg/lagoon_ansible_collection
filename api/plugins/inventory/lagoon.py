@@ -3,11 +3,11 @@ from ansible.utils.display import Display
 import re
 import ast
 import json
-from ansible.errors import AnsibleError, AnsibleParserError, AnsibleOptionsError
-from ansible.plugins import inventory
+from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Constructable
 from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from ansible_collections.lagoon.api.plugins.module_utils.create_token import CreateToken
 
 __metaclass__ = type
 
@@ -31,9 +31,6 @@ DOCUMENTATION = """
             lagoon_api_endpoint:
                 description:
                 - The lagoon API endpoint
-            lagoon_api_token:
-                description:
-                - The lagoon API token
             headers:
               description: HTTP request headers
               type: dictionary
@@ -107,6 +104,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
             for lagoon in lagoons:
 
+                if not isinstance(lagoon, dict):
+                    raise AnsibleError(
+                        "Lagoon must be a dictionary."
+                    )
+
                 if 'transport' not in lagoon:
                     lagoon['transport'] = 'ssh'
                 elif lagoon['transport'] != 'ssh':
@@ -117,23 +119,30 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
 
                 # Set default connections details to public Lagoon.
                 if 'ssh_host' not in lagoon:
-                    lagoon['ssh_host'] = ''
+                    raise AnsibleError(
+                        "Expecting SSH host."
+                    )
+
                 if 'ssh_port' not in lagoon:
-                    lagoon['ssh_port'] = ''
-
-                if not isinstance(lagoon, dict):
                     raise AnsibleError(
-                        "Expection lagoon to be a dictionary."
+                        "Expecting SSH port."
                     )
 
-                if not {'lagoon_api_endpoint', 'lagoon_api_token'} <= set(lagoon):
+                if 'ssh_username' not in lagoon:
+                    # If ssh_username is not defined in configuration file, 
+                    # use lagoon as default user.
+                    lagoon['ssh_username'] = 'lagoon'
+
+                if 'lagoon_api_endpoint' not in lagoon:
                     raise AnsibleError(
-                        "Expecting lagoon_api_endpoint and lagoon_api_token."
+                        "Expecting lagoon_api_endpoint."
                     )
+
+                token = CreateToken(lagoon['ssh_host'], lagoon['ssh_port'], lagoon['ssh_username'])
 
                 lagoon_api = ApiClient(
                     lagoon['lagoon_api_endpoint'],
-                    lagoon['lagoon_api_token'],
+                    token.get_token(),
                     {
                         'headers': lagoon['headers'] if 'headers' in lagoon else {}
                     }
