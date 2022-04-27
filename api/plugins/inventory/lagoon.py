@@ -9,8 +9,9 @@ from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructa
 from ansible.utils import py3compat
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from gql.dsl import DSLFragment, DSLQuery, dsl_gql
+from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
-from typing import List
+from typing import Any, List, Optional
 
 __metaclass__ = type
 
@@ -32,20 +33,18 @@ DOCUMENTATION = """
             name:
                 description:
                 - Name for this Lagoon endpoint
-            lagoon_api_endpoint:
+            api_endpoint:
                 description:
                 - The lagoon API endpoint
-            lagoon_api_token:
+                aliases: [ lagoon_api_endpoint ]
+                env:
+                - name: LAGOON_API_ENDPOINT
+            api_token:
                 description:
                 - The lagoon API token
-            headers:
-              description: HTTP request headers
-              type: dictionary
-              default: {}
-            lagoon_groups:
-                description: List of Lagoon groups to filter projects by
-                type: list
-                default: []
+                aliases: [ lagoon_api_token ]
+                env:
+                - name: LAGOON_API_TOKEN
             api_batch_group_size:
                 description:
                 - Create batches of this size when making multiple queries
@@ -53,6 +52,9 @@ DOCUMENTATION = """
                   efficient querying while making less calls to the API.
                 type: int
                 default: 100
+                aliases: [ lagoon_api_batch_group_size ]
+                env:
+                - name: LAGOON_API_BATCH_GROUP_SIZE
             api_batch_environment_size:
                 description:
                 - Create batches of this size when making multiple queries
@@ -60,6 +62,20 @@ DOCUMENTATION = """
                   efficient querying while making less calls to the API.
                 type: int
                 default: 200
+                aliases: [ lagoon_api_batch_environment_size ]
+                env:
+                - name: LAGOON_API_BATCH_ENVIRONMENT_SIZE
+            headers:
+              description: HTTP request headers
+              type: dictionary
+              default: {}
+            filter_groups:
+                description: List of Lagoon groups to filter projects by
+                type: list
+                default: []
+                aliases: [ lagoon_filter_groups, lagoon_groups ]
+                env:
+                - name: LAGOON_FILTER_GROUPS
     requirements:
     - "python >= 3"
     - "PyYAML >= 3.11"
@@ -73,16 +89,16 @@ plugin: lagoon.api.lagoon
 strict: false
 lagoons:
   -
-    lagoon_api_endpoint: 'http://localhost:4000'
-    lagoon_api_token: ''
-    transport: 'ssh'
-    ssh_host: 'localhost'
-    ssh_port: '22'
-    headers: {}
-    lagoon_groups:
-      - my-group
+    api_endpoint: 'http://localhost:4000'
+    api_token: ''
     api_batch_group_size: 100
     api_batch_environment_size: 200
+    transport: 'ssh'
+    headers: {}
+    filter_groups:
+      - my-group
+    ssh_port: '22'
+    ssh_host: 'localhost'
 groups:
   development: type == 'development'
   production: type == 'production'
@@ -170,10 +186,8 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     )
 
                 # Set default connections details to public Lagoon.
-                if 'ssh_host' not in lagoon:
-                    lagoon['ssh_host'] = 'ssh.lagoon.amazeeio.cloud'
-                if 'ssh_port' not in lagoon:
-                    lagoon['ssh_port'] = '32222'
+                lagoon['ssh_host'] = self.get_var(lagoon, 'ssh_host', 'ssh.lagoon.amazeeio.cloud')
+                lagoon['ssh_port'] = self.get_var(lagoon, 'ssh_port', '32222')
 
                 if not isinstance(lagoon, dict):
                     raise AnsibleError(
@@ -183,32 +197,22 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 # Endpoint & token can be provided in the file directly
                 # or in --extra-vars. They could also be provided in separate
                 # places.
-                lagoon_api_endpoint = None
-                lagoon_api_endpoint = py3compat.environ.get('LAGOON_API_ENDPOINT')
-                if not lagoon_api_endpoint and 'lagoon_api_endpoint' in self._vars:
-                    lagoon_api_endpoint = self._vars.get('lagoon_api_endpoint')
-                elif not lagoon_api_endpoint and 'lagoon_api_endpoint' in lagoon:
-                    lagoon_api_endpoint = lagoon.get('lagoon_api_endpoint')
-
-                lagoon_api_token = None
-                lagoon_api_token = py3compat.environ.get('LAGOON_API_TOKEN')
-                if not lagoon_api_token and 'lagoon_api_token' in self._vars:
-                    lagoon_api_token = self._vars.get('lagoon_api_token')
-                elif not lagoon_api_token and 'lagoon_api_token' in lagoon:
-                    lagoon_api_token = lagoon.get('lagoon_api_token')
+                lagoon_api_endpoint = self.get_var(lagoon, 'api_endpoint')
+                lagoon_api_token = self.get_var(lagoon, 'api_token')
 
                 if not lagoon_api_endpoint or not lagoon_api_token:
                     raise AnsibleError(
                         "Expecting lagoon_api_endpoint and lagoon_api_token."
                     )
 
-                self.api_batch_group_size = 100
-                if 'api_batch_group_size' in lagoon:
-                    self.api_batch_group_size = lagoon.get('api_batch_group_size')
+                # Batch sizes should be overridable by environment variables.
+                self.api_batch_group_size = self.get_var(lagoon, 'api_batch_group_size', 100)
+                if isinstance(self.api_batch_group_size, str):
+                    self.api_batch_group_size = int(self.api_batch_group_size)
 
-                self.api_batch_environment_size = 200
-                if 'api_batch_environment_size' in lagoon:
-                    self.api_batch_environment_size = lagoon.get('api_batch_environment_size')
+                self.api_batch_environment_size = self.get_var(lagoon, 'api_batch_environment_size', 200)
+                if isinstance(self.api_batch_environment_size, str):
+                    self.api_batch_environment_size = int(self.api_batch_environment_size)
 
                 self.lagoon_api = GqlClient(
                     lagoon_api_endpoint,
@@ -224,9 +228,15 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 }
 
                 seen = []
-                if 'lagoon_groups' in lagoon and lagoon['lagoon_groups']:
-                    self.display.v(f"Fetching list of projects for these groups: [{', '.join(lagoon['lagoon_groups'])}]")
-                    for group in lagoon['lagoon_groups']:
+                lagoon_groups = self.get_var(lagoon, 'filter_groups')
+                # Backwards-compatibility.
+                if not lagoon_groups:
+                    lagoon_groups = self.get_var(lagoon, 'groups')
+                if isinstance(lagoon_groups, str):
+                    lagoon_groups = lagoon_groups.split(",")
+                if lagoon_groups:
+                    self.display.v(f"Fetching list of projects for these groups: [{', '.join(lagoon_groups)}]")
+                    for group in lagoon_groups:
                         for project in self.get_projects_in_group(group):
                             if project['name'] not in seen:
                                 objects['project_list'].append(project)
@@ -252,6 +262,29 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 objects['environments_vars'] = self.batch_get_env_vars(environment_names)
 
                 self.all_objects.append(objects)
+
+    def get_var(self, lagoon, name: str, default: Optional[Any]=None):
+        """
+        Determines a variable from the environment, host vars or lagoon.yml
+        file, in that order.
+
+        When looking at environment and host variables, the name is prefixed
+        with 'LAGOON_' and 'lagoon_' respectively.
+        """
+
+        safe_name = f"lagoon_{name}"
+        val = py3compat.environ.get(safe_name.upper())
+        if not val and safe_name in self._vars:
+            val = self._vars.get(safe_name)
+        elif not val and name in lagoon:
+            val = lagoon.get(name)
+        # Keep backwards compatibility with 'lagoon_' variables in lagoon.yml.
+        elif not val and safe_name in lagoon:
+            val = lagoon.get(safe_name)
+        elif not val and default:
+            val = default
+
+        return val
 
     def populate(self):
         for objects in self.all_objects:
@@ -436,7 +469,21 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
             query = dsl_gql(groupsnvars_fields, DSLQuery(*field_queries))
             self.display.vvvv(f"Built query: \n{print_ast(query)}")
-            return self.lagoon_api.client.session.execute(query)
+            try:
+                return self.lagoon_api.client.session.execute(query)
+            except TransportQueryError as e:
+                self.display.vvv(e.errors)
+                if len(e.data):
+                    raise AnsibleError(
+                        """
+The gql query returned incomplete data; this could be due to the batch query
+timing out. You could try decreasing the batch size (`lagoon_api_batch_group_size`)
+and see if that helps""", None, True, False, e)
+                else:
+                    raise e
+            except Exception as e:
+                self.display.vvv(e.errors)
+                raise e
 
     def batch_get_env_vars(self, environments: List[str]) -> dict:
         """
@@ -490,7 +537,22 @@ fragment EnvVars on Environment {
 }
         """
         self.display.vvvv(f"Query: \n{query}")
-        return self.lagoon_api.execute_query(query)
+
+        try:
+            return self.lagoon_api.execute_query(query)
+        except TransportQueryError as e:
+            self.display.vvv(e.errors)
+            if len(e.data):
+                raise AnsibleError(
+                    """
+The gql query returned incomplete data; this could be due to the batch query
+timing out. You could try decreasing the batch size (`lagoon_api_batch_environment_size`)
+and see if that helps""", None, True, False, e)
+            else:
+                raise e
+        except Exception as e:
+            self.display.vvv(e.errors)
+            raise e
 
     def sanitised_for_query_alias(self, name):
         return re.sub(r'[\W-]+', '_', name)
