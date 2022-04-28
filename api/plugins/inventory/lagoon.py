@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 import ast
 import json
 import re
+import ansible_collections.lagoon.api.plugins.module_utils.token as LagoonToken
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
@@ -177,6 +178,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
             for lagoon in lagoons:
 
+                if not isinstance(lagoon, dict):
+                    raise AnsibleError(
+                        "Expecting lagoon to be a dictionary."
+                    )
+
                 if 'transport' not in lagoon:
                     lagoon['transport'] = 'ssh'
                 elif lagoon['transport'] != 'ssh':
@@ -189,21 +195,20 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 lagoon['ssh_host'] = self.get_var(lagoon, 'ssh_host', 'ssh.lagoon.amazeeio.cloud')
                 lagoon['ssh_port'] = self.get_var(lagoon, 'ssh_port', '32222')
 
-                if not isinstance(lagoon, dict):
-                    raise AnsibleError(
-                        "Expecting lagoon to be a dictionary."
-                    )
-
                 # Endpoint & token can be provided in the file directly
                 # or in --extra-vars. They could also be provided in separate
                 # places.
                 lagoon_api_endpoint = self.get_var(lagoon, 'api_endpoint')
                 lagoon_api_token = self.get_var(lagoon, 'api_token')
 
-                if not lagoon_api_endpoint or not lagoon_api_token:
+                if not lagoon_api_endpoint:
                     raise AnsibleError(
-                        "Expecting lagoon_api_endpoint and lagoon_api_token."
+                        "Expecting lagoon_api_endpoint."
                     )
+
+                if not lagoon_api_token:
+                    # Try fetching a fresh token.
+                    lagoon_api_token = self.fetch_lagoon_api_token(lagoon)
 
                 # Batch sizes should be overridable by environment variables.
                 self.api_batch_group_size = self.get_var(lagoon, 'api_batch_group_size', 100)
@@ -556,3 +561,24 @@ and see if that helps""", None, True, False, e)
 
     def sanitised_for_query_alias(self, name):
         return re.sub(r'[\W-]+', '_', name)
+
+    def fetch_lagoon_api_token(self, lagoon):
+        lagoon_ssh_private_key = self.get_var(lagoon, 'ssh_private_key')
+        lagoon_ssh_private_key_file = self.get_var(lagoon, 'ssh_private_key_file')
+
+        if lagoon_ssh_private_key:
+            if not lagoon_ssh_private_key_file:
+                lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
+            LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
+
+        rc, token, error = LagoonToken.fetch_token(
+            lagoon.get('ssh_host'),
+            lagoon.get('ssh_port'),
+            "",
+            lagoon_ssh_private_key
+        )
+
+        if rc > 0:
+            raise AnsibleError("Failed to fetch Lagoon API token: %s " % (error))
+
+        return token
