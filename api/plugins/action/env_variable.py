@@ -15,17 +15,23 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
-            task_vars = dict()
+            task_vars = dict(options = {"headers": self._task.args.get('headers', {})})
+            elif task_vars and task_vars.options is None:
+                task_vars.options = dict(
+                        "headers": self._task.args.get('headers', {}),
+                    )
 
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
         display.v("Task args: %s" % self._task.args)
 
+        breakpoint()
+
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            task_vars.get('options')
         )
 
         type = self._task.args.get('type')
