@@ -574,11 +574,12 @@ and see if that helps""", None, True, False, e)
         rc, token, error = LagoonToken.fetch_token(
             lagoon.get('ssh_host'),
             lagoon.get('ssh_port'),
-            "",
+            "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
             lagoon_ssh_private_key
         )
 
         if rc > 0:
             raise AnsibleError("Failed to fetch Lagoon API token: %s " % (error))
 
-        return token
+        return token.decode("utf-8").strip()
+
