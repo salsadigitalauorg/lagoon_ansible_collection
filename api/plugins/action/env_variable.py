@@ -29,7 +29,9 @@ class ActionModule(ActionBase):
         value = self._task.args.get('value', None)
         scope = self._task.args.get('scope', None)
         replace_existing = self._task.args.get('replace_existing', False)
-        options = self._task.args.get('options', {'headers': {}})
+        options = self._task.args.get('options', {}})
+        if not 'headers' in options:
+            options['headers'] = {}
 
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
