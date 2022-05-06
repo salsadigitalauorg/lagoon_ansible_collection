@@ -15,11 +15,7 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
-            task_vars = dict(options = {"headers": self._task.args.get('headers', {})})
-            elif task_vars and task_vars.options is None:
-                task_vars.options = dict(
-                        "headers": self._task.args.get('headers', {}),
-                    )
+            task_vars = dict()
 
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
