@@ -22,19 +22,22 @@ class ActionModule(ActionBase):
 
         display.v("Task args: %s" % self._task.args)
 
-        lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
-        )
-
+        name = self._task.args.get('name')
         type = self._task.args.get('type')
         type_name = self._task.args.get('type_name')
-        name = self._task.args.get('name')
         state = self._task.args.get('state', 'present')
         value = self._task.args.get('value', None)
         scope = self._task.args.get('scope', None)
         replace_existing = self._task.args.get('replace_existing', False)
+        options = self._task.args.get('options', {})
+        if not 'headers' in options:
+            options['headers'] = {}
+
+        lagoon = ApiClient(
+            task_vars.get('lagoon_api_endpoint'),
+            task_vars.get('lagoon_api_token'),
+            options
+        )
 
         # Setting this option will ensure the value has been set, by making
         # additional calls to the API until it matches.
