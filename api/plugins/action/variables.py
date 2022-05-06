@@ -22,14 +22,15 @@ class ActionModule(ActionBase):
 
         display.v("Task args: %s" % self._task.args)
 
+        name = self._task.args.get('name')
+        type = self._task.args.get('type', 'project')
+        options = self._task.args.get('options', {'headers': {}})
+
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            options
         )
-
-        name = self._task.args.get('name')
-        type = self._task.args.get('type', 'project')
 
         if type == "project":
             result['data'] = lagoon.project_get_variables(name)

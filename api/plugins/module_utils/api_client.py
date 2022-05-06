@@ -618,7 +618,6 @@ class ApiClient:
 
     def make_api_call(self, payload):
         # display.v("API call payload: %s" % payload)
-        raise Exception(self.options.get('options'))
         try:
             response = open_url(self.options.get('endpoint'), data=payload,
                                 validate_certs=self.options.get(
