@@ -459,7 +459,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         The expected built query is as follows:
         query {
             projectByName(name: "project-name") {
-                environments { id name environmentType kubernetes { id name } }
+                environments { id name environmentType routes kubernetes { id name } }
             }
         }
         """
@@ -470,6 +470,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 ds.Environment.id,
                 ds.Environment.name,
                 ds.Environment.environmentType,
+                ds.Environment.routes,
                 ds.Environment.kubernetes.select(
                     ds.Kubernetes.id,
                     ds.Kubernetes.name
