@@ -62,7 +62,7 @@ DOCUMENTATION = """
                   in a single GraphQL query for environments. This allows for more
                   efficient querying while making less calls to the API.
                 type: int
-                default: 200
+                default: 50
                 aliases: [ lagoon_api_batch_environment_size ]
                 env:
                 - name: LAGOON_API_BATCH_ENVIRONMENT_SIZE
@@ -93,7 +93,7 @@ lagoons:
     api_endpoint: 'http://localhost:4000'
     api_token: ''
     api_batch_group_size: 100
-    api_batch_environment_size: 200
+    api_batch_environment_size: 50
     transport: 'ssh'
     headers: {}
     filter_groups:
@@ -172,7 +172,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         if lagoons:
             if not isinstance(lagoons, list):
-                raise AnsibleError (
+                raise AnsibleError(
                     "Expecting lagoons to be a list."
                 )
 
@@ -215,7 +215,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 if isinstance(self.api_batch_group_size, str):
                     self.api_batch_group_size = int(self.api_batch_group_size)
 
-                self.api_batch_environment_size = self.get_var(lagoon, 'api_batch_environment_size', 200)
+                self.api_batch_environment_size = self.get_var(lagoon, 'api_batch_environment_size', 50)
                 if isinstance(self.api_batch_environment_size, str):
                     self.api_batch_environment_size = int(self.api_batch_environment_size)
 
@@ -252,11 +252,14 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     objects['project_list'] = self.get_projects()
 
                 project_names = []
-                environment_names = []
                 for project in objects['project_list']:
                     project_names.append(project['name'])
-                    for environment in project['environments']:
-                        environment_names.append(self.sanitised_name(f"{project['name']}-{environment['name']}"))
+
+                objects['projects_environments'] = self.batch_fetch_projects_environments(project_names)
+                environment_names = []
+                for project, environments in objects['projects_environments'].items():
+                    for environment in environments['environments']:
+                      environment_names.append(self.sanitised_name(f"{project}-{environment['name']}"))
 
                 # Secondary batch lookup as group queries validate permissions
                 # on each trip and results in query timeouts if these
@@ -268,7 +271,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 self.all_objects.append(objects)
 
-    def get_var(self, lagoon, name: str, default: Optional[Any]=None):
+    def get_var(self, lagoon, name: str, default: Optional[Any] = None):
         """
         Determines a variable from the environment, host vars or lagoon.yml
         file, in that order.
@@ -298,15 +301,16 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                         self.sanitised_for_query_alias(project['name']))
                 project['groups'], project['envVariables'] = pgv['groups'], pgv['envVariables']
 
+                penv = objects['projects_environments'].get(self.sanitised_for_query_alias(project['name']))
+                project['environments'] = penv['environments']
+
                 for environment in project['environments']:
                     try:
                         environment['envVariables'] = objects['environments_vars'].get(
                             self.sanitised_for_query_alias(f"{project['name']}-{environment['name']}"))['envVariables']
                     except:
                         environment['envVariables'] = []
-
                     self.add_environment(project, environment, objects['lagoon'])
-
 
     # Add the environment to the inventory set.
     def add_environment(self, project, environment, lagoon):
@@ -318,7 +322,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         # Collect and set host variables.
         try:
             hostvars = self.collect_host_vars(namespace, environment, project, lagoon)
-            for key,value in hostvars.items():
+            for key, value in hostvars.items():
                 self.inventory.set_variable(namespace, key, value)
         except Exception as e:
             raise AnsibleParserError("failed to parse: %s " % (to_native(e)), orig_exc=e)
@@ -388,7 +392,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     name
                     gitUrl
                     metadata
-                    environments { id name environmentType kubernetes { id name } openshift { id name } }
                 }
             }
             """
@@ -406,13 +409,30 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     name
                     gitUrl
                     metadata
-                    environments { id name environmentType kubernetes { id name } openshift { id name }  }
                 }
             }
             """,
             {"group": group}
         )
         return filter(None, res['allProjectsInGroup'])
+
+    def batch_fetch_projects_environments(self, projects: List[str]) -> dict:
+        """
+        Get the environments for a batch of projects.
+        """
+
+        environments = {}
+
+        # Create batches.
+        batches = []
+        for i in range(0, len(projects), self.api_batch_group_size):
+            batches.append(projects[i:i+self.api_batch_group_size])
+
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching environments for batch {i+1}/{len(batches)}")
+            environments.update(self.batch_fetch_environments_execute(b))
+
+        return environments
 
     def batch_fetch_projects_groups_and_variables(self, projects: List[str]) -> dict:
         """
@@ -431,6 +451,58 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             groups_n_vars.update(self.batch_fetch_groups_and_vars_execute(b))
 
         return groups_n_vars
+
+    def batch_fetch_environments_execute(self, batch: List[str]):
+        """
+        Build the query for a batch of environments.
+
+        The expected built query is as follows:
+        query {
+            projectByName(name: "project-name") {
+                environments { id name environmentType routes kubernetes { id name } }
+            }
+        }
+        """
+        self.display.vv(f"Fetching environments for [{', '.join(batch)}]")
+        with self.lagoon_api as (_, ds):
+            # Build the fragment.
+            environment_fields = ds.Project.environments.select(
+                ds.Environment.id,
+                ds.Environment.name,
+                ds.Environment.environmentType,
+                ds.Environment.routes,
+                ds.Environment.kubernetes.select(
+                    ds.Kubernetes.id,
+                    ds.Kubernetes.name
+                )
+            )
+
+            field_queries = []
+            for pname in batch:
+                # Build the main query.
+                field_query = ds.Query.projectByName.args(
+                    name=pname).alias(self.sanitised_for_query_alias(pname))
+                field_query.select(environment_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                return self.lagoon_api.client.session.execute(query)
+            except TransportQueryError as e:
+                self.display.vvv(e)
+                if len(e.data):
+                    raise AnsibleError(
+                        """
+The gql query returned incomplete data; this could be due to the batch query
+timing out. You could try decreasing the batch size (`lagoon_api_batch_group_size`)
+and see if that helps""", None, True, False, e)
+                else:
+                    raise e
+            except Exception as e:
+                self.display.vvv(e.errors)
+                raise e
 
     def batch_fetch_groups_and_vars_execute(self, batch: List[str]):
         """
@@ -530,17 +602,18 @@ and see if that helps""", None, True, False, e)
         query = "query {"
         for env in batch:
             query += f"""
-    {self.sanitised_for_query_alias(env)}: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "{self.sanitised_name(env)}") {{
-        ...EnvVars
-    }}
-    """
+                      {self.sanitised_for_query_alias(env)}: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "{self.sanitised_name(env)}") {{
+                          ...EnvVars
+                      }}
+                      """
         query += """
-}
+                }
 
-fragment EnvVars on Environment {
-    envVariables { name value }
-}
-        """
+                fragment EnvVars on Environment {
+                    envVariables { name value }
+                }
+                """
+
         self.display.vvvv(f"Query: \n{query}")
 
         try:
@@ -574,11 +647,11 @@ and see if that helps""", None, True, False, e)
         rc, token, error = LagoonToken.fetch_token(
             lagoon.get('ssh_host'),
             lagoon.get('ssh_port'),
-            "",
+            "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
             lagoon_ssh_private_key
         )
 
         if rc > 0:
             raise AnsibleError("Failed to fetch Lagoon API token: %s " % (error))
 
-        return token
+        return token.decode("utf-8").strip()
