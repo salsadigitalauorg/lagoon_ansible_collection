@@ -75,8 +75,8 @@ def get_project(client: GqlClient, name: str) -> dict:
             ds.Project.gitUrl,
             ds.Project.metadata,
             ds.Project.developmentEnvironmentsLimit,
-            ds.productionEnvironment,
-            ds.standbyProductionEnvironment,
+            ds.Project.productionEnvironment,
+            ds.Project.standbyProductionEnvironment,
             ds.Project.openshift.select(
                 ds.Openshift.id,
                 ds.Openshift.name,
