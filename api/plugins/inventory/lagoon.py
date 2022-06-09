@@ -648,7 +648,7 @@ and see if that helps""", None, True, False, e)
             lagoon.get('ssh_host'),
             lagoon.get('ssh_port'),
             "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
-            lagoon_ssh_private_key
+            lagoon_ssh_private_key_file
         )
 
         if rc > 0:
