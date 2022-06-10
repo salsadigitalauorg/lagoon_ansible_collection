@@ -127,6 +127,8 @@ def get_project_from_environment(client: GqlClient, name: str) -> dict:
                 ds.Project.branches,
                 ds.Project.gitUrl,
                 ds.Project.metadata,
+                ds.Project.productionEnvironment,
+                ds.Project.standbyProductionEnvironment,
             )
         )
     )
