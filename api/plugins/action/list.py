@@ -63,9 +63,9 @@ class ActionModule(ActionBase):
             self._task.args.get('headers', {})
         )
 
-        type = task_vars.get('type', 'project')
+        resource = task_vars.get('type', 'project')
 
-        if type != "project":
+        if resource != "project":
             result['failed'] = True
             display.v("Only 'project' is supported")
         else:

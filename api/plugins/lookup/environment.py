@@ -14,13 +14,13 @@ DOCUMENTATION = """
     _terms:
       description: The project to query (or environment if from_environment is True)
       required: True
-    endpoint:
+    lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
       type: string
       required: True
       vars:
         - name: lagoon_api_endpoint
-    endpoint_token:
+    lagoon_api_token:
       description: The token for Lagoon graphql API
       type: string
       required: True
@@ -65,8 +65,8 @@ class LookupModule(LookupBase):
         self.set_options(var_options=variables, direct=kwargs)
 
         lagoon = ApiClient(
-            self.get_option('endpoint'),
-            self.get_option('endpoint_token'),
+            self.get_option('lagoon_api_endpoint'),
+            self.get_option('lagoon_api_token'),
             {'headers': self.get_option('headers', {})}
         )
 
