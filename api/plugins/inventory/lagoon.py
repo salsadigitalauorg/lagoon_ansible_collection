@@ -549,7 +549,6 @@ and see if that helps""", None, True, False, e)
             try:
                 return self.lagoon_api.client.session.execute(query)
             except TransportQueryError as e:
-                self.display.vvv(e.errors)
                 if len(e.data):
                     raise AnsibleError(
                         """
