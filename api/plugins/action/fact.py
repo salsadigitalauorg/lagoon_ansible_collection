@@ -139,7 +139,7 @@ class ActionModule(ActionBase):
             self._task.args.get('headers', {})
         )
 
-        environment_id = self._task.args.get("environment")
+        environment_id = int(self._task.args.get("environment"))
         name = self._task.args.get("name")
         value = self._task.args.get("value")
         source = self._task.args.get("source", None)
