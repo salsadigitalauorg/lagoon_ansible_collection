@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
-
 __metaclass__ = type
 
+import re
 from ansible.errors import AnsibleFilterError
 from functools import reduce
 
@@ -38,5 +38,26 @@ class FilterModule(object):
 
         return environments
 
+    def autogen_route(self, routes, route_pattern):
+        """
+        Get the Lagoon auto-generated route from the list of routes.
+        Examples:
+        - name: Get the auto-generated route.
+          set_fact:
+            autogen_route: "{{ lookup('lagoon.api.environment', inventory_hostname).routes | lagoon.api.lagoon_autogen_route(route_pattern=route_pattern) }}"
+          vars:
+            route_pattern: "[a-z0-9-]+\.cluster[1-9]{1}\.amazee\.io"
+        """
+
+        routes_list = routes.split(",")
+        for r in routes_list:
+            matches = re.search(route_pattern, r)
+            if matches:
+                return r
+        return None
+
     def filters(self):
-        return {"lagoon_environment_input": self.environment_input_type}
+        return {
+            "lagoon_environment_input": self.environment_input_type,
+            "lagoon_autogen_route": self.autogen_route,
+        }
