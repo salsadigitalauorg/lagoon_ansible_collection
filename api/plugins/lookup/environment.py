@@ -1,7 +1,4 @@
 from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 __metaclass__ = type
 
 DOCUMENTATION = """
@@ -52,9 +49,51 @@ EXAMPLES = """
   debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta-master') }}"
 """
 
+from ansible.errors import AnsibleError
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible.plugins.lookup import LookupBase
+from ansible.utils.display import Display
 
 display = Display()
 
+def get_environment(client: GqlClient, env_name: str) -> dict:
+    res = client.execute_query(
+        """
+        query env($env_name: String!) {
+            environmentByKubernetesNamespaceName(kubernetesNamespaceName: $env_name) {
+                id
+                name
+                autoIdle
+                route
+                routes
+                deployments {
+                    name
+                    status
+                    started
+                    completed
+                }
+                project {
+                    id
+                }
+                openshift {
+                    id
+                    name
+                }
+                kubernetes {
+                    id
+                    name
+                }
+            }
+        }""",
+        {
+            "env_name": env_name
+        }
+    )
+    display.v(f"GraphQL query result: {res}")
+
+    if 'errors' in res:
+        raise AnsibleError("Unable to get environments.", res['errors'])
+    return res['environmentByKubernetesNamespaceName']
 
 class LookupModule(LookupBase):
 
@@ -64,13 +103,13 @@ class LookupModule(LookupBase):
 
         self.set_options(var_options=variables, direct=kwargs)
 
-        lagoon = ApiClient(
+        lagoon = GqlClient(
             self.get_option('lagoon_api_endpoint'),
             self.get_option('lagoon_api_token'),
-            {'headers': self.get_option('headers', {})}
+            self.get_option('headers', {})
         )
 
         for term in terms:
-            ret.append(lagoon.environment(term))
+            ret.append(get_environment(lagoon, term))
 
         return ret
