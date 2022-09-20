@@ -11,7 +11,7 @@ class FilterModule(object):
         self.playbook = self.play.playbook
         self.inventory = self.playbook.inventory
 
-    def bulk_deploy_environment_input(self, hosts, hostvars=None, env_id_key="env_id", env_key="env_name", project_key="project_name"):
+    def bulkDeployEnvironmentInput(self, hosts, hostvars=None, env_id_key="env_id", env_key="env_name", project_key="project_name"):
         """
         Generate EnvironmentInput from the inventory to use for GraphQL queries.
         Examples:
@@ -50,7 +50,7 @@ class FilterModule(object):
 
         return environments
 
-    def autogen_route(self, routes, route_pattern):
+    def autogenRoute(self, routes, route_pattern):
         """
         Get the Lagoon auto-generated route from the list of routes.
         Examples:
@@ -70,8 +70,8 @@ class FilterModule(object):
 
     def filters(self):
         return {
-            "autogen_route": self.autogen_route,
-            "bulk_deploy_environment_input": self.bulk_deploy_environment_input,
-            "lagoon_autogen_route": self.autogen_route,  # DEPRECATED
-            "lagoon_environment_input": self.bulk_deploy_environments, # DEPRECATED
+            "autogen_route": self.autogenRoute,
+            "bulk_deploy_environment_input": self.bulkDeployEnvironmentInput,
+            "lagoon_autogen_route": self.autogenRoute, # DEPRECATED
+            "lagoon_environment_input": self.bulkDeployEnvironmentInput, # DEPRECATED
         }
