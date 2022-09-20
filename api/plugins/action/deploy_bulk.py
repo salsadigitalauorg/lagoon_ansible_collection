@@ -8,15 +8,24 @@ from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 __metaclass__ = type
 
 EXAMPLES = r'''
-- name: Bulk deployment trigger
-    lagoon.api.deploy_bulk:
+- name: Bulk deployment trigger by environment id.
+  lagoon.api.deploy_bulk:
     name: Trigger by Ansible
     environments:
-        - name: environment_name
-        project:
-            name: project_name
+      - id: environment_id
     build_vars:
-        - name: build_var_name
+      - name: build_var_name
+        value: build_var_value
+
+- name: Bulk deployment trigger by project & env name.
+  lagoon.api.deploy_bulk:
+    name: Trigger by Ansible
+    environments:
+      - name: environment_name
+        project:
+          name: project_name
+    build_vars:
+      - name: build_var_name
         value: build_var_value
 '''
 
@@ -44,8 +53,10 @@ def deploy_bulk(client: GqlClient, build_vars: list, name: str, envs: list) -> d
             "envs": envs,
         }
     )
-
     display.v(f"GraphQL query result: {res}")
+
+    if 'errors' in res:
+        raise AnsibleError("Unable to create bulk deployment.", res['errors'])
     return res['bulkDeployEnvironmentLatest']
 
 
@@ -118,7 +129,7 @@ class ActionModule(ActionBase):
             valid, r = is_variable_type(b[i])
             if not valid:
                 result['invalid_variable'].append(b[i])
-                display.v(f'Invalid project detected: {r}')
+                display.v(f'Invalid build variable detected: {r}')
                 display.v(b[i])
                 del b[i]
 
@@ -132,7 +143,11 @@ class ActionModule(ActionBase):
                 continue
 
             envs.append({
-                "environment": e[i]
+                "environment": e[i],
+                # At the time of writing, build variables at the top level
+                # are not working; they need to be at the environment level
+                # instead.
+                "buildVariables": b
             })
 
         if len(envs) < 1:
@@ -140,10 +155,6 @@ class ActionModule(ActionBase):
             result['message'] = 'No environments to deploy'
             return result
 
-        try:
-            result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
-            result['changed'] = True
-        except:
-            result['failed'] = True
-            result['message'] = 'Unexpected Lagoon API response, unable to trigger a bulk deployment'
+        result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
+        result['changed'] = True
         return result
