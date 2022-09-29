@@ -147,6 +147,7 @@ class ActionModule(ActionBase):
                 # At the time of writing, build variables at the top level
                 # are not working; they need to be at the environment level
                 # instead.
+                # Remove when https://github.com/uselagoon/lagoon/pull/3296 is released.
                 "buildVariables": b
             })
 
