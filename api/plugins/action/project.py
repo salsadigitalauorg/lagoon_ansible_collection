@@ -143,7 +143,7 @@ def add_project(
             "subfolder": subfolder,
             "branches": branches,
             "pullrequests": pullrequests,
-            "openshift": openshift,
+            "openshift": int(openshift),
             "productionEnvironment": productionEnvironment,
             "standbyProductionEnvironment": standbyProductionEnvironment,
             "autoIdle": int(autoIdle),
