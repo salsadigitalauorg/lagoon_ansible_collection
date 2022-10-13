@@ -2,16 +2,12 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 EXAMPLES = r'''
-- name: Add a fact to a Lagoon project
-  lagoon.api.fact:
-    environment: 1
-    name: php_version
-    value: 8.1.9
-    description: PHP version
-    type: SEMVER
-    category: fact
-    service: php
-- debug: var=whoami
+- name: Ensure project is in group
+  lagoon.api.project_group:
+    state: present
+    project: "{{ project_name }}"
+    groups:
+      - my_group_name
 '''
 
 from ansible.errors import AnsibleError
