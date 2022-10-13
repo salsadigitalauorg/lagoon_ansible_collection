@@ -636,7 +636,7 @@ class ApiClient:
 
         result = json.loads(response.read())
 
-        if "error" in result:
+        if "errors" in result:
             raise AnsibleError("GraphQL error: %s" % (to_native(result)))
 
         # display.v('API call result: %s' % result)
