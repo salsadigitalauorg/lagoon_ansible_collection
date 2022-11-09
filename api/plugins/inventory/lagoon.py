@@ -491,7 +491,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             try:
                 return self.lagoon_api.client.session.execute(query)
             except TransportQueryError as e:
-                self.display.vvv(e)
                 if len(e.data):
                     raise AnsibleError(
                         """
@@ -501,7 +500,6 @@ and see if that helps""", None, True, False, e)
                 else:
                     raise e
             except Exception as e:
-                self.display.vvv(e.errors)
                 raise e
 
     def batch_fetch_groups_and_vars_execute(self, batch: List[str]):
@@ -558,7 +556,6 @@ and see if that helps""", None, True, False, e)
                 else:
                     raise e
             except Exception as e:
-                self.display.vvv(e.errors)
                 raise e
 
     def batch_get_env_vars(self, environments: List[str]) -> dict:
@@ -618,7 +615,6 @@ and see if that helps""", None, True, False, e)
         try:
             return self.lagoon_api.execute_query(query)
         except TransportQueryError as e:
-            self.display.vvv(e.errors)
             if len(e.data):
                 raise AnsibleError(
                     """
@@ -628,7 +624,6 @@ and see if that helps""", None, True, False, e)
             else:
                 raise e
         except Exception as e:
-            self.display.vvv(e.errors)
             raise e
 
     def sanitised_for_query_alias(self, name):
