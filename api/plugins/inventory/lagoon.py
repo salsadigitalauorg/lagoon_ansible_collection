@@ -229,6 +229,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     'lagoon': lagoon,
                     'project_list': [],
                     'projects_groups_n_vars': {},
+                    'environments_clusters': {},
                     'environments_vars': {}
                 }
 
@@ -257,16 +258,21 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 objects['projects_environments'] = self.batch_fetch_projects_environments(project_names)
                 environment_names = []
+                environment_names_ids = []
                 for project, environments in objects['projects_environments'].items():
                     for environment in environments['environments']:
-                      environment_names.append(self.sanitised_name(f"{project}-{environment['name']}"))
+                        environment_names.append(environment['kubernetesNamespaceName'])
+                        environment_names_ids.append((environment['kubernetesNamespaceName'], environment['id']))
 
                 # Secondary batch lookup as group queries validate permissions
                 # on each trip and results in query timeouts if these
                 # were returned with the project list.
                 objects['projects_groups_n_vars'] = self.batch_fetch_projects_groups_and_variables(project_names)
 
-                # Do the same for environment vars
+                # Do the same for environment clusters.
+                objects['environments_clusters'] = self.batch_fetch_environments_cluster(environment_names_ids)
+
+                # Do the same for environment vars.
                 objects['environments_vars'] = self.batch_get_env_vars(environment_names)
 
                 self.all_objects.append(objects)
@@ -306,15 +312,20 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 for environment in project['environments']:
                     try:
+                        environment['kubernetes'] = objects['environments_clusters'].get(
+                            self.sanitised_for_query_alias(environment['kubernetesNamespaceName']))['kubernetes']
+                    except:
+                        environment['kubernetes'] = []
+                    try:
                         environment['envVariables'] = objects['environments_vars'].get(
-                            self.sanitised_for_query_alias(f"{project['name']}-{environment['name']}"))['envVariables']
+                            self.sanitised_for_query_alias(environment['kubernetesNamespaceName']))['envVariables']
                     except:
                         environment['envVariables'] = []
                     self.add_environment(project, environment, objects['lagoon'])
 
     # Add the environment to the inventory set.
     def add_environment(self, project, environment, lagoon):
-        namespace = self.sanitised_name(f"{project['name']}-{environment['name']}")
+        namespace = environment['kubernetesNamespaceName']
 
         # Add host to the inventory.
         self.inventory.add_host(namespace)
@@ -377,9 +388,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             host_vars['metadata'] = inventory_meta
 
         return host_vars
-
-    def sanitised_name(self, name):
-        return re.sub(r'[\W_-]+', '-', name)
 
     def get_projects(self) -> dict:
         """Get all projects"""
@@ -459,7 +467,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         The expected built query is as follows:
         query {
             projectByName(name: "project-name") {
-                environments { id name environmentType routes kubernetes { id name } }
+                environments { id name kubernetesNamespaceName environmentType routes }
             }
         }
         """
@@ -469,12 +477,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             environment_fields = ds.Project.environments.select(
                 ds.Environment.id,
                 ds.Environment.name,
+                ds.Environment.kubernetesNamespaceName,
                 ds.Environment.environmentType,
-                ds.Environment.routes,
-                ds.Environment.kubernetes.select(
-                    ds.Kubernetes.id,
-                    ds.Kubernetes.name
-                )
+                ds.Environment.routes
             )
 
             field_queries = []
@@ -558,6 +563,74 @@ and see if that helps""", None, True, False, e)
             except Exception as e:
                 raise e
 
+    def batch_fetch_environments_cluster(self, environments: List[tuple]) -> dict:
+        """
+        Fetch the cluster for environments in batches.
+        """
+
+        env_clusters = {}
+
+        # Create batches.
+        batches = []
+        for i in range(0, len(environments), self.api_batch_environment_size):
+            batches.append(environments[i:i+self.api_batch_environment_size])
+
+        for i, b in enumerate(batches):
+            self.display.v(
+                f"Fetching env clusters for batch {i+1}/{len(batches)}")
+            env_clusters.update(
+                self.batch_fetch_environments_cluster_execute(b))
+
+        return env_clusters
+
+    def batch_fetch_environments_cluster_execute(self, batch_envs):
+        """
+        Build the query for a batch of environments' cluster.
+
+        The expected built query is as follows:
+        query {
+            environmentById(id: envId) {
+                kubernetes {
+                    id
+                    name
+                }
+            }
+        }
+        """
+        self.display.vv(
+            f"Fetching cluster for environments [{', '.join([envName for envName, _ in batch_envs])}]")
+        with self.lagoon_api as (_, ds):
+            # Build the fragment.
+            cluster_fields = ds.Environment.kubernetes.select(
+                ds.Kubernetes.id,
+                ds.Kubernetes.name
+            )
+
+            field_queries = []
+            for envName, envId in batch_envs:
+                # Build the main query.
+                field_query = ds.Query.environmentById.args(
+                    id=envId).alias(self.sanitised_for_query_alias(envName))
+                field_query.select(cluster_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                return self.lagoon_api.client.session.execute(query)
+            except TransportQueryError as e:
+                if len(e.data):
+                    raise AnsibleError(
+                        """
+The gql query returned incomplete data; this could be due to the batch query
+timing out. You could try decreasing the batch size (`lagoon_api_batch_group_size`)
+and see if that helps""", None, True, False, e)
+                else:
+                    raise e
+            except Exception as e:
+                raise e
+
     def batch_get_env_vars(self, environments: List[str]) -> dict:
         """
         Get the variables for a batch of environments.
@@ -598,7 +671,7 @@ and see if that helps""", None, True, False, e)
         query = "query {"
         for env in batch:
             query += f"""
-                      {self.sanitised_for_query_alias(env)}: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "{self.sanitised_name(env)}") {{
+                      {self.sanitised_for_query_alias(env)}: environmentByKubernetesNamespaceName(kubernetesNamespaceName: "{env}") {{
                           ...EnvVars
                       }}
                       """
