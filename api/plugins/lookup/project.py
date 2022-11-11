@@ -107,6 +107,7 @@ class LookupModule(LookupBase):
         project = get_project_from_environment(lagoon, term)
         ret.append(project)
       else:
-        ret.extend(lagoonProject.byName(term).withCluster().withEnvironments().projects)
+        ret.extend(lagoonProject.byName(term).withCluster(
+        ).withEnvironments().withDeployTargetConfigs().projects)
 
     return ret

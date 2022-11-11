@@ -45,6 +45,14 @@ PROJECT_ENVIRONMENTS_FIELDS = [
     'routes',
 ]
 
+PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
+    'id',
+    'weight',
+    'branches',
+    'pullrequests',
+    'deployTarget',
+]
+
 
 class Project(ResourceBase):
 
@@ -200,6 +208,30 @@ class Project(ResourceBase):
 
         return self
 
+    def withDeployTargetConfigs(self, fields: List[str] = None) -> Self:
+        """
+        Retrieve the projects' deploy target configs.
+        """
+
+        if not len(self.projects):
+            return self
+
+        project_names = [p['name'] for p in self.projects]
+
+        batches = []
+        for i in range(0, len(project_names), self.batch_size):
+            batches.append(project_names[i:i+self.batch_size])
+
+        dtcs = {}
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
+            dtcs.update(self.getDeployTargetConfigsForProjects(b, fields))
+
+        for project in self.projects:
+            project['deployTargetConfigs'] = dtcs.get(project['name'])
+
+        return self
+
     def getClusterForProjects(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
@@ -287,6 +319,60 @@ class Project(ResourceBase):
             try:
                 res[pName] = environments.get(
                     self.sanitiseForQueryAlias(pName))['environments']
+            except:
+                res[pName] = None
+
+        return res
+
+    def getDeployTargetConfigsForProjects(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+        res = {}
+
+        if not fields or not len(fields):
+            fields = PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS
+
+        dtcs = {}
+        with self.client as (_, ds):
+            # Build the fragment.
+            dtc_fields = ds.Project.deployTargetConfigs.select(
+                getattr(ds.DeployTargetConfig, fields[0]))
+            if len(fields) > 1:
+                for f in fields[1:]:
+                    if f == 'deployTarget':
+                        continue
+                    dtc_fields.select(getattr(ds.DeployTargetConfig, f))
+
+                if 'deployTarget' in fields:
+                    dtc_fields.select(ds.DeployTargetConfig.deployTarget.select(
+                        ds.Kubernetes.id,
+                        ds.Kubernetes.name,
+                    ))
+
+            field_queries = []
+            for pName in project_names:
+                # Build the main query.
+                field_query = ds.Query.projectByName.args(
+                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query.select(dtc_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                dtcs = self.client.client.session.execute(query)
+            except TransportQueryError as e:
+                if len(e.data):
+                    dtcs = e.data
+                    self.errors.extend(e.errors)
+                else:
+                    raise
+            except Exception:
+                raise
+
+        for pName in project_names:
+            try:
+                res[pName] = dtcs.get(
+                    self.sanitiseForQueryAlias(pName))['deployTargetConfigs']
             except:
                 res[pName] = None
 
