@@ -53,6 +53,19 @@ PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
     'deployTarget',
 ]
 
+PROJECT_VARIABLES_FIELDS = [
+    'id',
+    'name',
+    'value',
+    'scope',
+]
+
+PROJECT_GROUPS_FIELDS = [
+    'id',
+    'name',
+    'type',
+]
+
 
 class Project(ResourceBase):
 
@@ -176,7 +189,7 @@ class Project(ResourceBase):
         clusters = {}
         for i, b in enumerate(batches):
             self.display.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
-            clusters.update(self.getClusterForProjects(b, fields))
+            clusters.update(self.getCluster(b, fields))
 
         for project in self.projects:
             project['kubernetes'] = clusters.get(project['name'])
@@ -201,7 +214,7 @@ class Project(ResourceBase):
         environments = {}
         for i, b in enumerate(batches):
             self.display.v(f"Fetching environments for batch {i+1}/{len(batches)}")
-            environments.update(self.getEnvironmentsForProjects(b, fields))
+            environments.update(self.getEnvironments(b, fields))
 
         for project in self.projects:
             project['environments'] = environments.get(project['name'])
@@ -225,14 +238,62 @@ class Project(ResourceBase):
         dtcs = {}
         for i, b in enumerate(batches):
             self.display.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
-            dtcs.update(self.getDeployTargetConfigsForProjects(b, fields))
+            dtcs.update(self.getDeployTargetConfigs(b, fields))
 
         for project in self.projects:
             project['deployTargetConfigs'] = dtcs.get(project['name'])
 
         return self
 
-    def getClusterForProjects(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def withVariables(self, fields: List[str] = None) -> Self:
+        """
+        Retrieve the projects' variables.
+        """
+
+        if not len(self.projects):
+            return self
+
+        project_names = [p['name'] for p in self.projects]
+
+        batches = []
+        for i in range(0, len(project_names), self.batch_size):
+            batches.append(project_names[i:i+self.batch_size])
+
+        projectVars = {}
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching variables for batch {i+1}/{len(batches)}")
+            projectVars.update(self.getVariables(b, fields))
+
+        for project in self.projects:
+            project['envVariables'] = projectVars.get(project['name'])
+
+        return self
+
+    def withGroups(self, fields: List[str] = None) -> Self:
+        """
+        Retrieve the projects' groups.
+        """
+
+        if not len(self.projects):
+            return self
+
+        project_names = [p['name'] for p in self.projects]
+
+        batches = []
+        for i in range(0, len(project_names), self.batch_size):
+            batches.append(project_names[i:i+self.batch_size])
+
+        groups = {}
+        for i, b in enumerate(batches):
+            self.display.v(f"Fetching groups for batch {i+1}/{len(batches)}")
+            groups.update(self.getGroups(b, fields))
+
+        for project in self.projects:
+            project['groups'] = groups.get(project['name'])
+
+        return self
+
+    def getCluster(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -278,7 +339,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getEnvironmentsForProjects(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getEnvironments(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -324,7 +385,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getDeployTargetConfigsForProjects(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getDeployTargetConfigs(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -373,6 +434,98 @@ class Project(ResourceBase):
             try:
                 res[pName] = dtcs.get(
                     self.sanitiseForQueryAlias(pName))['deployTargetConfigs']
+            except:
+                res[pName] = None
+
+        return res
+
+    def getVariables(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+        res = {}
+
+        if not fields or not len(fields):
+            fields = PROJECT_VARIABLES_FIELDS
+
+        variables = {}
+        with self.client as (_, ds):
+            # Build the fragment.
+            var_fields = ds.Project.envVariables.select(
+                getattr(ds.EnvKeyValue, fields[0]))
+            if len(fields) > 1:
+                for f in fields[1:]:
+                    var_fields.select(getattr(ds.EnvKeyValue, f))
+
+            field_queries = []
+            for pName in project_names:
+                # Build the main query.
+                field_query = ds.Query.projectByName.args(
+                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query.select(var_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                variables = self.client.client.session.execute(query)
+            except TransportQueryError as e:
+                if len(e.data):
+                    variables = e.data
+                    self.errors.extend(e.errors)
+                else:
+                    raise
+            except Exception:
+                raise
+
+        for pName in project_names:
+            try:
+                res[pName] = variables.get(
+                    self.sanitiseForQueryAlias(pName))['envVariables']
+            except:
+                res[pName] = None
+
+        return res
+
+    def getGroups(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+        res = {}
+
+        if not fields or not len(fields):
+            fields = PROJECT_GROUPS_FIELDS
+
+        groups = {}
+        with self.client as (_, ds):
+            # Build the fragment.
+            groups_fields = ds.Project.groups.select(
+                getattr(ds.GroupInterface, fields[0]))
+            if len(fields) > 1:
+                for f in fields[1:]:
+                    groups_fields.select(getattr(ds.GroupInterface, f))
+
+            field_queries = []
+            for pName in project_names:
+                # Build the main query.
+                field_query = ds.Query.projectByName.args(
+                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query.select(groups_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                groups = self.client.client.session.execute(query)
+            except TransportQueryError as e:
+                if len(e.data):
+                    groups = e.data
+                    self.errors.extend(e.errors)
+                else:
+                    raise
+            except Exception:
+                raise
+
+        for pName in project_names:
+            try:
+                res[pName] = groups.get(
+                    self.sanitiseForQueryAlias(pName))['groups']
             except:
                 res[pName] = None
 
