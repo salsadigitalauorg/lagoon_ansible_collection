@@ -1,21 +1,19 @@
 from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 __metaclass__ = type
 
+from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from ansible.plugins.lookup import LookupBase
+from ansible.utils.display import Display
+from ansible.errors import AnsibleError
+
 DOCUMENTATION = """
-  name: group
+  name: all_projects
   author: Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
-  short_description: get group for a project
+  short_description: get all lagoon projects
   description:
-      - This lookup returns the information for a Lagoon project's group.
+      - This lookup returns the information for all Lagoon projects.
   options:
-    _terms:
-      description: The group variables to fetch
-      required: True
-    default:
-      description: An optional default value to set if the group does not exist
     lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
       type: string
@@ -50,28 +48,27 @@ DOCUMENTATION = """
 """
 
 EXAMPLES = """
-- name: retrieve a groups information
-  debug: msg="{{ lookup('lagoon.api.group', 'my-group-name') }}"
+- name: retrieve all projects.
+  debug: msg="{{ lookup('lagoon.api.all_projects') }}"
 """
-
 
 display = Display()
 
-
 class LookupModule(LookupBase):
 
-  def run(self, terms, variables=None, **kwargs):
+  def run(self, _, variables=None, **kwargs):
 
     ret = []
 
     self.set_options(var_options=variables, direct=kwargs)
-    lagoon = ApiClient(
+
+    lagoon = GqlClient(
         self._templar.template(self.get_option('lagoon_api_endpoint')),
         self._templar.template(self.get_option('lagoon_api_token')),
-        {'headers': self.get_option('headers', {})}
+        self.get_option('headers', {})
     )
 
-    for term in terms:
-        ret.append(lagoon.group(term))
+    lagoonProject = Project(lagoon, {'batch_size': 20}).all().withCluster().withEnvironments()
+    ret = lagoonProject.projects
 
     return ret
