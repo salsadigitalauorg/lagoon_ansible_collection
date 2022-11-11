@@ -89,8 +89,8 @@ class LookupModule(LookupBase):
 
     self.set_options(var_options=variables, direct=kwargs)
     lagoon = GqlClient(
-        self.get_option('lagoon_api_endpoint'),
-        self.get_option('lagoon_api_token'),
+        self._templar.template(self.get_option('lagoon_api_endpoint')),
+        self._templar.template(self.get_option('lagoon_api_token')),
         self.get_option('headers', {})
     )
     project = self.get_option('project')
