@@ -1,0 +1,3 @@
+- name: Retrieve project by name.
+  set_fact:
+    project_info: "{{ lookup('lagoon.api.project', project_name) }}"
