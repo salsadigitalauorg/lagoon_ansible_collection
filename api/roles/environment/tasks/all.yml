@@ -1,0 +1,3 @@
+- name: Retrieve all environments.
+  set_fact:
+    all_environments: "{{ lookup('lagoon.api.all_environments') }}"

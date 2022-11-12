@@ -2,17 +2,17 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 from ansible.plugins.lookup import LookupBase
 from ansible.utils.display import Display
 from ansible.errors import AnsibleError
 
 DOCUMENTATION = """
-  name: all_projects
+  name: all_environments
   author: Yusuf Hasan Miyan <yusuf@salsa.digital>
-  short_description: get all lagoon projects
+  short_description: get all lagoon environments
   description:
-      - This lookup returns the information for all Lagoon projects.
+      - This lookup returns the information for all Lagoon environments.
   options:
     lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
@@ -48,8 +48,8 @@ DOCUMENTATION = """
 """
 
 EXAMPLES = """
-- name: retrieve all projects.
-  debug: msg="{{ lookup('lagoon.api.all_projects') }}"
+- name: retrieve all environments.
+  debug: msg="{{ lookup('lagoon.api.all_environments') }}"
 """
 
 display = Display()
@@ -68,7 +68,7 @@ class LookupModule(LookupBase):
         self.get_option('headers', {})
     )
 
-    lagoonProject = Project(lagoon, {'batch_size': 20}).all().withCluster().withEnvironments()
-    ret = lagoonProject.projects
+    lagoonEnvironment = Environment(lagoon, {'batch_size': 50}).all().withCluster().withVariables()
+    ret = lagoonEnvironment.environments
 
     return ret

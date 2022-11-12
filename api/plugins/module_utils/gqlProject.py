@@ -1,6 +1,5 @@
-from jinja2 import environment
+from ansible_collections.lagoon.api.plugins.module_utils import gqlResourceBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import ResourceBase
 from gql.dsl import DSLQuery, dsl_gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
@@ -32,32 +31,12 @@ PROJECT_DEFAULT_FIELDS = [
     'standbyRoutes',
 ]
 
-PROJECT_CLUSTER_FIELDS = [
-    'id',
-    'name',
-]
-
-PROJECT_ENVIRONMENTS_FIELDS = [
-    'id',
-    'name',
-    'kubernetesNamespaceName',
-    'environmentType',
-    'routes',
-]
-
 PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
     'id',
     'weight',
     'branches',
     'pullrequests',
     'deployTarget',
-]
-
-PROJECT_VARIABLES_FIELDS = [
-    'id',
-    'name',
-    'value',
-    'scope',
 ]
 
 PROJECT_GROUPS_FIELDS = [
@@ -67,7 +46,7 @@ PROJECT_GROUPS_FIELDS = [
 ]
 
 
-class Project(ResourceBase):
+class Project(gqlResourceBase.ResourceBase):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
@@ -98,7 +77,7 @@ class Project(ResourceBase):
             res = self.client.execute_query(query)
             self.projects.extend(res['allProjects'])
         except TransportQueryError as e:
-            if len(e.data):
+            if isinstance(e.data['allProjects'], list):
                 self.projects.extend(e.data['allProjects'])
                 self.errors.extend(e.errors)
             else:
@@ -130,7 +109,7 @@ class Project(ResourceBase):
             res = self.client.execute_query(query)
             self.projects.extend(res['allProjectsInGroup'])
         except TransportQueryError as e:
-            if len(e.data):
+            if isinstance(e.data['allProjectsInGroup'], list):
                 self.projects.extend(e.data['allProjectsInGroup'])
                 self.errors.extend(e.errors)
             else:
@@ -162,7 +141,7 @@ class Project(ResourceBase):
             res = self.client.execute_query(query)
             self.projects.append(res['projectByName'])
         except TransportQueryError as e:
-            if len(e.data):
+            if isinstance(e.data['projectByName'], list):
                 self.projects.append(e.data['projectByName'])
                 self.errors.extend(e.errors)
             else:
@@ -297,7 +276,7 @@ class Project(ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = PROJECT_CLUSTER_FIELDS
+            fields = gqlResourceBase.CLUSTER_FIELDS
 
         clusters = {}
         with self.client as (_, ds):
@@ -322,7 +301,7 @@ class Project(ResourceBase):
             try:
                 clusters = self.client.client.session.execute(query)
             except TransportQueryError as e:
-                if len(e.data):
+                if isinstance(e.data, dict):
                     clusters = e.data
                     self.errors.extend(e.errors)
                 else:
@@ -343,7 +322,7 @@ class Project(ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = PROJECT_ENVIRONMENTS_FIELDS
+            fields = gqlResourceBase.ENVIRONMENTS_FIELDS
 
         environments = {}
         with self.client as (_, ds):
@@ -368,7 +347,7 @@ class Project(ResourceBase):
             try:
                 environments = self.client.client.session.execute(query)
             except TransportQueryError as e:
-                if len(e.data):
+                if isinstance(e.data, dict):
                     environments = e.data
                     self.errors.extend(e.errors)
                 else:
@@ -422,7 +401,7 @@ class Project(ResourceBase):
             try:
                 dtcs = self.client.client.session.execute(query)
             except TransportQueryError as e:
-                if len(e.data):
+                if isinstance(e.data, dict):
                     dtcs = e.data
                     self.errors.extend(e.errors)
                 else:
@@ -443,7 +422,7 @@ class Project(ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = PROJECT_VARIABLES_FIELDS
+            fields = gqlResourceBase.VARIABLES_FIELDS
 
         variables = {}
         with self.client as (_, ds):
@@ -468,7 +447,7 @@ class Project(ResourceBase):
             try:
                 variables = self.client.client.session.execute(query)
             except TransportQueryError as e:
-                if len(e.data):
+                if isinstance(e.data, dict):
                     variables = e.data
                     self.errors.extend(e.errors)
                 else:
@@ -514,7 +493,7 @@ class Project(ResourceBase):
             try:
                 groups = self.client.client.session.execute(query)
             except TransportQueryError as e:
-                if len(e.data):
+                if isinstance(e.data, dict):
                     groups = e.data
                     self.errors.extend(e.errors)
                 else:
