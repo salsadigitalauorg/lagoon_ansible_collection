@@ -9,7 +9,7 @@ from ansible.errors import AnsibleError
 
 DOCUMENTATION = """
   name: project
-  author: Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
+  author: Yusuf Hasan Miyan <yusuf@salsa.digital>
   short_description: get a lagoon project
   description:
       - This lookup returns the information for a Lagoon project.
