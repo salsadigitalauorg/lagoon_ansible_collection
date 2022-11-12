@@ -5,6 +5,31 @@ from ansible.utils.display import Display
 
 display = Display()
 
+PROJECT_FIELDS = [
+    'autoIdle',
+    'availability',
+    'branches',
+    'created',
+    'deploymentsDisabled',
+    'developmentBuildPriority',
+    'developmentEnvironmentsLimit',
+    'gitUrl',
+    'id',
+    'metadata',
+    'name',
+    'openshiftProjectName',
+    'openshiftProjectPattern',
+    'productionAlias',
+    'productionBuildPriority',
+    'productionEnvironment',
+    'productionRoutes',
+    'pullrequests',
+    'routerPattern',
+    'standbyAlias',
+    'standbyProductionEnvironment',
+    'standbyRoutes',
+]
+
 VARIABLES_FIELDS = [
     'id',
     'name',
@@ -27,6 +52,18 @@ ENVIRONMENTS_FIELDS = [
     'route',
     'routes',
     'updated',
+]
+
+DEPLOYMENTS_FIELDS = [
+    'bulkId',
+    'bulkName',
+    'completed',
+    'created',
+    'id',
+    'name',
+    'started',
+    'status',
+    'uiLink',
 ]
 
 class ResourceBase:

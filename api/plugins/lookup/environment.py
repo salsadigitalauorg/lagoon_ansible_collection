@@ -49,51 +49,12 @@ EXAMPLES = """
   debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta-master') }}"
 """
 
-from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 from ansible.plugins.lookup import LookupBase
 from ansible.utils.display import Display
 
 display = Display()
-
-def get_environment(client: GqlClient, env_name: str) -> dict:
-    res = client.execute_query(
-        """
-        query env($env_name: String!) {
-            environmentByKubernetesNamespaceName(kubernetesNamespaceName: $env_name) {
-                id
-                name
-                autoIdle
-                route
-                routes
-                deployments {
-                    name
-                    status
-                    started
-                    completed
-                }
-                project {
-                    id
-                }
-                openshift {
-                    id
-                    name
-                }
-                kubernetes {
-                    id
-                    name
-                }
-            }
-        }""",
-        {
-            "env_name": env_name
-        }
-    )
-    display.v(f"GraphQL query result: {res}")
-
-    if 'errors' in res:
-        raise AnsibleError("Unable to get environments.", res['errors'])
-    return res['environmentByKubernetesNamespaceName']
 
 class LookupModule(LookupBase):
 
@@ -109,7 +70,14 @@ class LookupModule(LookupBase):
             self.get_option('headers', {})
         )
 
+        lagoonEnvironment = Environment(lagoon)
+
         for term in terms:
-            ret.append(get_environment(lagoon, term))
+            lagoonEnvironment.byNs(term).withCluster(
+                ).withVariables().withProject().withDeployments()
+            if len(lagoonEnvironment.errors):
+                display.warning(
+                    f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
+            ret.extend(lagoonEnvironment.environments)
 
         return ret
