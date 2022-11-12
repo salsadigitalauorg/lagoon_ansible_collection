@@ -6,31 +6,6 @@ from graphql import print_ast
 from typing import List
 from typing_extensions import Self
 
-PROJECT_DEFAULT_FIELDS = [
-    'autoIdle',
-    'availability',
-    'branches',
-    'created',
-    'deploymentsDisabled',
-    'developmentBuildPriority',
-    'developmentEnvironmentsLimit',
-    'gitUrl',
-    'id',
-    'metadata',
-    'name',
-    'openshiftProjectName',
-    'openshiftProjectPattern',
-    'productionAlias',
-    'productionBuildPriority',
-    'productionEnvironment',
-    'productionRoutes',
-    'pullrequests',
-    'routerPattern',
-    'standbyAlias',
-    'standbyProductionEnvironment',
-    'standbyRoutes',
-]
-
 PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
     'id',
     'weight',
@@ -61,7 +36,7 @@ class Project(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = PROJECT_DEFAULT_FIELDS
+            fields = gqlResourceBase.PROJECT_FIELDS
 
         joined_fields = "\n        ".join(fields)
 
@@ -93,7 +68,7 @@ class Project(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = PROJECT_DEFAULT_FIELDS
+            fields = gqlResourceBase.PROJECT_FIELDS
 
         joined_fields = "\n        ".join(fields)
 
@@ -125,7 +100,7 @@ class Project(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = PROJECT_DEFAULT_FIELDS
+            fields = gqlResourceBase.PROJECT_FIELDS
 
         joined_fields = "\n        ".join(fields)
 

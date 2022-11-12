@@ -68,7 +68,11 @@ class LookupModule(LookupBase):
         self.get_option('headers', {})
     )
 
-    lagoonProject = Project(lagoon, {'batch_size': 20}).all().withCluster().withEnvironments()
+    lagoonProject = Project(lagoon, {'batch_size': 20}).all(
+      ).withCluster().withEnvironments()
+    if len(lagoonProject.errors):
+      display.warning(
+          f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
     ret = lagoonProject.projects
 
     return ret

@@ -107,8 +107,12 @@ class LookupModule(LookupBase):
         project = get_project_from_environment(lagoon, term)
         ret.append(project)
       else:
-        ret.extend(lagoonProject.byName(term).withCluster(
-        ).withEnvironments().withDeployTargetConfigs().withVariables(
-        ).withGroups().projects)
+        lagoonProject.byName(term).withCluster(
+          ).withEnvironments().withDeployTargetConfigs().withVariables(
+        ).withGroups()
+        if len(lagoonProject.errors):
+          display.warning(
+              f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+        ret.extend(lagoonProject.projects)
 
     return ret

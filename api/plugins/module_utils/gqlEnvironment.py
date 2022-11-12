@@ -181,6 +181,58 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
+    def withProject(self, fields: List[str] = None) -> Self:
+        """
+        Retrieve the environments' project.
+        """
+
+        if not len(self.environments):
+            return self
+
+        env_names = [e['kubernetesNamespaceName'] for e in self.environments]
+
+        batches = []
+        for i in range(0, len(env_names), self.batch_size):
+            batches.append(env_names[i:i+self.batch_size])
+
+        envProject = {}
+        for i, b in enumerate(batches):
+            self.display.v(
+                f"Fetching project for batch {i+1}/{len(batches)}")
+            envProject.update(self.getProject(b, fields))
+
+        for environment in self.environments:
+            environment['project'] = envProject.get(
+                environment['kubernetesNamespaceName'])
+
+        return self
+
+    def withDeployments(self, fields: List[str] = None) -> Self:
+        """
+        Retrieve the environments' deployments.
+        """
+
+        if not len(self.environments):
+            return self
+
+        env_names = [e['kubernetesNamespaceName'] for e in self.environments]
+
+        batches = []
+        for i in range(0, len(env_names), self.batch_size):
+            batches.append(env_names[i:i+self.batch_size])
+
+        envDeployments = {}
+        for i, b in enumerate(batches):
+            self.display.v(
+                f"Fetching deployments for batch {i+1}/{len(batches)}")
+            envDeployments.update(self.getDeployments(b, fields))
+
+        for environment in self.environments:
+            environment['deployments'] = envDeployments.get(
+                environment['kubernetesNamespaceName'])
+
+        return self
+
     def getCluster(self, env_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
@@ -270,6 +322,100 @@ class Environment(gqlResourceBase.ResourceBase):
             try:
                 res[eName] = variables.get(
                     self.sanitiseForQueryAlias(eName))['envVariables']
+            except:
+                res[eName] = None
+
+        return res
+
+    def getProject(self, env_names: List[str], fields: List[str] = None) -> List[dict]:
+        res = {}
+
+        if not fields or not len(fields):
+            fields = gqlResourceBase.PROJECT_FIELDS
+
+        projects = {}
+        with self.client as (_, ds):
+            # Build the fragment.
+            project_fields = ds.Environment.project.select(
+                getattr(ds.Project, fields[0]))
+            if len(fields) > 1:
+                for f in fields[1:]:
+                    project_fields.select(getattr(ds.Project, f))
+
+            field_queries = []
+            for eName in env_names:
+                # Build the main query.
+                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                    kubernetesNamespaceName=eName).alias(
+                        self.sanitiseForQueryAlias(eName))
+                field_query.select(project_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                projects = self.client.client.session.execute(query)
+            except TransportQueryError as e:
+                if isinstance(e.data, dict):
+                    projects = e.data
+                    self.errors.extend(e.errors)
+                else:
+                    raise
+            except Exception:
+                raise
+
+        for eName in env_names:
+            try:
+                res[eName] = projects.get(
+                    self.sanitiseForQueryAlias(eName))['project']
+            except:
+                res[eName] = None
+
+        return res
+
+    def getDeployments(self, env_names: List[str], fields: List[str] = None) -> List[dict]:
+        res = {}
+
+        if not fields or not len(fields):
+            fields = gqlResourceBase.DEPLOYMENTS_FIELDS
+
+        deployments = {}
+        with self.client as (_, ds):
+            # Build the fragment.
+            deployment_fields = ds.Environment.deployments.select(
+                getattr(ds.Deployment, fields[0]))
+            if len(fields) > 1:
+                for f in fields[1:]:
+                    deployment_fields.select(getattr(ds.Deployment, f))
+
+            field_queries = []
+            for eName in env_names:
+                # Build the main query.
+                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                    kubernetesNamespaceName=eName).alias(
+                        self.sanitiseForQueryAlias(eName))
+                field_query.select(deployment_fields)
+                field_queries.append(field_query)
+
+            query = dsl_gql(DSLQuery(*field_queries))
+            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+
+            try:
+                deployments = self.client.client.session.execute(query)
+            except TransportQueryError as e:
+                if isinstance(e.data, dict):
+                    deployments = e.data
+                    self.errors.extend(e.errors)
+                else:
+                    raise
+            except Exception:
+                raise
+
+        for eName in env_names:
+            try:
+                res[eName] = deployments.get(
+                    self.sanitiseForQueryAlias(eName))['deployments']
             except:
                 res[eName] = None
 

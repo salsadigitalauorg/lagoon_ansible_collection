@@ -69,6 +69,9 @@ class LookupModule(LookupBase):
     )
 
     lagoonEnvironment = Environment(lagoon, {'batch_size': 50}).all().withCluster().withVariables()
+    if len(lagoonEnvironment.errors):
+      display.warning(
+          f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
     ret = lagoonEnvironment.environments
 
     return ret
