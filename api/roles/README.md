@@ -15,7 +15,7 @@ The following play can be used to fetch a token:
         name: lagoon.api.token
 ```
 
-The token will now be available in the `lagoon_api_token` localhost variable.
+The token will now be available in the `lagoon_api_token` localhost variable. Default Lagoon variables are also exported from the `lagoon.api.common` role.
 
 To reuse the token in another play, the following can be done:
 ```yaml
@@ -48,9 +48,9 @@ To reuse the token in another play, the following can be done:
     - include_role:
         name: lagoon.api.token
 
-    - include_role:
-        name: lagoon.api.project
-        tasks_from: all
+    - name: Retrieve all projects.
+      set_fact:
+        all_projects: "{{ lookup('lagoon.api.all_projects') }}"
 ```
 
 ## Fetch a single project
@@ -66,9 +66,7 @@ To reuse the token in another play, the following can be done:
     - include_role:
         name: lagoon.api.token
 
-    - include_role:
-        name: lagoon.api.project
-        tasks_from: byname
-      vars:
-        project_name: your-project
+    - name: Retrieve project by name.
+      set_fact:
+        project_info: "{{ lookup('lagoon.api.project', project_name) }}"
 ```
