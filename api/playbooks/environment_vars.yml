@@ -1,0 +1,80 @@
+- name: Manipulate environment variables.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Fetch environment vars.
+      lagoon.api.variables:
+        type: environment
+        name: '{{ environment_ns }}'
+      register: environment_vars_res
+
+    - name: Extract environment vars.
+      set_fact:
+        environment_vars: '{{ environment_vars_res.data }}'
+
+    - debug: var=environment_vars
+
+    - name: Delete Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: absent
+        name: TEST_VAR_ENV_YHM
+        type: ENVIRONMENT
+        type_name: "{{ environment_ns }}"
+        verify_value: true
+
+    - name: Add Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: present
+        type: ENVIRONMENT
+        type_name: "{{ environment_ns }}"
+        name: TEST_VAR_ENV_YHM
+        value: foo_bar
+        scope: RUNTIME
+        verify_value: true
+
+    - name: Fetch environment vars.
+      lagoon.api.variables:
+        type: environment
+        name: '{{ environment_ns }}'
+      register: environment_vars_res
+    - debug: var=environment_vars_res.data
+
+    - name: Replace Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: present
+        type: ENVIRONMENT
+        type_name: "{{ environment_ns }}"
+        name: TEST_VAR_ENV_YHM
+        value: bar_baz
+        scope: RUNTIME
+        replace_existing: true
+        verify_value: true
+
+    - name: Fetch environment vars.
+      lagoon.api.variables:
+        type: environment
+        name: '{{ environment_ns }}'
+      register: environment_vars_res
+    - debug: var=environment_vars_res.data
+
+    - name: Delete Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: absent
+        type: ENVIRONMENT
+        type_name: "{{ environment_ns }}"
+        name: TEST_VAR_ENV_YHM
+        verify_value: true
+
+    - name: Fetch environment vars.
+      lagoon.api.variables:
+        type: environment
+        name: '{{ environment_ns }}'
+      register: environment_vars_res
+    - debug: var=environment_vars_res.data

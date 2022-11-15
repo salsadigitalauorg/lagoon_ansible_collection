@@ -1,0 +1,26 @@
+- name: Fetch project information.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Retrieve all projects.
+      set_fact:
+        all_projects: "{{ lookup('lagoon.api.all_projects') }}"
+      when: project_name is not defined
+
+    - debug: var=all_projects
+      when: project_name is not defined
+
+    - name: Retrieve project by name.
+      set_fact:
+        project_info: "{{ lookup('lagoon.api.project', project_name) }}"
+      when: project_name is defined
+
+    - debug: var=project_info
+      when: project_name is defined
