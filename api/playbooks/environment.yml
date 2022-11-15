@@ -1,0 +1,26 @@
+- name: Fetch environment information.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Retrieve all environments.
+      set_fact:
+        all_environments: "{{ lookup('lagoon.api.all_environments') }}"
+      when: environment_ns is not defined
+
+    - debug: var=all_environments
+      when: environment_ns is not defined
+
+    - name: Retrieve environment by namespace.
+      set_fact:
+        environment_info: "{{ lookup('lagoon.api.environment', environment_ns) }}"
+      when: environment_ns is defined
+
+    - debug: var=environment_info
+      when: environment_ns is defined

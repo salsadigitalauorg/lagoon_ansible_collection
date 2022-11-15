@@ -1,3 +1,0 @@
-- name: Retrieve environment by namespace.
-  set_fact:
-    environment_info: "{{ lookup('lagoon.api.environment', environment_ns) }}"

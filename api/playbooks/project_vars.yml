@@ -1,0 +1,80 @@
+- name: Manipulate project variables.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Fetch project vars.
+      lagoon.api.variables:
+        type: project
+        name: '{{ project_name }}'
+      register: project_vars_res
+
+    - name: Extract project vars.
+      set_fact:
+        project_vars: '{{ project_vars_res.data }}'
+
+    - debug: var=project_vars
+
+    - name: Delete Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: absent
+        name: TEST_VAR_YHM
+        type: PROJECT
+        type_name: "{{ project_name }}"
+        verify_value: true
+
+    - name: Add Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: present
+        type: PROJECT
+        type_name: "{{ project_name }}"
+        name: TEST_VAR_YHM
+        value: foo_bar
+        scope: RUNTIME
+        verify_value: true
+
+    - name: Fetch project vars.
+      lagoon.api.variables:
+        type: project
+        name: '{{ project_name }}'
+      register: project_vars_res
+    - debug: var=project_vars_res.data
+
+    - name: Replace Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: present
+        type: PROJECT
+        type_name: "{{ project_name }}"
+        name: TEST_VAR_YHM
+        value: bar_baz
+        scope: RUNTIME
+        replace_existing: true
+        verify_value: true
+
+    - name: Fetch project vars.
+      lagoon.api.variables:
+        type: project
+        name: '{{ project_name }}'
+      register: project_vars_res
+    - debug: var=project_vars_res.data
+
+    - name: Delete Lagoon environment variable.
+      lagoon.api.env_variable:
+        state: absent
+        name: TEST_VAR_YHM
+        type: PROJECT
+        type_name: "{{ project_name }}"
+        verify_value: true
+
+    - name: Fetch project vars.
+      lagoon.api.variables:
+        type: project
+        name: '{{ project_name }}'
+      register: project_vars_res
+    - debug: var=project_vars_res.data

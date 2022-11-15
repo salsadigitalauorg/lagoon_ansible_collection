@@ -73,8 +73,12 @@ class LookupModule(LookupBase):
         lagoonEnvironment = Environment(lagoon)
 
         for term in terms:
-            lagoonEnvironment.byNs(term).withCluster(
-                ).withVariables().withProject().withDeployments()
+            lagoonEnvironment.byNs(term)
+            if not len(lagoonEnvironment.environments):
+                return ret
+
+            lagoonEnvironment.withCluster().withVariables()
+            lagoonEnvironment.withProject().withDeployments()
             if len(lagoonEnvironment.errors):
                 display.warning(
                     f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")

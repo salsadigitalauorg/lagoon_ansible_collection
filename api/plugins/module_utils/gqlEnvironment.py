@@ -85,7 +85,9 @@ class Environment(gqlResourceBase.ResourceBase):
 
         try:
             res = self.client.execute_query(query)
-            self.environments.append(res['environmentByKubernetesNamespaceName'])
+            if res['environmentByKubernetesNamespaceName'] != None:
+                self.environments.append(
+                    res['environmentByKubernetesNamespaceName'])
         except TransportQueryError as e:
             if isinstance(e.data['environmentByKubernetesNamespaceName'], list):
                 self.environments.append(e.data['environmentByKubernetesNamespaceName'])
@@ -117,7 +119,8 @@ class Environment(gqlResourceBase.ResourceBase):
 
         try:
             res = self.client.execute_query(query)
-            self.environments.append(res['environmentById'])
+            if res['environmentById'] != None:
+                self.environments.append(res['environmentById'])
         except TransportQueryError as e:
             if isinstance(e.data['environmentById'], list):
                 self.environments.append(e.data['environmentById'])

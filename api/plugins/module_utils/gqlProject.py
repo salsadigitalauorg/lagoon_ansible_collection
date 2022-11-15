@@ -114,7 +114,8 @@ class Project(gqlResourceBase.ResourceBase):
 
         try:
             res = self.client.execute_query(query)
-            self.projects.append(res['projectByName'])
+            if res['projectByName'] != None:
+                self.projects.append(res['projectByName'])
         except TransportQueryError as e:
             if isinstance(e.data['projectByName'], list):
                 self.projects.append(e.data['projectByName'])
