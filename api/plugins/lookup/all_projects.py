@@ -1,11 +1,6 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 from ansible.errors import AnsibleError
+from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
 
 DOCUMENTATION = """
   name: all_projects
@@ -52,9 +47,8 @@ EXAMPLES = """
   debug: msg="{{ lookup('lagoon.api.all_projects') }}"
 """
 
-display = Display()
 
-class LookupModule(LookupBase):
+class LookupModule(LagoonLookupBase):
 
   def run(self, _, variables=None, **kwargs):
 
@@ -62,16 +56,18 @@ class LookupModule(LookupBase):
 
     self.set_options(var_options=variables, direct=kwargs)
 
-    lagoon = GqlClient(
-        self._templar.template(self.get_option('lagoon_api_endpoint')),
-        self._templar.template(self.get_option('lagoon_api_token')),
-        self.get_option('headers', {})
-    )
+    self.createClient()
 
-    lagoonProject = Project(lagoon, {'batch_size': 20}).all(
-      ).withCluster().withEnvironments()
+    lagoonProject = Project(self.client, {'batch_size': 20}).all()
+    if not len(lagoonProject.projects):
+      if len(lagoonProject.errors):
+        raise AnsibleError(
+            f"Unable to fetch projects; encountered the following errors: {lagoonProject.errors}")
+      return ret
+
+    lagoonProject.withCluster().withEnvironments()
     if len(lagoonProject.errors):
-      display.warning(
+      self._display.warning(
           f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
     ret = lagoonProject.projects
 

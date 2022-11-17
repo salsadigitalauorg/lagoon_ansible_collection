@@ -1,0 +1,13 @@
+- name: Fetch project metadata.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Retrieve project metadata.
+      debug: msg="{{ lookup('lagoon.api.metadata', project=project_name) }}"

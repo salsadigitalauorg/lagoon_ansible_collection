@@ -1,0 +1,23 @@
+- name: Lookup variables.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+  - lagoon.api.common
+  tasks:
+  - include_role:
+      name: lagoon.api.token
+
+  - name: lookup a project's variables
+    debug: msg="{{ item }}"
+    loop: "{{ lookup('lagoon.api.var', project_name) }}"
+
+  - name: lookup a project's variables as dict
+    debug: msg="{{ lookup('lagoon.api.var', project_name, return_dict=true) }}"
+
+  - name: retrieve a specific variable for a project
+    debug: msg='{{ lookup('lagoon.api.var', project_name, var_name=project_var_name) }}'
+
+  - name: retrieve variables for a project environment
+    debug: msg='{{ lookup('lagoon.api.var', project_name, environment='master') }}'

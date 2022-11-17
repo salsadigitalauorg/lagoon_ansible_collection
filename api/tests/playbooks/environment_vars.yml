@@ -24,7 +24,7 @@
     - name: Delete Lagoon environment variable.
       lagoon.api.env_variable:
         state: absent
-        name: TEST_VAR_ENV_YHM
+        name: TEST_VAR_ENV
         type: ENVIRONMENT
         type_name: "{{ environment_ns }}"
         verify_value: true
@@ -34,7 +34,7 @@
         state: present
         type: ENVIRONMENT
         type_name: "{{ environment_ns }}"
-        name: TEST_VAR_ENV_YHM
+        name: TEST_VAR_ENV
         value: foo_bar
         scope: RUNTIME
         verify_value: true
@@ -51,7 +51,7 @@
         state: present
         type: ENVIRONMENT
         type_name: "{{ environment_ns }}"
-        name: TEST_VAR_ENV_YHM
+        name: TEST_VAR_ENV
         value: bar_baz
         scope: RUNTIME
         replace_existing: true
@@ -69,7 +69,7 @@
         state: absent
         type: ENVIRONMENT
         type_name: "{{ environment_ns }}"
-        name: TEST_VAR_ENV_YHM
+        name: TEST_VAR_ENV
         verify_value: true
 
     - name: Fetch environment vars.
