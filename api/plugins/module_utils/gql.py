@@ -1,11 +1,8 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 from ansible.errors import AnsibleError
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
-from gql.dsl import DSLField, DSLSchema, DSLQuery, dsl_gql
-from typing import Any, Dict, Optional
+from gql.dsl import DSLField, DSLQuery, DSLSchema, DSLType, dsl_gql
+from typing import Any, Dict, List, Optional
 
 class GqlClient:
     """ This client aims to facilitate the usage of the gql package, based on
@@ -57,6 +54,63 @@ class GqlClient:
         """Executes a query using the graphql string provided.
         """
         return self.client.execute(gql(query), variable_values=variables)
+
+    def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
+        """
+        Dynamically build a query against the Lagoon API.
+
+        The query is built from the query name (e.g, projectByName), a list of
+        top-level fields (e.g, id, name, branches, ...) and a map of sub-fields
+        (e.g, kubernetes { id name } ).
+
+        Taking the following graphql query as an example:
+        {
+            projectByName(name: "test-project") {
+                id
+                name
+                kubernetes {
+                    id
+                    name
+                }
+            }
+        }
+        query = "projectByName"
+        args = {"name": "test-project"}
+        mainType = "Project" (since projectByName returns Project)
+        fields = ["id", "name"]
+        subFieldsMap = {
+            "kubernetes": {
+                "type": "Kubernetes",
+                "fields": ["id", "name"],
+            },
+        }
+        """
+
+        # Build the main query with top-level fields if any.
+        queryObj: DSLField = getattr(self.ds.Query, query)
+        if len(args):
+            queryObj.args(**args)
+
+        mainTypeObj: DSLType = getattr(self.ds, mainType)
+
+        # Top-level fields.
+        if len(fields):
+            for f in fields:
+                queryObj.select(getattr(mainTypeObj, f))
+
+        if not len(subFieldsMap):
+            return queryObj
+
+        # Nested fields (one level only).
+        for field, subFieldsNType in subFieldsMap.items():
+            subFieldSelector: DSLField = getattr(mainTypeObj, field)
+            subFieldTypeObj: DSLType = getattr(self.ds, subFieldsNType['type'])
+            for f in subFieldsNType['fields']:
+                subFieldSelector.select(getattr(subFieldTypeObj, f))
+            queryObj.select(subFieldSelector)
+
+        return queryObj
+
 
     def execute_query_dynamic(self, field_query: DSLField) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.

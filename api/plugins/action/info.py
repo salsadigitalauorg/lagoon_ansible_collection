@@ -7,12 +7,8 @@ EXAMPLES = r'''
 '''
 
 from ansible.errors import AnsibleError
-from ansible.utils.display import Display
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-
-display = Display()
-
 
 class ActionModule(LagoonActionBase):
 
@@ -48,7 +44,7 @@ class ActionModule(LagoonActionBase):
 
         lagoonEnvironment.withCluster().withProject()
         if len(lagoonEnvironment.errors):
-            display.warning(
+            self._display.warning(
                 f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
 
         result['result'] = lagoonEnvironment.environments[0]
