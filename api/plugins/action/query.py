@@ -45,8 +45,6 @@ EXAMPLES = r'''
 '''
 
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from gql.dsl import DSLQuery, dsl_gql
-from graphql import print_ast
 
 class ActionModule(LagoonActionBase):
 
@@ -69,8 +67,6 @@ class ActionModule(LagoonActionBase):
         with self.client:
             queryObj = self.client.build_dynamic_query(
                 query, mainType, args, fields, subFields)
-            query_ast = dsl_gql(DSLQuery(queryObj))
-            self._display.vvvv(f"Built query: \n{print_ast(query_ast)}")
             res = self.client.execute_query_dynamic(queryObj)
             result['result'] = res[query]
         return result

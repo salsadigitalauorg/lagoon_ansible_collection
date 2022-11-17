@@ -8,5 +8,6 @@ class LagoonActionBase(ActionBase):
         self.client = GqlClient(
             self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
             self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
+            self._task.args.get('headers', {}),
+            self._display,
         )

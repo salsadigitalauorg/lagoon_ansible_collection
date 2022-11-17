@@ -50,7 +50,6 @@ def deploy_bulk(client: GqlClient, build_vars: list, name: str, envs: list) -> d
             "envs": envs,
         }
     )
-    display.v(f"GraphQL query result: {res}")
 
     if 'errors' in res:
         raise AnsibleError("Unable to create bulk deployment.", res['errors'])
