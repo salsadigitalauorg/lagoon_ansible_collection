@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Verify the user.
   lagoon.api.whoami: {}
@@ -9,8 +6,8 @@ EXAMPLES = r'''
 '''
 
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 display = Display()
@@ -39,7 +36,8 @@ def whoAmI(client: GqlClient) -> dict:
         raise AnsibleError(f"Unable to get user information.")
     return res['me']
 
-class ActionModule(ActionBase):
+
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -49,13 +47,9 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
-        result['result'] = whoAmI(lagoon)
+        result['result'] = whoAmI(self.client)
         return result

@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Create a project
   lagoon.api.project:
@@ -13,9 +10,8 @@ EXAMPLES = r'''
     openshift: 1
 '''
 
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 
@@ -157,7 +153,7 @@ def add_project(
     return res["addProject"]
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -167,14 +163,9 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get(
-                'lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         # Modifier.
         state = self._task.args.get('state', 'present')
@@ -192,19 +183,19 @@ class ActionModule(ActionBase):
         problemsUi = self._task.args.get("problems_ui", False)
         factsUi = self._task.args.get("facts_ui", False)
 
-        project = has_project(lagoon, name)
+        project = has_project(self.client, name)
 
         if state == "absent" and not project:
             result["changed"] = False
         elif state == "absent" and project:
             result["changed"] = True
-            result["result"] = delete_project(lagoon, name)
+            result["result"] = delete_project(self.client, name)
         elif state == "present" and project:
             result["changed"] = False
         else:
             result["changed"] = True
             result["result"] = add_project(
-                lagoon,
+                self.client,
                 name,
                 gitUrl,
                 productionEnvironment,

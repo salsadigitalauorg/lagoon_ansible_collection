@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Add a fact to a Lagoon project
   lagoon.api.fact:
@@ -15,8 +12,8 @@ EXAMPLES = r'''
 '''
 
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 
@@ -121,7 +118,7 @@ def add_fact(client: GqlClient, environment_id, name, value, source = "ansible",
     return res["addFact"]
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -131,13 +128,9 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         environment_id = int(self._task.args.get("environment"))
         name = self._task.args.get("name")
@@ -151,7 +144,7 @@ class ActionModule(ActionBase):
 
         found_fact = False
 
-        facts = get_facts(lagoon, environment_id)
+        facts = get_facts(self.client, environment_id)
         for fact in facts:
             if fact["name"] == name:
                 found_fact = fact
@@ -160,18 +153,18 @@ class ActionModule(ActionBase):
             result["changed"] = False
         elif found_fact and state == "absent":
             result["changed"] = True
-            result["result"] = delete_fact(lagoon, environment_id, name)
+            result["result"] = delete_fact(self.client, environment_id, name)
         elif found_fact:
             if value != found_fact["value"]:
                 result["changed"] = True
-                delete_fact(lagoon, environment_id, name)
+                delete_fact(self.client, environment_id, name)
                 result["result"] = add_fact(
-                    lagoon, environment_id, name, value, source, type, description)
+                    self.client, environment_id, name, value, source, type, description)
             else:
                 result["changed"] = False
         else:
             result["changed"] = True
             result["result"] = add_fact(
-                lagoon, environment_id, name, value, source, type, description)
+                self.client, environment_id, name, value, source, type, description)
 
         return result

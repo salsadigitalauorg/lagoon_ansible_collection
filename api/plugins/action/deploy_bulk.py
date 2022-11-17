@@ -1,11 +1,8 @@
-from __future__ import (absolute_import, division, print_function)
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
 import json
+from ansible.errors import AnsibleError
+from ansible.utils.display import Display
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-
-__metaclass__ = type
 
 EXAMPLES = r'''
 - name: Bulk deployment trigger by environment id.
@@ -94,7 +91,7 @@ def is_environment_type(i):
     return True, None
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -103,11 +100,7 @@ class ActionModule(ActionBase):
 
         result = super(ActionModule, self).run(tmp, task_vars)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         b = self._task.args.get('build_vars')
         n = self._task.args.get('name')
@@ -129,8 +122,8 @@ class ActionModule(ActionBase):
             valid, r = is_variable_type(b[i])
             if not valid:
                 result['invalid_variable'].append(b[i])
-                display.v(f'Invalid build variable detected: {r}')
-                display.v(b[i])
+                self._display.v(f'Invalid build variable detected: {r}')
+                self._display.v(b[i])
                 del b[i]
 
         for i in range(len(e)):
@@ -138,8 +131,8 @@ class ActionModule(ActionBase):
 
             if not valid:
                 result['invalid_environment'].append(e[i])
-                display.v(f'Invalid environment detected: {r}')
-                display.v(json.dumps(e[i]))
+                self._display.v(f'Invalid environment detected: {r}')
+                self._display.v(json.dumps(e[i]))
                 continue
 
             envs.append({
@@ -156,6 +149,6 @@ class ActionModule(ActionBase):
             result['message'] = 'No environments to deploy'
             return result
 
-        result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
+        result['deploy_id'] = deploy_bulk(self.client, b, n, envs)
         result['changed'] = True
         return result
