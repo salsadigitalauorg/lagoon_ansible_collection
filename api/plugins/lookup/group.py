@@ -1,8 +1,5 @@
-from __future__ import (absolute_import, division, print_function)
 from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
 from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
-__metaclass__ = type
 
 DOCUMENTATION = """
   name: group
@@ -53,9 +50,6 @@ EXAMPLES = """
 - name: retrieve a groups information
   debug: msg="{{ lookup('lagoon.api.group', 'my-group-name') }}"
 """
-
-
-display = Display()
 
 
 class LookupModule(LookupBase):

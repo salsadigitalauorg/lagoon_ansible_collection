@@ -1,5 +1,6 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+from ansible.errors import AnsibleError
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
 
 DOCUMENTATION = """
   name: environment
@@ -46,17 +47,11 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a environment's information
-  debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta-master') }}"
+  debug: msg="{{ lookup('lagoon.api.environment', environment_ns) }}"
 """
 
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 
-display = Display()
-
-class LookupModule(LookupBase):
+class LookupModule(LagoonLookupBase):
 
     def run(self, terms, variables=None, **kwargs):
 
@@ -64,23 +59,22 @@ class LookupModule(LookupBase):
 
         self.set_options(var_options=variables, direct=kwargs)
 
-        lagoon = GqlClient(
-            self._templar.template(self.get_option('lagoon_api_endpoint')),
-            self._templar.template(self.get_option('lagoon_api_token')),
-            self.get_option('headers', {})
-        )
+        self.createClient()
 
-        lagoonEnvironment = Environment(lagoon)
+        lagoonEnvironment = Environment(self.client)
 
         for term in terms:
             lagoonEnvironment.byNs(term)
             if not len(lagoonEnvironment.environments):
+                if len(lagoonEnvironment.errors):
+                    raise AnsibleError(
+                        f"Unable to fetch environment {term}; encountered the following errors: {lagoonEnvironment.errors}")
                 return ret
 
             lagoonEnvironment.withCluster().withVariables()
             lagoonEnvironment.withProject().withDeployments()
             if len(lagoonEnvironment.errors):
-                display.warning(
+                self._display.warning(
                     f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
             ret.extend(lagoonEnvironment.environments)
 
