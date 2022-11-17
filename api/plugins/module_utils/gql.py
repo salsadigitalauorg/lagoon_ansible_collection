@@ -1,7 +1,9 @@
 from ansible.errors import AnsibleError
+from ansible.utils.display import Display
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
 from gql.dsl import DSLField, DSLQuery, DSLSchema, DSLType, dsl_gql
+from graphql import print_ast
 from typing import Any, Dict, List, Optional
 
 class GqlClient:
@@ -10,7 +12,7 @@ class GqlClient:
     The goal is to allow developers to run queries and mutations using the awesome
     package while reducing boilerplate code. """
 
-    def __init__(self, endpoint: str, token: str, headers: dict={}) -> None:
+    def __init__(self, endpoint: str, token: str, headers: dict = {}, display: Display = None) -> None:
         if not isinstance(headers, dict):
             raise AnsibleError("Expecting client headers to be dictionary.")
 
@@ -34,6 +36,8 @@ class GqlClient:
             fetch_schema_from_transport=True
         )
 
+        self.display = display
+
     def __enter__(self):
         """This method and the next (__exit__) allow the use of the `with`
         statement with the class.
@@ -53,7 +57,11 @@ class GqlClient:
     def execute_query(self, query: str, variables: Optional[Dict[str, Any]]={}) -> Dict[str, Any]:
         """Executes a query using the graphql string provided.
         """
-        return self.client.execute(gql(query), variable_values=variables)
+        query_ast = gql(query)
+        self.display.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
+        res = self.client.execute(query_ast, variable_values=variables)
+        self.display.vvvv(f"GraphQL query result: {res}")
+        return res
 
     def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
         """
@@ -126,4 +134,7 @@ class GqlClient:
 
         # Generate the full query.
         full_query = dsl_gql(DSLQuery(field_query))
-        return self.client.session.execute(full_query)
+        self.display.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
+        res = self.client.session.execute(full_query)
+        self.display.vvvv(f"GraphQL query result: {res}")
+        return res

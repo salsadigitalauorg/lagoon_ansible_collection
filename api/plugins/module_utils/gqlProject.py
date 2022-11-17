@@ -1,9 +1,8 @@
-from ansible_collections.lagoon.api.plugins.module_utils import gqlResourceBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from gql.dsl import DSLQuery, dsl_gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
-from typing import List
 from typing_extensions import Self
 
 PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
@@ -21,13 +20,13 @@ PROJECT_GROUPS_FIELDS = [
 ]
 
 
-class Project(gqlResourceBase.ResourceBase):
+class Project(ResourceBase):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
         self.projects = []
 
-    def all(self, fields: List[str] = None) -> Self:
+    def all(self, fields: list[str] = None) -> Self:
         """
         Get a list of all projects, but only top level fields.
 
@@ -36,98 +35,36 @@ class Project(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = gqlResourceBase.PROJECT_FIELDS
+            fields = PROJECT_FIELDS
 
-        joined_fields = "\n        ".join(fields)
+        return self.queryTopLevelFields(
+            self.projects, 'allProjects', 'Project', fields=fields)
 
-        query = f"""query {{
-    allProjects {{
-        { joined_fields }
-    }}
-}}"""
-
-        self.display.vvvv(f"{ query }")
-
-        try:
-            res = self.client.execute_query(query)
-            self.projects.extend(res['allProjects'])
-        except TransportQueryError as e:
-            if isinstance(e.data['allProjects'], list):
-                self.projects.extend(e.data['allProjects'])
-                self.errors.extend(e.errors)
-            else:
-                raise
-        except Exception:
-            raise
-
-        return self
-
-    def allInGroup(self, group: str, fields: List[str] = None) -> Self:
+    def allInGroup(self, group: str, fields: list[str] = None) -> Self:
         """
         Get a list of all projects in a group.
         """
 
         if not fields:
-            fields = gqlResourceBase.PROJECT_FIELDS
+            fields = PROJECT_FIELDS
 
-        joined_fields = "\n        ".join(fields)
+        args = {"input": {"name": group}}
+        return self.queryTopLevelFields(
+            self.projects, 'allProjectsInGroup', 'Project', args, fields)
 
-        query = f"""query {{
-    allProjectsInGroup (input: {{ name: "{ group }" }}) {{
-        { joined_fields }
-    }}
-}}"""
-
-        self.display.vvvv(f"{ query }")
-
-        try:
-            res = self.client.execute_query(query)
-            self.projects.extend(res['allProjectsInGroup'])
-        except TransportQueryError as e:
-            if isinstance(e.data['allProjectsInGroup'], list):
-                self.projects.extend(e.data['allProjectsInGroup'])
-                self.errors.extend(e.errors)
-            else:
-                raise
-        except Exception:
-            raise
-
-        return self
-
-    def byName(self, name: str, fields: List[str] = None) -> Self:
+    def byName(self, name: str, fields: list[str] = None) -> Self:
         """
         Get the top-level information for a project.
         """
 
         if not fields:
-            fields = gqlResourceBase.PROJECT_FIELDS
+            fields = PROJECT_FIELDS
 
-        joined_fields = "\n        ".join(fields)
+        args = {"name": name}
+        return self.queryTopLevelFields(
+            self.projects, 'projectByName', 'Project', args, fields)
 
-        query = f"""query {{
-    projectByName (name: "{ name }") {{
-        { joined_fields }
-    }}
-}}"""
-
-        self.display.vvvv(f"{ query }")
-
-        try:
-            res = self.client.execute_query(query)
-            if res['projectByName'] != None:
-                self.projects.append(res['projectByName'])
-        except TransportQueryError as e:
-            if isinstance(e.data['projectByName'], list):
-                self.projects.append(e.data['projectByName'])
-                self.errors.extend(e.errors)
-            else:
-                raise
-        except Exception:
-            raise
-
-        return self
-
-    def withCluster(self, fields: List[str] = None) -> Self:
+    def withCluster(self, fields: list[str] = None) -> Self:
         """
         Retrieve cluster information for the projects.
         """
@@ -152,7 +89,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withEnvironments(self, fields: List[str] = None) -> Self:
+    def withEnvironments(self, fields: list[str] = None) -> Self:
         """
         Retrieve the projects' environments.
         """
@@ -176,7 +113,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withDeployTargetConfigs(self, fields: List[str] = None) -> Self:
+    def withDeployTargetConfigs(self, fields: list[str] = None) -> Self:
         """
         Retrieve the projects' deploy target configs.
         """
@@ -200,7 +137,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withVariables(self, fields: List[str] = None) -> Self:
+    def withVariables(self, fields: list[str] = None) -> Self:
         """
         Retrieve the projects' variables.
         """
@@ -224,7 +161,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withGroups(self, fields: List[str] = None) -> Self:
+    def withGroups(self, fields: list[str] = None) -> Self:
         """
         Retrieve the projects' groups.
         """
@@ -248,11 +185,11 @@ class Project(gqlResourceBase.ResourceBase):
 
         return self
 
-    def getCluster(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getCluster(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.CLUSTER_FIELDS
+            fields = CLUSTER_FIELDS
 
         clusters = {}
         with self.client as (_, ds):
@@ -294,11 +231,11 @@ class Project(gqlResourceBase.ResourceBase):
 
         return res
 
-    def getEnvironments(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getEnvironments(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.ENVIRONMENTS_FIELDS
+            fields = ENVIRONMENTS_FIELDS
 
         environments = {}
         with self.client as (_, ds):
@@ -340,7 +277,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return res
 
-    def getDeployTargetConfigs(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getDeployTargetConfigs(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -394,11 +331,11 @@ class Project(gqlResourceBase.ResourceBase):
 
         return res
 
-    def getVariables(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getVariables(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.VARIABLES_FIELDS
+            fields = VARIABLES_FIELDS
 
         variables = {}
         with self.client as (_, ds):
@@ -440,7 +377,7 @@ class Project(gqlResourceBase.ResourceBase):
 
         return res
 
-    def getGroups(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getGroups(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
         res = {}
 
         if not fields or not len(fields):
