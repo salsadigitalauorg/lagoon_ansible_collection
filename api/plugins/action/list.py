@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Add Lagoon deploy target configs.
   lagoon.api.list:
@@ -9,43 +6,10 @@ EXAMPLES = r'''
 '''
 
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
 
-display = Display()
-
-
-def getProjects(client: GqlClient) -> dict:
-
-    res = client.execute_query(
-        """
-        query GetProjects {
-            allProjects {
-                id
-                name
-                gitUrl
-                branches
-                autoIdle
-                pullrequests
-                developmentEnvironmentsLimit
-                activeSystemsTask
-                activeSystemsMisc
-                activeSystemsDeploy
-                activeSystemsRemove
-                productionEnvironment
-                metadata
-                environments { id name environmentType autoIdle updated created route }
-            }
-        }
-"""
-    )
-    display.v(f"GraphQL query result: {res}")
-    if res['allProjects'] == None:
-        raise AnsibleError(f"Unable to get projects.")
-    return res['allProjects']
-
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -55,20 +19,23 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = GqlClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         resource = task_vars.get('type', 'project')
 
         if resource != "project":
             result['failed'] = True
-            display.v("Only 'project' is supported")
+            self._display.v("Only 'project' is supported")
         else:
-            result['result'] = getProjects(lagoon)
+            lagoonProject = Project(self.client, {'batch_size': 20}).all(
+            ).withEnvironments()
+            if len(lagoonProject.errors):
+                if not len(lagoonProject.projects):
+                    raise AnsibleError(f"Unable to get projects.")
+                self._display.warning(
+                    f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+            result['result'] = lagoonProject.projects
 
         return result

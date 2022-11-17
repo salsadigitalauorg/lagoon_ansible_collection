@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Ensure project is in group
   lagoon.api.project_group:
@@ -10,11 +7,9 @@ EXAMPLES = r'''
       - my_group_name
 '''
 
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-
 
 display = Display()
 
@@ -96,7 +91,7 @@ def add_project_group(client: GqlClient, project, groups):
     return res["addGroupsToProject"]
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -106,13 +101,9 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         # Modifier.
         state = self._task.args.get('state', 'present')
@@ -123,18 +114,18 @@ class ActionModule(ActionBase):
         op_groups = []
 
         for g in groups:
-            if state == "present" and not has_group(lagoon, project, g):
+            if state == "present" and not has_group(self.client, project, g):
                 op_groups.append({"name": g})
-            elif state == "absent" and has_group(lagoon, project, g):
+            elif state == "absent" and has_group(self.client, project, g):
                 op_groups.append({"name": g})
 
-        display.v("Groups args: %s" % op_groups)
+        self._display.v("Groups args: %s" % op_groups)
         method = "remove_groups_from_project" if state == "absent" else "add_project_group"
 
         if len(op_groups) == 0:
             result["changed"] = False
         else:
-            result["result"] = globals()[method](lagoon, project, op_groups)
+            result["result"] = globals()[method](self.client, project, op_groups)
             result["changed"] = True
 
         return result
