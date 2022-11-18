@@ -1,8 +1,6 @@
 import json
-from ansible.errors import AnsibleError
-from ansible.utils.display import Display
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 
 EXAMPLES = r'''
 - name: Bulk deployment trigger by environment id.
@@ -25,35 +23,6 @@ EXAMPLES = r'''
       - name: build_var_name
         value: build_var_value
 '''
-
-display = Display()
-
-
-def deploy_bulk(client: GqlClient, build_vars: list, name: str, envs: list) -> dict:
-
-    res = client.execute_query(
-        """
-        mutation bulkDeployEnvironment(
-            $build_vars:[EnvKeyValueInput]
-            $envs: [DeployEnvironmentLatestInput!]!
-            $name: String
-        ) {
-            bulkDeployEnvironmentLatest(input: {
-                name: $name
-                buildVariables: $build_vars
-                environments: $envs
-            })
-        }""",
-        {
-            "build_vars": build_vars,
-            "name": name,
-            "envs": envs,
-        }
-    )
-
-    if 'errors' in res:
-        raise AnsibleError("Unable to create bulk deployment.", res['errors'])
-    return res['bulkDeployEnvironmentLatest']
 
 
 def is_variable_type(i):
@@ -148,6 +117,7 @@ class ActionModule(LagoonActionBase):
             result['message'] = 'No environments to deploy'
             return result
 
-        result['deploy_id'] = deploy_bulk(self.client, b, n, envs)
+        lagoonEnvironment = Environment(self.client)
+        result['deploy_id'] = lagoonEnvironment.bulkDeploy(b, n, envs)
         result['changed'] = True
         return result

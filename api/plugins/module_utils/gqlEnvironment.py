@@ -1,3 +1,4 @@
+from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
@@ -423,3 +424,28 @@ class Environment(ResourceBase):
                 res[eName] = None
 
         return res
+
+    def bulkDeploy(self, build_vars: list, name: str, envs: list) -> str:
+        mutation = """
+        mutation bulkDeployEnvironment(
+            $build_vars:[EnvKeyValueInput]
+            $envs: [DeployEnvironmentLatestInput!]!
+            $name: String
+        ) {
+            bulkDeployEnvironmentLatest(input: {
+                name: $name
+                buildVariables: $build_vars
+                environments: $envs
+            })
+        }"""
+
+        mutation_vars = {
+            "build_vars": build_vars,
+            "name": name,
+            "envs": envs,
+        }
+
+        res = self.client.execute_query(mutation, mutation_vars)
+        if 'errors' in res:
+            raise AnsibleError("Unable to create bulk deployment.", res['errors'])
+        return res['bulkDeployEnvironmentLatest']
