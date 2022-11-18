@@ -1,8 +1,9 @@
-from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
+from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from gql.dsl import DSLQuery, dsl_gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
+from typing import List
 from typing_extensions import Self
 
 PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
@@ -26,7 +27,7 @@ class Project(ResourceBase):
         super().__init__(client, options)
         self.projects = []
 
-    def all(self, fields: list[str] = None) -> Self:
+    def all(self, fields: List[str] = None) -> Self:
         """
         Get a list of all projects, but only top level fields.
 
@@ -40,7 +41,7 @@ class Project(ResourceBase):
         return self.queryTopLevelFields(
             self.projects, 'allProjects', 'Project', fields=fields)
 
-    def allInGroup(self, group: str, fields: list[str] = None) -> Self:
+    def allInGroup(self, group: str, fields: List[str] = None) -> Self:
         """
         Get a list of all projects in a group.
         """
@@ -52,7 +53,7 @@ class Project(ResourceBase):
         return self.queryTopLevelFields(
             self.projects, 'allProjectsInGroup', 'Project', args, fields)
 
-    def byName(self, name: str, fields: list[str] = None) -> Self:
+    def byName(self, name: str, fields: List[str] = None) -> Self:
         """
         Get the top-level information for a project.
         """
@@ -64,7 +65,7 @@ class Project(ResourceBase):
         return self.queryTopLevelFields(
             self.projects, 'projectByName', 'Project', args, fields)
 
-    def withCluster(self, fields: list[str] = None) -> Self:
+    def withCluster(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve cluster information for the projects.
         """
@@ -75,8 +76,8 @@ class Project(ResourceBase):
         project_names = [p['name'] for p in self.projects]
 
         batches = []
-        for i in range(0, len(project_names), self.batch_size):
-            batches.append(project_names[i:i+self.batch_size])
+        for i in range(0, len(project_names), batch_size):
+            batches.append(project_names[i:i+batch_size])
 
         clusters = {}
         for i, b in enumerate(batches):
@@ -89,7 +90,7 @@ class Project(ResourceBase):
 
         return self
 
-    def withEnvironments(self, fields: list[str] = None) -> Self:
+    def withEnvironments(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the projects' environments.
         """
@@ -100,8 +101,8 @@ class Project(ResourceBase):
         project_names = [p['name'] for p in self.projects]
 
         batches = []
-        for i in range(0, len(project_names), self.batch_size):
-            batches.append(project_names[i:i+self.batch_size])
+        for i in range(0, len(project_names), batch_size):
+            batches.append(project_names[i:i+batch_size])
 
         environments = {}
         for i, b in enumerate(batches):
@@ -113,7 +114,7 @@ class Project(ResourceBase):
 
         return self
 
-    def withDeployTargetConfigs(self, fields: list[str] = None) -> Self:
+    def withDeployTargetConfigs(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the projects' deploy target configs.
         """
@@ -124,8 +125,8 @@ class Project(ResourceBase):
         project_names = [p['name'] for p in self.projects]
 
         batches = []
-        for i in range(0, len(project_names), self.batch_size):
-            batches.append(project_names[i:i+self.batch_size])
+        for i in range(0, len(project_names), batch_size):
+            batches.append(project_names[i:i+batch_size])
 
         dtcs = {}
         for i, b in enumerate(batches):
@@ -137,7 +138,7 @@ class Project(ResourceBase):
 
         return self
 
-    def withVariables(self, fields: list[str] = None) -> Self:
+    def withVariables(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the projects' variables.
         """
@@ -148,8 +149,8 @@ class Project(ResourceBase):
         project_names = [p['name'] for p in self.projects]
 
         batches = []
-        for i in range(0, len(project_names), self.batch_size):
-            batches.append(project_names[i:i+self.batch_size])
+        for i in range(0, len(project_names), batch_size):
+            batches.append(project_names[i:i+batch_size])
 
         projectVars = {}
         for i, b in enumerate(batches):
@@ -161,7 +162,7 @@ class Project(ResourceBase):
 
         return self
 
-    def withGroups(self, fields: list[str] = None) -> Self:
+    def withGroups(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the projects' groups.
         """
@@ -172,8 +173,8 @@ class Project(ResourceBase):
         project_names = [p['name'] for p in self.projects]
 
         batches = []
-        for i in range(0, len(project_names), self.batch_size):
-            batches.append(project_names[i:i+self.batch_size])
+        for i in range(0, len(project_names), batch_size):
+            batches.append(project_names[i:i+batch_size])
 
         groups = {}
         for i, b in enumerate(batches):
@@ -185,7 +186,7 @@ class Project(ResourceBase):
 
         return self
 
-    def getCluster(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
+    def getCluster(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -231,7 +232,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getEnvironments(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
+    def getEnvironments(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -277,7 +278,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getDeployTargetConfigs(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
+    def getDeployTargetConfigs(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -331,7 +332,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getVariables(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
+    def getVariables(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -377,7 +378,7 @@ class Project(ResourceBase):
 
         return res
 
-    def getGroups(self, project_names: list[str], fields: list[str] = None) -> list[dict]:
+    def getGroups(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):

@@ -29,8 +29,8 @@ class ActionModule(LagoonActionBase):
             result['failed'] = True
             self._display.v("Only 'project' is supported")
         else:
-            lagoonProject = Project(self.client, {'batch_size': 20}).all(
-            ).withEnvironments()
+            lagoonProject = Project(self.client).all(
+            ).withEnvironments(batch_size=50)
             if len(lagoonProject.errors):
                 if not len(lagoonProject.projects):
                     raise AnsibleError(f"Unable to get projects.")

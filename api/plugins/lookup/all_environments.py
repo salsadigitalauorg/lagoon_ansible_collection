@@ -58,14 +58,14 @@ class LookupModule(LagoonLookupBase):
 
     self.createClient()
 
-    lagoonEnvironment = Environment(self.client, {'batch_size': 50}).all()
+    lagoonEnvironment = Environment(self.client).all()
     if not len(lagoonEnvironment.environments):
       if len(lagoonEnvironment.errors):
         raise AnsibleError(
             f"Unable to fetch environments; encountered the following errors: {lagoonEnvironment.errors}")
       return ret
 
-    lagoonEnvironment.withCluster().withVariables()
+    lagoonEnvironment.withCluster(batch_size=50).withVariables(batch_size=50)
     if len(lagoonEnvironment.errors):
       self._display.warning(
           f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")

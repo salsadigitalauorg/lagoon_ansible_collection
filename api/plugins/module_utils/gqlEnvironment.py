@@ -1,4 +1,4 @@
-from ansible_collections.lagoon.api.plugins.module_utils import gqlResourceBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
 from gql.dsl import DSLQuery, dsl_gql
@@ -8,7 +8,7 @@ from typing import List
 from typing_extensions import Self
 
 
-class Environment(gqlResourceBase.ResourceBase):
+class Environment(ResourceBase):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
@@ -23,7 +23,7 @@ class Environment(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = gqlResourceBase.ENVIRONMENTS_FIELDS
+            fields = ENVIRONMENTS_FIELDS
 
         joined_fields = "\n        ".join(fields)
 
@@ -52,13 +52,13 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
-    def allThroughProjects(self, fields: List[str] = None) -> Self:
+    def allThroughProjects(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Get a list of all environments, but going through projects first.
         """
 
         projects = Project(self.client, self.options).all(
-            ).withEnvironments(fields).projects
+            ).withEnvironments(fields, batch_size).projects
 
         for p in projects:
             self.environments.extend(p['environments'])
@@ -71,7 +71,7 @@ class Environment(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = gqlResourceBase.ENVIRONMENTS_FIELDS
+            fields = ENVIRONMENTS_FIELDS
 
         joined_fields = "\n        ".join(fields)
 
@@ -105,7 +105,7 @@ class Environment(gqlResourceBase.ResourceBase):
         """
 
         if not fields:
-            fields = gqlResourceBase.ENVIRONMENTS_FIELDS
+            fields = ENVIRONMENTS_FIELDS
 
         joined_fields = "\n        ".join(fields)
 
@@ -132,7 +132,7 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withCluster(self, fields: List[str] = None) -> Self:
+    def withCluster(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve cluster information for the environments.
         """
@@ -143,8 +143,8 @@ class Environment(gqlResourceBase.ResourceBase):
         env_names = [e['kubernetesNamespaceName'] for e in self.environments]
 
         batches = []
-        for i in range(0, len(env_names), self.batch_size):
-            batches.append(env_names[i:i+self.batch_size])
+        for i in range(0, len(env_names), batch_size):
+            batches.append(env_names[i:i+batch_size])
 
         clusters = {}
         for i, b in enumerate(batches):
@@ -158,7 +158,7 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withVariables(self, fields: List[str] = None) -> Self:
+    def withVariables(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the environments' variables.
         """
@@ -169,8 +169,8 @@ class Environment(gqlResourceBase.ResourceBase):
         env_names = [e['kubernetesNamespaceName'] for e in self.environments]
 
         batches = []
-        for i in range(0, len(env_names), self.batch_size):
-            batches.append(env_names[i:i+self.batch_size])
+        for i in range(0, len(env_names), batch_size):
+            batches.append(env_names[i:i+batch_size])
 
         environmentVars = {}
         for i, b in enumerate(batches):
@@ -184,7 +184,7 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withProject(self, fields: List[str] = None) -> Self:
+    def withProject(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the environments' project.
         """
@@ -195,8 +195,8 @@ class Environment(gqlResourceBase.ResourceBase):
         env_names = [e['kubernetesNamespaceName'] for e in self.environments]
 
         batches = []
-        for i in range(0, len(env_names), self.batch_size):
-            batches.append(env_names[i:i+self.batch_size])
+        for i in range(0, len(env_names), batch_size):
+            batches.append(env_names[i:i+batch_size])
 
         envProject = {}
         for i, b in enumerate(batches):
@@ -210,7 +210,7 @@ class Environment(gqlResourceBase.ResourceBase):
 
         return self
 
-    def withDeployments(self, fields: List[str] = None) -> Self:
+    def withDeployments(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Retrieve the environments' deployments.
         """
@@ -221,8 +221,8 @@ class Environment(gqlResourceBase.ResourceBase):
         env_names = [e['kubernetesNamespaceName'] for e in self.environments]
 
         batches = []
-        for i in range(0, len(env_names), self.batch_size):
-            batches.append(env_names[i:i+self.batch_size])
+        for i in range(0, len(env_names), batch_size):
+            batches.append(env_names[i:i+batch_size])
 
         envDeployments = {}
         for i, b in enumerate(batches):
@@ -240,7 +240,7 @@ class Environment(gqlResourceBase.ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.CLUSTER_FIELDS
+            fields = CLUSTER_FIELDS
 
         clusters = {}
         with self.client as (_, ds):
@@ -287,7 +287,7 @@ class Environment(gqlResourceBase.ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.VARIABLES_FIELDS
+            fields = VARIABLES_FIELDS
 
         variables = {}
         with self.client as (_, ds):
@@ -334,7 +334,7 @@ class Environment(gqlResourceBase.ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.PROJECT_FIELDS
+            fields = PROJECT_FIELDS
 
         projects = {}
         with self.client as (_, ds):
@@ -381,7 +381,7 @@ class Environment(gqlResourceBase.ResourceBase):
         res = {}
 
         if not fields or not len(fields):
-            fields = gqlResourceBase.DEPLOYMENTS_FIELDS
+            fields = DEPLOYMENTS_FIELDS
 
         deployments = {}
         with self.client as (_, ds):
