@@ -699,6 +699,9 @@ and see if that helps""", None, True, False, e)
         except Exception as e:
             raise e
 
+    def sanitised_name(self, name):
+        return re.sub(r'[\W_-]+', '-', name)
+
     def sanitised_for_query_alias(self, name):
         return re.sub(r'[\W-]+', '_', name)
 
