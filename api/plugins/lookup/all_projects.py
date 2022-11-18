@@ -58,14 +58,14 @@ class LookupModule(LagoonLookupBase):
 
     self.createClient()
 
-    lagoonProject = Project(self.client, {'batch_size': 20}).all()
+    lagoonProject = Project(self.client).all()
     if not len(lagoonProject.projects):
       if len(lagoonProject.errors):
         raise AnsibleError(
             f"Unable to fetch projects; encountered the following errors: {lagoonProject.errors}")
       return ret
 
-    lagoonProject.withCluster().withEnvironments()
+    lagoonProject.withCluster(batch_size=50).withEnvironments(batch_size=50)
     if len(lagoonProject.errors):
       self._display.warning(
           f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")

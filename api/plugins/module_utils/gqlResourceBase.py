@@ -2,6 +2,7 @@ import re
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible.utils.display import Display
 from gql.transport.exceptions import TransportQueryError
+from typing import Dict, List
 from typing_extensions import Self
 
 display = Display()
@@ -67,6 +68,8 @@ DEPLOYMENTS_FIELDS = [
     'uiLink',
 ]
 
+DEFAULT_BATCH_SIZE = 100
+
 
 class ResourceBase:
 
@@ -74,14 +77,12 @@ class ResourceBase:
         self.client = client
         self.errors = []
         self.display = display
-
         self.options = options
-        self.batch_size = options.get('batch_size', 100)
 
     def sanitiseForQueryAlias(self, name):
         return re.sub(r'[\W-]+', '_', name)
 
-    def queryTopLevelFields(self, resList: list, query: str, qryType: str, args: dict[str, any] = {}, fields: list[str] = []) -> Self:
+    def queryTopLevelFields(self, resList: list, query: str, qryType: str, args: Dict[str, any] = {}, fields: List[str] = []) -> Self:
         with self.client:
             queryObj = self.client.build_dynamic_query(query, qryType, args, fields)
             try:
