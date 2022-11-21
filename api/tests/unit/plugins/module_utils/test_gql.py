@@ -1,7 +1,7 @@
 import unittest
 from ansible.module_utils.errors import AnsibleValidationError
 from ansible_collections.lagoon.api.tests.common import dsl_field_query_to_str, load_schema
-from gql.dsl import dsl_gql, DSLQuery, DSLSchema, print_ast
+from gql.dsl import DSLSchema
 
 import sys
 sys.modules['ansible.utils.display'] = unittest.mock.Mock()

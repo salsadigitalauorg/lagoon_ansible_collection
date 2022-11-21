@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lagoon-collection-tester
+    volumes:
+      - ./api:/usr/share/collections/ansible_collections/lagoon/api
+    working_dir: /usr/share/collections/ansible_collections/lagoon/api
