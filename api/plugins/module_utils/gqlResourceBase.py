@@ -79,6 +79,9 @@ class ResourceBase:
         self.display = display
         self.options = options
 
+    def sanitisedName(self, name):
+        return re.sub(r'[\W_-]+', '-', name)
+
     def sanitiseForQueryAlias(self, name):
         return re.sub(r'[\W-]+', '_', name)
 
