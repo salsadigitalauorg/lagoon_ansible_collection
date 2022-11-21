@@ -1,4 +1,5 @@
 # Ansible Collection - lagoon
+[![tests](https://github.com/salsadigitalauorg/lagoon_ansible_collection/actions/workflows/test.yml/badge.svg)](https://github.com/salsadigitalauorg/lagoon_ansible_collection/actions/workflows/test.yml)
 
 This repository contains collections related to the [Lagoon](https://github.com/uselagoon/lagoon) application delivery platform.
 
@@ -24,8 +25,6 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 
 ## Run unit tests
 ```sh
-docker run --rm -it -v \
-    $PWD/api:/usr/share/collections/ansible_collections/lagoon/api \
-    -w /usr/share/collections/ansible_collections/lagoon/api \
-    ghcr.io/salsadigitalauorg/ansible-test:latest units -v --requirements
+docker-compose build
+docker-compose run --rm test units -v --requirements
 ```
