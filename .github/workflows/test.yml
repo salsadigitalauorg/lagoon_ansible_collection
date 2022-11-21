@@ -34,8 +34,5 @@ jobs:
         run: python -m pip install ansible pytest pytest-forked
 
       - name: Run unit tests
-        run: |
-          pwd
-          ls -l
-          ansible-test units -v --requirements
+        run: ansible-test units -v --requirements --python ${{ matrix.python-version }}
         working-directory: ./ansible_collections/lagoon/api
