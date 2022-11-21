@@ -36,6 +36,14 @@ jobs:
         run: ansible-test units -v --requirements --python ${{ matrix.python-version }}
         working-directory: ./ansible_collections/lagoon/api
 
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v3
+        if: always()
+        with:
+          check_name: Ansible tests - python${{ matrix.python-version }}
+          report_paths: 'ansible_collections/lagoon/api/tests/output/junit/*.xml'
+          detailed_summary: true
+
       - name: Upload test results
         uses: actions/upload-artifact@v3
         with:
