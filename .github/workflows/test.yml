@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          path: 'ansible_collections/lagoon/api'
+          path: 'ansible_collections/lagoon'
 
       - name: Set up Python
         uses: actions/setup-python@v3
