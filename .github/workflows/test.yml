@@ -2,9 +2,9 @@ name: Run ansible-test
 
 on:
   push:
-    branches: [ main, feature/refactor-use-new-client ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 env:
   REGISTRY: ghcr.io
