@@ -1,0 +1,24 @@
+- name: Deploy project branch.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - include_role:
+        name: lagoon.api.token
+
+    - name: Trigger staggered deployment.
+      lagoon.api.deploy:
+        project: '{{ deploy_project }}'
+        branch: '{{ deploy_branch }}'
+        stagger: 5
+      throttle: 1
+
+    - name: Wait for deployment to complete.
+      lagoon.api.last_deploy:
+        project: '{{ deploy_project }}'
+        branch: '{{ deploy_branch }}'
+        wait: true
+        retries: 60

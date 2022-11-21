@@ -1,3 +1,4 @@
+from time import time
 from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
@@ -424,6 +425,48 @@ class Environment(ResourceBase):
                 res[eName] = None
 
         return res
+
+    def deployBranch(self, project: str, branch: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
+        mutation = """
+        mutation deploy($project: String!, $branch: String!) {
+            deployEnvironmentBranch (input: {
+                project: { name: $project },
+                branchName: $branch
+            })
+        }"""
+
+        mutation_vars = {
+            "project": project,
+            "branch": branch,
+        }
+
+        res = self.client.execute_query(mutation, mutation_vars)
+        if 'errors' in res:
+            raise AnsibleError("Unable to deploy branch.", res['errors'])
+
+        if not wait:
+            return res['deployEnvironmentBranch']
+
+        env_ns = self.sanitisedName(f"{project}-{branch}")
+        return self.checkDeployStatus(env_ns, wait, delay, retries)
+
+    def checkDeployStatus(self, env_ns: str, wait: bool=False, delay: int=60, retries: int=30, current_try: int=1):
+        time.sleep(delay)
+
+        deployments = self.getDeployments([env_ns])[env_ns]
+
+        if (not wait or (len(deployments) and
+            'status' in deployments[0] and
+            deployments[0]['status'] in ['complete', 'failed', 'new', 'cancelled'])):
+            return deployments[0]['status']
+
+        if retries - current_try == 0:
+            raise AnsibleError(
+                'Maximium number of retries reached; view deployment logs for more information.')
+
+        self.display.display(
+            f"\033[30;1mRETRYING: Wait for deployment completion for {env_ns} ({retries - current_try} retries left).\033[0m")
+        return self.checkDeployStatus(env_ns, wait, delay, retries, current_try + 1)
 
     def bulkDeploy(self, build_vars: list, name: str, envs: list) -> str:
         mutation = """
