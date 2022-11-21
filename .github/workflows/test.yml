@@ -2,7 +2,7 @@ name: Run ansible-test
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/refactor-use-new-client ]
   pull_request:
     branches: [ main ]
 
