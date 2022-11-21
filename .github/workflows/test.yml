@@ -15,8 +15,7 @@ jobs:
 
     strategy:
       matrix:
-        # python-version: [ '3.8', '3.9', '3.10', '3.11' ]
-        python-version: [ '3.8' ]
+        python-version: [ '3.8', '3.9', '3.10', '3.11' ]
 
     steps:
       - name: Checkout
@@ -36,3 +35,9 @@ jobs:
       - name: Run unit tests
         run: ansible-test units -v --requirements --python ${{ matrix.python-version }}
         working-directory: ./ansible_collections/lagoon/api
+
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v3
+        if: always()
+        with:
+          report_paths: 'ansible_collections/lagoon/api/tests/output/junit/*.xml'
