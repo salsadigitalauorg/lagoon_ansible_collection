@@ -1,4 +1,4 @@
-from ansible.errors import AnsibleError
+from ansible.module_utils.errors import AnsibleValidationError
 from ansible.utils.display import Display
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
@@ -14,7 +14,7 @@ class GqlClient:
 
     def __init__(self, endpoint: str, token: str, headers: dict = {}, display: Display = None) -> None:
         if not isinstance(headers, dict):
-            raise AnsibleError("Expecting client headers to be dictionary.")
+            raise AnsibleValidationError("Expecting client headers to be dictionary.")
 
         headers['Content-Type'] = 'application/json'
         headers['Authorization'] = f"Bearer {token}"
@@ -93,6 +93,9 @@ class GqlClient:
             },
         }
         """
+
+        if not len(fields) and not len(subFieldsMap):
+            raise AnsibleValidationError("One of fields or subFieldsMap is required.")
 
         # Build the main query with top-level fields if any.
         queryObj: DSLField = getattr(self.ds.Query, query)
