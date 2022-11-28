@@ -31,7 +31,7 @@ class Variable(gqlResourceBase.ResourceBase):
                 "type_id": int(type_id),
                 "scope": scope,
                 "name": name,
-                "value": value,
+                "value": str(value),
             }
         )
         return res['addEnvVariable']
