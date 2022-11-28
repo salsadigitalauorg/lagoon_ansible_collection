@@ -3,7 +3,6 @@ from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 from ansible.utils.display import Display
 from gql.transport.exceptions import TransportQueryError
 from typing import Dict, List
-from typing_extensions import Self
 
 display = Display()
 
@@ -85,7 +84,7 @@ class ResourceBase:
     def sanitiseForQueryAlias(self, name):
         return re.sub(r'[\W-]+', '_', name)
 
-    def queryTopLevelFields(self, resList: list, query: str, qryType: str, args: Dict[str, any] = {}, fields: List[str] = []) -> Self:
+    def queryTopLevelFields(self, resList: list, query: str, qryType: str, args: Dict[str, any] = {}, fields: List[str] = []):
         with self.client:
             queryObj = self.client.build_dynamic_query(query, qryType, args, fields)
             try:
