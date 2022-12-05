@@ -117,7 +117,7 @@ def run_module():
         {'headers': module.params['headers']}
     )
 
-    project = lagoon.project(module.params['project'])
+    project = lagoon.deploy_target_config_get(module.params['project'])
     existing_configs = project['deployTargetConfigs']
 
     if module.params['state'] == 'present':
