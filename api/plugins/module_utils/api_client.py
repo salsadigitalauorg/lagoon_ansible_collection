@@ -563,6 +563,32 @@ class ApiClient:
 
         return self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name))
 
+    def deploy_target_config_get(self, project_name):
+       query = {
+           'query': """query projectInfo($name: String!) {
+               projectByName(name: $name) {
+                   id
+                   deployTargetConfigs {
+                       id
+                       weight
+                       branches
+                       pullrequests
+                       deployTarget {
+                           name
+                           id
+                       }
+                   }
+               }
+           }""",
+           'variables': '{"name": "%s"}'
+       }
+       result = self.make_api_call(
+           self.__prepare_graphql_query(query) % project_name)
+       if result['data']['projectByName'] == None:
+           raise AnsibleError(
+               "Unable to get deployTargetConfigs for project %s; please make sure the project name is correct" % project)
+       return result['data']['projectByName']
+    
     def deploy_target_config_add(self, project_id, configs):
         query_configs = []
         for idx, config in enumerate(configs):
