@@ -577,9 +577,6 @@ class ApiClient:
                            name
                            id
                        }
-                       project{
-                           name
-                       }
                    }
                }
            }""",
