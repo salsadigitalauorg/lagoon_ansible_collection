@@ -114,7 +114,7 @@ def run_module():
     lagoon = ApiClient(
         module.params['lagoon_api_endpoint'],
         module.params['lagoon_api_token'],
-        {'headers': module.params['headers']}
+        {'headers': module.params['headers'], 'timeout': 60, 'validate_certs': False}
     )
 
     project = lagoon.deploy_target_config_get(module.params['project'])
