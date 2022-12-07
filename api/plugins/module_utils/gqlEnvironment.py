@@ -1,11 +1,12 @@
-from time import sleep
+from .gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
+from .gql import GqlClient
+from .gqlProject import Project
+
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
 from gql.dsl import DSLQuery, dsl_gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
+from time import sleep
 from typing import List
 from typing_extensions import Self
 
@@ -35,13 +36,13 @@ class Environment(ResourceBase):
     }}
 }}"""
 
-        self.display.vvvv(f"{ query }")
+        self.vvvv(f"{ query }")
 
         try:
             res = self.client.execute_query(query)
             self.environments.extend(res['allEnvironments'])
         except TransportQueryError as e:
-            self.display.v(f"{e.errors}")
+            self.v(f"{e.errors}")
             if e.errors[0]['message'] == 'Unauthorized: You don\'t have permission to "viewAll" on "environment": {}':
                 return self.allThroughProjects(fields)
             elif isinstance(e.data['allEnvironments'], list):
@@ -83,7 +84,7 @@ class Environment(ResourceBase):
     }}
 }}"""
 
-        self.display.vvvv(f"{ query }")
+        self.vvvv(f"{ query }")
 
         try:
             res = self.client.execute_query(query)
@@ -117,7 +118,7 @@ class Environment(ResourceBase):
     }}
 }}"""
 
-        self.display.vvvv(f"{ query }")
+        self.vvvv(f"{ query }")
 
         try:
             res = self.client.execute_query(query)
@@ -150,7 +151,7 @@ class Environment(ResourceBase):
 
         clusters = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
             clusters.update(self.getCluster(b, fields))
 
         for environment in self.environments:
@@ -176,7 +177,7 @@ class Environment(ResourceBase):
 
         environmentVars = {}
         for i, b in enumerate(batches):
-            self.display.v(
+            self.v(
                 f"Fetching variables for batch {i+1}/{len(batches)}")
             environmentVars.update(self.getVariables(b, fields))
 
@@ -202,7 +203,7 @@ class Environment(ResourceBase):
 
         envProject = {}
         for i, b in enumerate(batches):
-            self.display.v(
+            self.v(
                 f"Fetching project for batch {i+1}/{len(batches)}")
             envProject.update(self.getProject(b, fields))
 
@@ -228,7 +229,7 @@ class Environment(ResourceBase):
 
         envDeployments = {}
         for i, b in enumerate(batches):
-            self.display.v(
+            self.v(
                 f"Fetching deployments for batch {i+1}/{len(batches)}")
             envDeployments.update(self.getDeployments(b, fields))
 
@@ -263,7 +264,7 @@ class Environment(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 clusters = self.client.client.session.execute(query)
@@ -310,7 +311,7 @@ class Environment(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 variables = self.client.client.session.execute(query)
@@ -357,7 +358,7 @@ class Environment(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 projects = self.client.client.session.execute(query)
@@ -404,7 +405,7 @@ class Environment(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 deployments = self.client.client.session.execute(query)
@@ -464,7 +465,7 @@ class Environment(ResourceBase):
             raise AnsibleError(
                 'Maximium number of retries reached; view deployment logs for more information.')
 
-        self.display.display(
+        self.display(
             f"\033[30;1mRETRYING: Wait for deployment completion for {env_ns} ({retries - current_try} retries left).\033[0m")
         return self.checkDeployStatus(env_ns, wait, delay, retries, current_try + 1)
 

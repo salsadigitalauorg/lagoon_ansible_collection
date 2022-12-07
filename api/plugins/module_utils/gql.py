@@ -1,18 +1,21 @@
+from .display import Display
+
 from ansible.module_utils.errors import AnsibleValidationError
-from ansible.utils.display import Display
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
 from gql.dsl import DSLField, DSLQuery, DSLSchema, DSLType, dsl_gql
 from graphql import print_ast
 from typing import Any, Dict, List, Optional
 
-class GqlClient:
+class GqlClient(Display):
     """ This client aims to facilitate the usage of the gql package, based on
     the docs at https://gql.readthedocs.io/en/latest/advanced/dsl_module.html.
     The goal is to allow developers to run queries and mutations using the awesome
     package while reducing boilerplate code. """
 
     def __init__(self, endpoint: str, token: str, headers: dict = {}, display: Display = None) -> None:
+        super().__init__()
+
         if not isinstance(headers, dict):
             raise AnsibleValidationError("Expecting client headers to be dictionary.")
 
@@ -36,7 +39,8 @@ class GqlClient:
             fetch_schema_from_transport=True
         )
 
-        self.display = display
+        # This value of display if deprecated - use the Display class instead.
+        del display
 
     def __enter__(self):
         """This method and the next (__exit__) allow the use of the `with`
@@ -58,9 +62,9 @@ class GqlClient:
         """Executes a query using the graphql string provided.
         """
         query_ast = gql(query)
-        self.display.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
+        self.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
         res = self.client.execute(query_ast, variable_values=variables)
-        self.display.vvvv(f"GraphQL query result: {res}")
+        self.vvvv(f"GraphQL query result: {res}")
         return res
 
     def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
@@ -137,7 +141,7 @@ class GqlClient:
 
         # Generate the full query.
         full_query = dsl_gql(DSLQuery(field_query))
-        self.display.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
+        self.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
         res = self.client.session.execute(full_query)
-        self.display.vvvv(f"GraphQL query result: {res}")
+        self.vvvv(f"GraphQL query result: {res}")
         return res

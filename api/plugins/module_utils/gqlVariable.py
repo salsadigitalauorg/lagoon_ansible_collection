@@ -1,7 +1,7 @@
-from ansible_collections.lagoon.api.plugins.module_utils import gqlResourceBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from .gql import GqlClient
+from .gqlResourceBase import ResourceBase
 
-class Variable(gqlResourceBase.ResourceBase):
+class Variable(ResourceBase):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
