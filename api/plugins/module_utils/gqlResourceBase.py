@@ -1,10 +1,10 @@
 import re
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible.utils.display import Display
+
+from .gql import GqlClient
+from .display import Display
+
 from gql.transport.exceptions import TransportQueryError
 from typing import Dict, List
-
-display = Display()
 
 PROJECT_FIELDS = [
     'autoIdle',
@@ -70,12 +70,12 @@ DEPLOYMENTS_FIELDS = [
 DEFAULT_BATCH_SIZE = 100
 
 
-class ResourceBase:
+class ResourceBase(Display):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
+        super().__init__()
         self.client = client
         self.errors = []
-        self.display = display
         self.options = options
 
     def sanitisedName(self, name):

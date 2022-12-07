@@ -1,5 +1,6 @@
-from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from .gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
+from .gql import GqlClient
+
 from gql.dsl import DSLQuery, dsl_gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
@@ -81,7 +82,7 @@ class Project(ResourceBase):
 
         clusters = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
             clusters.update(self.getCluster(b, fields))
 
         for project in self.projects:
@@ -106,7 +107,7 @@ class Project(ResourceBase):
 
         environments = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching environments for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching environments for batch {i+1}/{len(batches)}")
             environments.update(self.getEnvironments(b, fields))
 
         for project in self.projects:
@@ -130,7 +131,7 @@ class Project(ResourceBase):
 
         dtcs = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
             dtcs.update(self.getDeployTargetConfigs(b, fields))
 
         for project in self.projects:
@@ -154,7 +155,7 @@ class Project(ResourceBase):
 
         projectVars = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching variables for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching variables for batch {i+1}/{len(batches)}")
             projectVars.update(self.getVariables(b, fields))
 
         for project in self.projects:
@@ -178,7 +179,7 @@ class Project(ResourceBase):
 
         groups = {}
         for i, b in enumerate(batches):
-            self.display.v(f"Fetching groups for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching groups for batch {i+1}/{len(batches)}")
             groups.update(self.getGroups(b, fields))
 
         for project in self.projects:
@@ -210,7 +211,7 @@ class Project(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 clusters = self.client.client.session.execute(query)
@@ -256,7 +257,7 @@ class Project(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 environments = self.client.client.session.execute(query)
@@ -310,7 +311,7 @@ class Project(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 dtcs = self.client.client.session.execute(query)
@@ -356,7 +357,7 @@ class Project(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 variables = self.client.client.session.execute(query)
@@ -402,7 +403,7 @@ class Project(ResourceBase):
                 field_queries.append(field_query)
 
             query = dsl_gql(DSLQuery(*field_queries))
-            self.display.vvvv(f"Built query: \n{print_ast(query)}")
+            self.vvvv(f"Built query: \n{print_ast(query)}")
 
             try:
                 groups = self.client.client.session.execute(query)
