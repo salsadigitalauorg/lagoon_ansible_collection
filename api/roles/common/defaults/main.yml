@@ -1,0 +1,3 @@
+lagoon_api_endpoint: https://api.lagoon.amazeeio.cloud/graphql
+lagoon_ssh_host: ssh.lagoon.amazeeio.cloud
+lagoon_ssh_port: 32222

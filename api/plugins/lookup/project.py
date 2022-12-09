@@ -1,14 +1,11 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
 from ansible.errors import AnsibleError
+from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 
 DOCUMENTATION = """
   name: project
-  author: Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
+  author: Yusuf Hasan Miyan <yusuf@salsa.digital>
   short_description: get a lagoon project
   description:
       - This lookup returns the information for a Lagoon project.
@@ -55,86 +52,14 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a project's information
-  debug: msg="{{ lookup('lagoon.api.project', 'vanilla-govcms9-beta') }}"
+  debug: msg="{{ lookup('lagoon.api.project', project_name) }}"
 
 - name: retrieve a project's information from an environment
-  debug: msg="{{ lookup('lagoon.api.project', 'vanilla-govcms9-beta-master', from_environment=true) }}"
+  debug: msg="{{ lookup('lagoon.api.project', environment_ns, from_environment=true) }}"
 """
 
-display = Display()
 
-
-def get_project(client: GqlClient, name: str) -> dict:
-  with client as (_, ds):
-    res = client.execute_query_dynamic(
-        ds.Query.projectByName(name=name).select(
-            ds.Project.id,
-            ds.Project.name,
-            ds.Project.autoIdle,
-            ds.Project.branches,
-            ds.Project.gitUrl,
-            ds.Project.metadata,
-            ds.Project.developmentEnvironmentsLimit,
-            ds.Project.openshift.select(
-                ds.Openshift.id,
-                ds.Openshift.name,
-            ),
-            ds.Project.kubernetes.select(
-                ds.Kubernetes.id,
-                ds.Kubernetes.name,
-            ),
-            ds.Project.environments.select(
-                ds.Environment.name,
-                ds.Environment.openshift.select(
-                    ds.Openshift.id,
-                    ds.Openshift.name,
-                ),
-                ds.Environment.kubernetes.select(
-                    ds.Kubernetes.id,
-                    ds.Kubernetes.name,
-                ),
-            ),
-            ds.Project.deployTargetConfigs.select(
-                ds.DeployTargetConfig.id,
-                ds.DeployTargetConfig.weight,
-                ds.DeployTargetConfig.branches,
-                ds.DeployTargetConfig.pullrequests,
-                ds.DeployTargetConfig.deployTarget.select(
-                    ds.Openshift.id,
-                    ds.Openshift.name,
-                ),
-            ),
-        )
-    )
-
-    display.v(f"GraphQL query result: {res}")
-    if res['projectByName'] == None:
-      raise AnsibleError(
-          f"Unable to get details for project {name}; please make sure the project name is correct")
-    return res['projectByName']
-
-
-def get_project_from_environment(client: GqlClient, name: str) -> dict:
-  with client as (_, ds):
-    res = client.execute_query_dynamic(
-        ds.Query.environmentByKubernetesNamespaceName(kubernetesNamespaceName=name).select(
-            ds.Environment.project.select(
-                ds.Project.id,
-                ds.Project.name,
-                ds.Project.autoIdle,
-                ds.Project.branches,
-                ds.Project.gitUrl,
-                ds.Project.metadata,
-            )
-        )
-    )
-    display.v(f"GraphQL query result: {res}")
-    if res['environmentByKubernetesNamespaceName']['project'] == None:
-      raise AnsibleError(
-          f"Unable to get project details for environment {name}; please make sure the environment name is correct")
-    return res['environmentByKubernetesNamespaceName']['project']
-
-class LookupModule(LookupBase):
+class LookupModule(LagoonLookupBase):
 
   def run(self, terms, variables=None, **kwargs):
 
@@ -142,17 +67,30 @@ class LookupModule(LookupBase):
 
     self.set_options(var_options=variables, direct=kwargs)
 
-    lagoon = GqlClient(
-        self.get_option('lagoon_api_endpoint'),
-        self.get_option('lagoon_api_token'),
-        self.get_option('headers', {})
-    )
+    self.createClient()
+
+    lagoonProject = Project(self.client)
+    lagoonEnvironment = Environment(self.client)
 
     for term in terms:
       if self.get_option('from_environment'):
-        project = get_project_from_environment(lagoon, term)
+        lagoonEnvironment.byNs(term, ['id'])
+        if not len(lagoonEnvironment.environments):
+          raise AnsibleError(
+              f"Unable to fetch environment {term}; errors: {lagoonEnvironment.errors}")
+
+        lagoonEnvironment.withProject()
+        lagoonProject.projects = [lagoonEnvironment.environments[0]['project']]
       else:
-        project = get_project(lagoon, term)
-      ret.append(project)
+        lagoonProject.byName(term)
+        if not len(lagoonProject.projects):
+            return ret
+
+      lagoonProject.withCluster().withEnvironments()
+      lagoonProject.withDeployTargetConfigs().withVariables().withGroups()
+      if len(lagoonProject.errors):
+        self._display.warning(
+            f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+      ret.extend(lagoonProject.projects)
 
     return ret

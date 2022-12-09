@@ -1,8 +1,6 @@
-from __future__ import (absolute_import, division, print_function)
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
-__metaclass__ = type
+from ansible.errors import AnsibleError
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
 
 DOCUMENTATION = """
   name: environment
@@ -14,13 +12,13 @@ DOCUMENTATION = """
     _terms:
       description: The project to query (or environment if from_environment is True)
       required: True
-    endpoint:
+    lagoon_api_endpoint:
       description: The Lagoon graphql endpoint
       type: string
       required: True
       vars:
         - name: lagoon_api_endpoint
-    endpoint_token:
+    lagoon_api_token:
       description: The token for Lagoon graphql API
       type: string
       required: True
@@ -49,14 +47,11 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a environment's information
-  debug: msg="{{ lookup('lagoon.api.environment', 'vanilla-govcms9-beta-master') }}"
+  debug: msg="{{ lookup('lagoon.api.environment', environment_ns) }}"
 """
 
 
-display = Display()
-
-
-class LookupModule(LookupBase):
+class LookupModule(LagoonLookupBase):
 
     def run(self, terms, variables=None, **kwargs):
 
@@ -64,13 +59,23 @@ class LookupModule(LookupBase):
 
         self.set_options(var_options=variables, direct=kwargs)
 
-        lagoon = ApiClient(
-            self.get_option('endpoint'),
-            self.get_option('endpoint_token'),
-            {'headers': self.get_option('headers', {})}
-        )
+        self.createClient()
+
+        lagoonEnvironment = Environment(self.client)
 
         for term in terms:
-            ret.append(lagoon.environment(term))
+            lagoonEnvironment.byNs(term)
+            if not len(lagoonEnvironment.environments):
+                if len(lagoonEnvironment.errors):
+                    raise AnsibleError(
+                        f"Unable to fetch environment {term}; encountered the following errors: {lagoonEnvironment.errors}")
+                return ret
+
+            lagoonEnvironment.withCluster().withVariables()
+            lagoonEnvironment.withProject().withDeployments()
+            if len(lagoonEnvironment.errors):
+                self._display.warning(
+                    f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
+            ret.extend(lagoonEnvironment.environments)
 
         return ret

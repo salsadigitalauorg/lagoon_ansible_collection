@@ -110,12 +110,7 @@ def run_module():
     if module.params['state'] == 'absent':
         res = lagoon.environment_delete(
             module.params['project'], module.params['environment'])
-        if 'errors' in res:
-            if res['errors'][0]['message'] == 'Branch environment does not exist, no need to remove anything.':
-                module.exit_json(**result)
-            module.fail_json(msg=res['errors'][0]['message'], **result)
-        result['result'] = res['data']['deleteEnvironment']
-        result['changed'] = True
+        result['changed'] = res
 
     module.exit_json(**result)
 

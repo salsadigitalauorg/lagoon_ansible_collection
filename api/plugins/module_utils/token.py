@@ -23,4 +23,4 @@ def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path
     ssh_command.extend([f"lagoon@{ssh_host}", 'token'])
 
     ssh_res = subprocess.run(ssh_command, capture_output=True)
-    return ssh_res.returncode, ssh_res.stdout, ssh_res.stderr
+    return ssh_res.returncode, ssh_res.stdout.strip(), ssh_res.stderr

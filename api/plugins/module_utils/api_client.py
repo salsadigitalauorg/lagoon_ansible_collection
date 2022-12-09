@@ -174,20 +174,18 @@ class ApiClient:
 
     def project_deploy(self, project, branch, wait=False, delay=60, retries=30):
         query = {
-            'query': """mutation deploy($govcms_project: String!, $govcms_branch: String!) {
-                deployEnvironmentLatest (input: {
-                    environment: {
-                        project: { name: $govcms_project },
-                        name: $govcms_branch
-                    }
+            'query': """mutation deploy($project: String!, $branch: String!) {
+                deployEnvironmentBranch (input: {
+                    project: { name: $project },
+                    branchName: $branch
                 })
             }""",
-            'variables': '{"govcms_project": "%s", "govcms_branch": "%s"}' %
+            'variables': '{"project": "%s", "branch": "%s"}' %
             (project, branch)
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
         if not wait:
-            return result['data']['deployEnvironmentLatest']
+            return result['data']['deployEnvironmentBranch']
 
         # display.display(
         #     "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
@@ -565,6 +563,32 @@ class ApiClient:
 
         return self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name))
 
+    def deploy_target_config_get(self, project_name):
+       query = {
+           'query': """query projectInfo($name: String!) {
+               projectByName(name: $name) {
+                   id
+                   deployTargetConfigs {
+                       id
+                       weight
+                       branches
+                       pullrequests
+                       deployTarget {
+                           name
+                           id
+                       }
+                   }
+               }
+           }""",
+           'variables': '{"name": "%s"}'
+       }
+       result = self.make_api_call(
+           self.__prepare_graphql_query(query) % project_name)
+       if result['data']['projectByName'] == None:
+           raise AnsibleError(
+               "Unable to get deployTargetConfigs for project %s; please make sure the project name is correct" % project)
+       return result['data']['projectByName']
+    
     def deploy_target_config_add(self, project_id, configs):
         query_configs = []
         for idx, config in enumerate(configs):
@@ -637,6 +661,10 @@ class ApiClient:
             raise AnsibleError("Error connecting: %s" % (to_native(e)))
 
         result = json.loads(response.read())
+
+        if "errors" in result:
+            raise AnsibleError("GraphQL error: %s" % (to_native(result)))
+
         # display.v('API call result: %s' % result)
         return result
 

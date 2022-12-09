@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 EXAMPLES = r'''
 - name: Add user to group.
   lagoon.api.user_group:
@@ -12,11 +9,10 @@ EXAMPLES = r'''
 '''
 
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -28,11 +24,7 @@ class ActionModule(ActionBase):
 
         self._display.v("Task args: %s" % self._task.args)
 
-        self.lagoon = GqlClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         email = self._task.args.get('email')
         group_name = self._task.args.get('group')
@@ -64,7 +56,7 @@ class ActionModule(ActionBase):
         return result
 
     def user_add_group(self, email: str, group: str, role: str) -> dict:
-        res = self.lagoon.execute_query(
+        res = self.client.execute_query(
             """
             mutation group(
                 $email: String!
@@ -89,7 +81,7 @@ class ActionModule(ActionBase):
         return res['addUserToGroup']['id']
 
     def user_remove_group(self, email: str, group: str):
-        res = self.lagoon.execute_query(
+        res = self.client.execute_query(
             """
             mutation group(
                 $email: String!

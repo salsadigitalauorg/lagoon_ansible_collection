@@ -1,16 +1,12 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from ansible_collections.lagoon.api.plugins.module_utils.gqlVariable import Variable
 from time import sleep
 
-display = Display()
 
-
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -20,7 +16,7 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
         name = self._task.args.get('name')
         type = self._task.args.get('type')
@@ -29,15 +25,8 @@ class ActionModule(ActionBase):
         value = self._task.args.get('value', None)
         scope = self._task.args.get('scope', None)
         replace_existing = self._task.args.get('replace_existing', False)
-        options = self._task.args.get('options', {})
-        if not 'headers' in options:
-            options['headers'] = {}
 
-        lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            options
-        )
+        self.createClient(task_vars)
 
         # Setting this option will ensure the value has been set, by making
         # additional calls to the API until it matches.
@@ -48,14 +37,30 @@ class ActionModule(ActionBase):
                 "Value and scope are required when creating a variable")
 
         env_vars = None
+        lagoonProject = Project(self.client)
+        lagoonEnvironment = Environment(self.client)
+        lagoonVariable = Variable(self.client)
         if (type == 'PROJECT'):
-            type_id = lagoon.project(type_name)['id']
-            env_vars = lagoon.project_get_variables(type_name)
-            display.v("Project variables: %s" % env_vars)
+            lagoonProject.byName(type_name, ['id', 'name'])
+            if not len(lagoonProject.projects):
+                raise AnsibleError("Project not found.")
+
+            lagoonProject.withVariables()
+            self._display.v(f"project: {lagoonProject.projects[0]}")
+            type_id = lagoonProject.projects[0]['id']
+            env_vars = lagoonProject.projects[0]['envVariables']
+            self._display.v("Project variables: %s" % env_vars)
         elif (type == 'ENVIRONMENT'):
-            type_id = lagoon.environment(type_name)['id']
-            env_vars = lagoon.environment_get_variables(type_name)
-            display.v("Environment variables: %s" % env_vars)
+            lagoonEnvironment.byNs(
+                type_name, ['id', 'kubernetesNamespaceName'])
+            if not len(lagoonEnvironment.environments):
+                raise AnsibleError("Environment not found.")
+
+            lagoonEnvironment.withVariables()
+            self._display.v(f"environment: {lagoonEnvironment.environments[0]}")
+            type_id = lagoonEnvironment.environments[0]['id']
+            env_vars = lagoonEnvironment.environments[0]['envVariables']
+            self._display.v("Environment variables: %s" % env_vars)
 
         if env_vars == None:
             raise AnsibleError(
@@ -68,20 +73,19 @@ class ActionModule(ActionBase):
             existing_var = var
 
         if existing_var:
-            display.v("Existing variable: %s" % existing_var)
+            self._display.v("Existing variable: %s" % existing_var)
 
             if state == 'absent':
-                result['delete'] = lagoon.delete_variable(existing_var['id'])
-                display.v("Variable delete result: %s" % result['delete'])
-                result['changed'] = True
+                result['changed'] = lagoonVariable.delete(existing_var['id'])
                 if not verify_value:
                     return result
 
                 var_exists = True
                 while var_exists:
                     sleep(1)
-                    env_vars = lagoon.project_get_variables(
-                        type_name) if type == 'PROJECT' else lagoon.environment_get_variables(type_name)
+                    env_vars = lagoonProject.withVariables(
+                    ).projects[0]['envVariables'] if type == 'PROJECT' else lagoonEnvironment.withVariables(
+                    ).environments[0]['envVariables']
                     var_found = False
                     for var in env_vars:
                         if var['name'] != name:
@@ -104,13 +108,13 @@ class ActionModule(ActionBase):
                 return result
 
             # Delete before recreating.
-            lagoon.delete_variable(existing_var['id'])
+            lagoonVariable.delete(existing_var['id'])
 
         if state == 'absent':
             return result
 
-        result['id'] = lagoon.add_variable(type, type_id, name, value, scope)
-        display.v("Variable add result: %s" % result['id'])
+        result['data'] = lagoonVariable.add(type, type_id, name, value, scope)
+        self._display.v("Variable add result: %s" % result['data'])
 
         result['changed'] = True
         if not verify_value:
@@ -119,8 +123,9 @@ class ActionModule(ActionBase):
         value_matches = False
         while not value_matches:
             sleep(1)
-            env_vars = lagoon.project_get_variables(
-                type_name) if type == 'PROJECT' else lagoon.environment_get_variables(type_name)
+            env_vars = lagoonProject.withVariables(
+            ).projects[0]['envVariables'] if type == 'PROJECT' else lagoonEnvironment.withVariables(
+            ).environments[0]['envVariables']
             for var in env_vars:
                 if var['name'] != name:
                     continue

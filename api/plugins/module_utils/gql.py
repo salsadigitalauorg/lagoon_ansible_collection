@@ -1,11 +1,10 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
-from ansible.errors import AnsibleError
+from ansible.module_utils.errors import AnsibleValidationError
+from ansible.utils.display import Display
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
-from gql.dsl import DSLField, DSLSchema, DSLQuery, dsl_gql
-from typing import Any, Dict, Optional
+from gql.dsl import DSLField, DSLQuery, DSLSchema, DSLType, dsl_gql
+from graphql import print_ast
+from typing import Any, Dict, List, Optional
 
 class GqlClient:
     """ This client aims to facilitate the usage of the gql package, based on
@@ -13,9 +12,9 @@ class GqlClient:
     The goal is to allow developers to run queries and mutations using the awesome
     package while reducing boilerplate code. """
 
-    def __init__(self, endpoint: str, token: str, headers: dict={}) -> None:
+    def __init__(self, endpoint: str, token: str, headers: dict = {}, display: Display = None) -> None:
         if not isinstance(headers, dict):
-            raise AnsibleError("Expecting client headers to be dictionary.")
+            raise AnsibleValidationError("Expecting client headers to be dictionary.")
 
         headers['Content-Type'] = 'application/json'
         headers['Authorization'] = f"Bearer {token}"
@@ -37,6 +36,8 @@ class GqlClient:
             fetch_schema_from_transport=True
         )
 
+        self.display = display
+
     def __enter__(self):
         """This method and the next (__exit__) allow the use of the `with`
         statement with the class.
@@ -56,7 +57,71 @@ class GqlClient:
     def execute_query(self, query: str, variables: Optional[Dict[str, Any]]={}) -> Dict[str, Any]:
         """Executes a query using the graphql string provided.
         """
-        return self.client.execute(gql(query), variable_values=variables)
+        query_ast = gql(query)
+        self.display.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
+        res = self.client.execute(query_ast, variable_values=variables)
+        self.display.vvvv(f"GraphQL query result: {res}")
+        return res
+
+    def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
+        """
+        Dynamically build a query against the Lagoon API.
+
+        The query is built from the query name (e.g, projectByName), a list of
+        top-level fields (e.g, id, name, branches, ...) and a map of sub-fields
+        (e.g, kubernetes { id name } ).
+
+        Taking the following graphql query as an example:
+        {
+            projectByName(name: "test-project") {
+                id
+                name
+                kubernetes {
+                    id
+                    name
+                }
+            }
+        }
+        query = "projectByName"
+        args = {"name": "test-project"}
+        mainType = "Project" (since projectByName returns Project)
+        fields = ["id", "name"]
+        subFieldsMap = {
+            "kubernetes": {
+                "type": "Kubernetes",
+                "fields": ["id", "name"],
+            },
+        }
+        """
+
+        if not len(fields) and not len(subFieldsMap):
+            raise AnsibleValidationError("One of fields or subFieldsMap is required.")
+
+        # Build the main query with top-level fields if any.
+        queryObj: DSLField = getattr(self.ds.Query, query)
+        if len(args):
+            queryObj.args(**args)
+
+        mainTypeObj: DSLType = getattr(self.ds, mainType)
+
+        # Top-level fields.
+        if len(fields):
+            for f in fields:
+                queryObj.select(getattr(mainTypeObj, f))
+
+        if not len(subFieldsMap):
+            return queryObj
+
+        # Nested fields (one level only).
+        for field, subFieldsNType in subFieldsMap.items():
+            subFieldSelector: DSLField = getattr(mainTypeObj, field)
+            subFieldTypeObj: DSLType = getattr(self.ds, subFieldsNType['type'])
+            for f in subFieldsNType['fields']:
+                subFieldSelector.select(getattr(subFieldTypeObj, f))
+            queryObj.select(subFieldSelector)
+
+        return queryObj
+
 
     def execute_query_dynamic(self, field_query: DSLField) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.
@@ -72,4 +137,7 @@ class GqlClient:
 
         # Generate the full query.
         full_query = dsl_gql(DSLQuery(field_query))
-        return self.client.session.execute(full_query)
+        self.display.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
+        res = self.client.session.execute(full_query)
+        self.display.vvvv(f"GraphQL query result: {res}")
+        return res

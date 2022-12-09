@@ -1,52 +1,28 @@
-from __future__ import (absolute_import, division, print_function)
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
 import json
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-
-__metaclass__ = type
+from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 
 EXAMPLES = r'''
-- name: Bulk deployment trigger
-    lagoon.api.deploy_bulk:
+- name: Bulk deployment trigger by environment id.
+  lagoon.api.deploy_bulk:
     name: Trigger by Ansible
     environments:
-        - name: environment_name
-        project:
-            name: project_name
+      - id: environment_id
     build_vars:
-        - name: build_var_name
+      - name: build_var_name
+        value: build_var_value
+
+- name: Bulk deployment trigger by project & env name.
+  lagoon.api.deploy_bulk:
+    name: Trigger by Ansible
+    environments:
+      - name: environment_name
+        project:
+          name: project_name
+    build_vars:
+      - name: build_var_name
         value: build_var_value
 '''
-
-display = Display()
-
-
-def deploy_bulk(client: GqlClient, build_vars: list, name: str, envs: list) -> dict:
-
-    res = client.execute_query(
-        """
-        mutation bulkDeployEnvironment(
-            $build_vars:[EnvKeyValueInput]
-            $envs: [DeployEnvironmentLatestInput!]!
-            $name: String
-        ) {
-            bulkDeployEnvironmentLatest(input: {
-                name: $name
-                buildVariables: $build_vars
-                environments: $envs
-            })
-        }""",
-        {
-            "build_vars": build_vars,
-            "name": name,
-            "envs": envs,
-        }
-    )
-
-    display.v(f"GraphQL query result: {res}")
-    return res['bulkDeployEnvironmentLatest']
 
 
 def is_variable_type(i):
@@ -83,7 +59,7 @@ def is_environment_type(i):
     return True, None
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -92,11 +68,7 @@ class ActionModule(ActionBase):
 
         result = super(ActionModule, self).run(tmp, task_vars)
 
-        lagoon = GqlClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            self._task.args.get('headers', {})
-        )
+        self.createClient(task_vars)
 
         b = self._task.args.get('build_vars')
         n = self._task.args.get('name')
@@ -118,8 +90,8 @@ class ActionModule(ActionBase):
             valid, r = is_variable_type(b[i])
             if not valid:
                 result['invalid_variable'].append(b[i])
-                display.v(f'Invalid project detected: {r}')
-                display.v(b[i])
+                self._display.v(f'Invalid build variable detected: {r}')
+                self._display.v(b[i])
                 del b[i]
 
         for i in range(len(e)):
@@ -127,12 +99,17 @@ class ActionModule(ActionBase):
 
             if not valid:
                 result['invalid_environment'].append(e[i])
-                display.v(f'Invalid environment detected: {r}')
-                display.v(json.dumps(e[i]))
+                self._display.v(f'Invalid environment detected: {r}')
+                self._display.v(json.dumps(e[i]))
                 continue
 
             envs.append({
-                "environment": e[i]
+                "environment": e[i],
+                # At the time of writing, build variables at the top level
+                # are not working; they need to be at the environment level
+                # instead.
+                # Remove when https://github.com/uselagoon/lagoon/pull/3296 is released.
+                "buildVariables": b
             })
 
         if len(envs) < 1:
@@ -140,10 +117,7 @@ class ActionModule(ActionBase):
             result['message'] = 'No environments to deploy'
             return result
 
-        try:
-            result['deploy_id'] = deploy_bulk(lagoon, b, n, envs)
-            result['changed'] = True
-        except:
-            result['failed'] = True
-            result['message'] = 'Unexpected Lagoon API response, unable to trigger a bulk deployment'
+        lagoonEnvironment = Environment(self.client)
+        result['deploy_id'] = lagoonEnvironment.bulkDeploy(b, n, envs)
+        result['changed'] = True
         return result

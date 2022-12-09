@@ -1,8 +1,5 @@
-from __future__ import (absolute_import, division, print_function)
 from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
 from ansible.plugins.lookup import LookupBase
-from ansible.utils.display import Display
-__metaclass__ = type
 
 DOCUMENTATION = """
   name: group
@@ -55,9 +52,6 @@ EXAMPLES = """
 """
 
 
-display = Display()
-
-
 class LookupModule(LookupBase):
 
   def run(self, terms, variables=None, **kwargs):
@@ -66,8 +60,8 @@ class LookupModule(LookupBase):
 
     self.set_options(var_options=variables, direct=kwargs)
     lagoon = ApiClient(
-        self.get_option('lagoon_api_endpoint'),
-        self.get_option('lagoon_api_token'),
+        self._templar.template(self.get_option('lagoon_api_endpoint')),
+        self._templar.template(self.get_option('lagoon_api_token')),
         {'headers': self.get_option('headers', {})}
     )
 
