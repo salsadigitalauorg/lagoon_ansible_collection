@@ -1,4 +1,4 @@
-from time import time
+from time import sleep
 from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.module_utils.gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, DEPLOYMENTS_FIELDS, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase, VARIABLES_FIELDS
 from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
@@ -451,7 +451,7 @@ class Environment(ResourceBase):
         return self.checkDeployStatus(env_ns, wait, delay, retries)
 
     def checkDeployStatus(self, env_ns: str, wait: bool=False, delay: int=60, retries: int=30, current_try: int=1):
-        time.sleep(delay)
+        sleep(delay)
 
         deployments = self.getDeployments([env_ns])[env_ns]
 

@@ -1,6 +1,6 @@
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-import sleep from time
+from time import sleep
 
 
 class ActionModule(LagoonActionBase):
