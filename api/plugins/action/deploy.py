@@ -1,10 +1,10 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-import time
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
 from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from time import sleep
 
 display = Display()
 
@@ -39,6 +39,6 @@ class ActionModule(ActionBase):
         # This is a way to delay concurrent deployments to Lagoon.
         stagger = self._task.args.get('stagger', 0)
         if stagger > 0:
-            time.sleep(stagger)
+            sleep(stagger)
 
         return result
