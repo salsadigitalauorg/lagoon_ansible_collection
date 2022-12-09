@@ -1,6 +1,6 @@
-import time
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from time import sleep
 
 
 class ActionModule(LagoonActionBase):
@@ -30,6 +30,6 @@ class ActionModule(LagoonActionBase):
         # This is a way to delay concurrent deployments to Lagoon.
         stagger = self._task.args.get('stagger', 0)
         if stagger > 0:
-            time.sleep(stagger)
+            sleep(stagger)
 
         return result
