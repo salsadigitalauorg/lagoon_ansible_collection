@@ -2,28 +2,6 @@ import json
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
 
-EXAMPLES = r'''
-- name: Bulk deployment trigger by environment id.
-  lagoon.api.deploy_bulk:
-    name: Trigger by Ansible
-    environments:
-      - id: environment_id
-    build_vars:
-      - name: build_var_name
-        value: build_var_value
-
-- name: Bulk deployment trigger by project & env name.
-  lagoon.api.deploy_bulk:
-    name: Trigger by Ansible
-    environments:
-      - name: environment_name
-        project:
-          name: project_name
-    build_vars:
-      - name: build_var_name
-        value: build_var_value
-'''
-
 
 def is_variable_type(i):
     if type(i) is not dict:
