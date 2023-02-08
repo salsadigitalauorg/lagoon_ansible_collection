@@ -426,7 +426,11 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         }
 
         if 'metadata' in project:
-            lagoon_meta = json.loads(project['metadata'])
+            # The Lagoon API sometimes returns a proper json structure as the
+            # value - we need to cater for both.
+            lagoon_meta = project['metadata']
+            if type(project['metadata']) is not dict:
+                lagoon_meta = json.loads(project['metadata'])
             inventory_meta = {}
             for key, value in lagoon_meta.items():
                 try:
