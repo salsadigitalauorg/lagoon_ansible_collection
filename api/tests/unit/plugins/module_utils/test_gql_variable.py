@@ -1,7 +1,7 @@
 import unittest
 
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlVariable import Variable
+from .....plugins.module_utils.gql import GqlClient
+from .....plugins.module_utils.gqlVariable import Variable
 from unittest.mock import MagicMock
 
 import sys
