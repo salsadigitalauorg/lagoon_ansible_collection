@@ -1,6 +1,7 @@
 import re
 
 from .gql import GqlClient
+from .gqlError import ResourceError
 from .display import Display
 
 from gql.transport.exceptions import TransportQueryError
@@ -78,6 +79,9 @@ class ResourceBase(Display):
         self.errors = []
         self.options = options
 
+        if self.options.get('exitOnError') == None:
+            self.options['exitOnError'] = False
+
     def sanitisedName(self, name):
         return re.sub(r'[\W_-]+', '-', name)
 
@@ -106,3 +110,19 @@ class ResourceBase(Display):
                 raise
 
             return self
+
+    def shouldStopDueToError(self) -> bool:
+        """
+        Determines whether we should exit due to errors.
+        """
+
+        return self.options.get('exitOnError') == True and len(self.errors) > 0
+
+    def raiseExceptionIfRequired(self, message: str = ""):
+        """
+        Raises a ResourceError exception if shouldStopDueToError is true.
+        """
+        if self.shouldStopDueToError():
+            if not message:
+                message = "Unable to proceed due to previous errors"
+            raise ResourceError(self.errors, message)

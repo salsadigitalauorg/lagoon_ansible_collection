@@ -153,6 +153,7 @@ class Environment(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
             clusters.update(self.getCluster(b, fields))
+            self.raiseExceptionIfRequired("Error fetching environment cluster")
 
         for environment in self.environments:
             ns = environment['kubernetesNamespaceName']
@@ -180,6 +181,7 @@ class Environment(ResourceBase):
             self.v(
                 f"Fetching variables for batch {i+1}/{len(batches)}")
             environmentVars.update(self.getVariables(b, fields))
+            self.raiseExceptionIfRequired("Error fetching environment variables")
 
         for environment in self.environments:
             environment['envVariables'] = environmentVars.get(
@@ -206,6 +208,8 @@ class Environment(ResourceBase):
             self.v(
                 f"Fetching project for batch {i+1}/{len(batches)}")
             envProject.update(self.getProject(b, fields))
+            self.raiseExceptionIfRequired(
+                "Error fetching environment project")
 
         for environment in self.environments:
             environment['project'] = envProject.get(
@@ -232,6 +236,7 @@ class Environment(ResourceBase):
             self.v(
                 f"Fetching deployments for batch {i+1}/{len(batches)}")
             envDeployments.update(self.getDeployments(b, fields))
+            self.raiseExceptionIfRequired("Error fetching deployments")
 
         for environment in self.environments:
             environment['deployments'] = envDeployments.get(

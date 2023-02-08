@@ -271,8 +271,9 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     lagoon['headers'] if 'headers' in lagoon else {},
                     self.display,
                 )
-                lagoonProject = Project(self.lagoon_api)
-                lagoonEnvironment = Environment(self.lagoon_api)
+                lagoonProject = Project(self.lagoon_api, {'exitOnError': True})
+                lagoonEnvironment = Environment(
+                    self.lagoon_api, {'exitOnError': True})
 
                 objects = {
                     'lagoon': lagoon,
