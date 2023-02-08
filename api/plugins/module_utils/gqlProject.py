@@ -84,6 +84,7 @@ class Project(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
             clusters.update(self.getCluster(b, fields))
+            self.raiseExceptionIfRequired("Error fetching project cluster")
 
         for project in self.projects:
             project['kubernetes'] = clusters.get(project['name'])
@@ -109,6 +110,7 @@ class Project(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching environments for batch {i+1}/{len(batches)}")
             environments.update(self.getEnvironments(b, fields))
+            self.raiseExceptionIfRequired("Error fetching environments")
 
         for project in self.projects:
             project['environments'] = environments.get(project['name'])
@@ -133,6 +135,7 @@ class Project(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
             dtcs.update(self.getDeployTargetConfigs(b, fields))
+            self.raiseExceptionIfRequired("Error fetching deploy target configs")
 
         for project in self.projects:
             project['deployTargetConfigs'] = dtcs.get(project['name'])
@@ -157,6 +160,7 @@ class Project(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching variables for batch {i+1}/{len(batches)}")
             projectVars.update(self.getVariables(b, fields))
+            self.raiseExceptionIfRequired("Error fetching project variables")
 
         for project in self.projects:
             project['envVariables'] = projectVars.get(project['name'])
@@ -181,6 +185,7 @@ class Project(ResourceBase):
         for i, b in enumerate(batches):
             self.v(f"Fetching groups for batch {i+1}/{len(batches)}")
             groups.update(self.getGroups(b, fields))
+            self.raiseExceptionIfRequired("Error fetching groups")
 
         for project in self.projects:
             project['groups'] = groups.get(project['name'])
