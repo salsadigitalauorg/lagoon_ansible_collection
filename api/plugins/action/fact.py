@@ -1,16 +1,3 @@
-EXAMPLES = r'''
-- name: Add a fact to a Lagoon project
-  lagoon.api.fact:
-    environment: 1
-    name: php_version
-    value: 8.1.9
-    description: PHP version
-    type: SEMVER
-    category: fact
-    service: php
-- debug: var=whoami
-'''
-
 from ansible.errors import AnsibleError
 from ansible.utils.display import Display
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase

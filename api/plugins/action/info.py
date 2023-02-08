@@ -1,11 +1,3 @@
-EXAMPLES = r'''
-- name: Get an environment.
-  lagoon.api.info:
-    resource: environment
-    name: test-environment
-  register: env_info
-'''
-
 from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
