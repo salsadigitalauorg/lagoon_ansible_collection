@@ -1,15 +1,15 @@
 import ast
 import json
 import re
-import ansible_collections.lagoon.api.plugins.module_utils.token as LagoonToken
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
 from ansible.utils import py3compat
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from ..module_utils import token as LagoonToken
+from ..module_utils.gql import GqlClient
+from ..module_utils.gqlEnvironment import Environment
+from ..module_utils.gqlProject import Project
 from typing import Any, Optional, Union
 
 

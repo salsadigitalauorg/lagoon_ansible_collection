@@ -8,9 +8,7 @@ except:
 class Display:
 
     def __init__(self) -> None:
-        self.display = None
-        if HAS_DISPLAY:
-            self.display = OrigDisplay()
+        self.display = OrigDisplay() if HAS_DISPLAY else None
 
     def v(self, msg, host=None):
         return self.verbose(msg, host=host, caplevel=0)
