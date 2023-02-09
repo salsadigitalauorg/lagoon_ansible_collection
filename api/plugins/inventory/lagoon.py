@@ -323,6 +323,10 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 for p in lagoonProject.projects:
                     for e in p['environments']:
+                        # If a project does not yet have an environment, `e`
+                        # might be None.
+                        if not e:
+                            continue
                         lagoonEnvironment.environments.append(e)
 
                 lagoonEnvironment.withProject(
