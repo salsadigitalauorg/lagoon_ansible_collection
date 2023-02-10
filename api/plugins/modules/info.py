@@ -12,7 +12,7 @@ options:
       - The resource type.
     type: str
     default: environment
-    choices: [ environment ]
+    choices: [ project, environment ]
   name:
     description:
       - The resource name.
@@ -21,6 +21,11 @@ options:
 '''
 
 EXAMPLES = r'''
+- name: Get a project.
+  lagoon.api.info:
+    resource: project
+    name: test
+  register: project_info
 - name: Get an environment.
   lagoon.api.info:
     resource: environment

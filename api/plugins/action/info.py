@@ -1,6 +1,12 @@
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from . import LagoonActionBase
+from ..module_utils.gqlEnvironment import Environment
+from ..module_utils.gqlProject import Project
+
+SUPPORTED_RESOURCES = [
+    "project",
+    "environment",
+]
 
 class ActionModule(LagoonActionBase):
 
@@ -20,15 +26,40 @@ class ActionModule(LagoonActionBase):
         name = self._task.args.get('name')
 
         if not name:
-            raise AnsibleError("Environment name is required")
+            raise AnsibleError("Resource name is required")
 
-        self._display.v(f"Looking up info for {resource} {name}")
-        if resource != "environment":
+        if resource not in SUPPORTED_RESOURCES:
             result['failed'] = True
-            self._display.v("Only 'environment' is currently supported")
+            supported_resources_str = ", ".join(SUPPORTED_RESOURCES)
+            self._display.v(
+                f"Resource {resource} is not currently supported - supported resources are {supported_resources_str}")
             return result
 
-        lagoonEnvironment = Environment(self.client)
+        self._display.v(f"Looking up info for {resource} {name}")
+
+        if resource == "project":
+            self.fetch_project(result, name)
+        elif resource == "environment":
+            self.fetch_environment(result, name)
+
+        return result
+
+    def fetch_project(self, name, result: dict):
+        lagoonProject = Project(self.client).byName(name)
+        if not len(lagoonProject.projects):
+            result['failed'] = True
+            result['notFound'] = True
+            return result
+
+        lagoonProject.withEnvironments(batch_size=50)
+        if len(lagoonProject.errors):
+            self._display.warning(
+                f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+
+        result['result'] = lagoonProject.projects[0]
+
+    def fetch_environment(self, name, result: dict):
+        lagoonEnvironment = Environment(self.client).byNs(name)
         if not len(lagoonEnvironment.environments):
             result['failed'] = True
             result['notFound'] = True
@@ -40,4 +71,3 @@ class ActionModule(LagoonActionBase):
                 f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
 
         result['result'] = lagoonEnvironment.environments[0]
-        return result

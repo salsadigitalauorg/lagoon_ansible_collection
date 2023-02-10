@@ -3,7 +3,7 @@ from .display import Display
 from ansible.module_utils.errors import AnsibleValidationError
 from gql.transport.requests import RequestsHTTPTransport
 from gql import Client, gql
-from gql.dsl import DSLField, DSLQuery, DSLSchema, DSLType, dsl_gql
+from gql.dsl import DSLExecutable, DSLField, DSLSchema, DSLType, dsl_gql
 from graphql import print_ast
 from typing import Any, Dict, List, Optional
 
@@ -126,8 +126,7 @@ class GqlClient(Display):
 
         return queryObj
 
-
-    def execute_query_dynamic(self, field_query: DSLField) -> Dict[str, Any]:
+    def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.
 
         See https://gql.readthedocs.io/en/latest/advanced/dsl_module.html for
@@ -135,12 +134,12 @@ class GqlClient(Display):
 
         Parameters
         ----------
-        field_query : DSLField, required
-            A field query on the schema as defined in the docs above.
+        operations : DSLExecutable, required
+            A list of DSLQuery and/or DSLFragment.
         """
 
         # Generate the full query.
-        full_query = dsl_gql(DSLQuery(field_query))
+        full_query = dsl_gql(*operations)
         self.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
         res = self.client.session.execute(full_query)
         self.vvvv(f"GraphQL query result: {res}")

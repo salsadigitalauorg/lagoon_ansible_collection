@@ -4,6 +4,7 @@ from .gql import GqlClient
 from .gqlError import ResourceError
 from .display import Display
 
+from gql.dsl import DSLExecutable, DSLQuery
 from gql.transport.exceptions import TransportQueryError
 from typing import Dict, List
 
@@ -92,7 +93,7 @@ class ResourceBase(Display):
         with self.client:
             queryObj = self.client.build_dynamic_query(query, qryType, args, fields)
             try:
-                res = self.client.execute_query_dynamic(queryObj)
+                res = self.client.execute_query_dynamic(DSLQuery(queryObj))
                 if isinstance(res[query], list):
                     resList.extend(res[query])
                 elif isinstance(res[query], dict):
@@ -110,6 +111,24 @@ class ResourceBase(Display):
                 raise
 
             return self
+
+    def queryResources(self, *query_operations: DSLExecutable) -> dict:
+        """
+        Runs a dynamic query and captures any errors and returns the result.
+        """
+
+        try:
+            resources = self.client.execute_query_dynamic(*query_operations)
+        except TransportQueryError as e:
+            if isinstance(e.data, dict):
+                resources = e.data
+                self.errors.extend(e.errors)
+            else:
+                raise
+        except Exception:
+            raise
+
+        return resources
 
     def shouldStopDueToError(self) -> bool:
         """
