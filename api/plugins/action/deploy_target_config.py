@@ -1,11 +1,10 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.errors import AnsibleError
 from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
+from . import LagoonActionBase
+from ..module_utils.gqlProject import Project
+from ..module_utils.api_client import ApiClient
 
 
 display = Display()
@@ -19,7 +18,7 @@ class ActionModule(LagoonActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        ret = {}
+        result = {}
         self.createClient(task_vars)
 
         display.vvv("With: " + self._task.args.get('project'))
@@ -33,28 +32,28 @@ class ActionModule(LagoonActionBase):
         lagoonProject = Project(self.client).byName(self._task.args.get('project')).withDeployTargetConfigs()
 
         if len(lagoonProject.errors) > 0:
-            ret['failed'] = True
+            result['failed'] = True
+            return result
 
         for project in lagoonProject.projects:
-            # ret['p'] = project["deployTargetConfigs"]
-            if self._task.args.get('state') == 'present':
+            if self._task.args.get('state', 'present') == 'present':
                 add_or_update(
                     lagoon,
                     project,
                     self._task.args.get('replace', False),
                     project["deployTargetConfigs"],
                     self._task.args.get('configs', []),
-                    ret
+                    result
                 )
             elif self._task.args.get('state') == 'absent':
                 delete_existing(
                     lagoon,
                     project,
                     project["deployTargetConfigs"],
-                    ret
+                    result
                 )
 
-        return ret
+        return result
 
 
 def add_or_update(lagoon, project, replace, existing_configs, desired_configs, result):
