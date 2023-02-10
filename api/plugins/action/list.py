@@ -1,13 +1,16 @@
-EXAMPLES = r'''
-- name: Add Lagoon deploy target configs.
-  lagoon.api.list:
-    type: project
-  register: projects
-'''
-
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+
+from . import LagoonActionBase
+from ..module_utils.gqlEnvironment import Environment
+from ..module_utils.gqlProject import Project
+from ..module_utils.gqlResourceBase import DEFAULT_BATCH_SIZE
+from ..module_utils.gqlTask import Task
+
+SUPPORTED_RESOURCES = [
+    "project",
+    "environment",
+    "task_definition"
+]
 
 class ActionModule(LagoonActionBase):
 
@@ -23,19 +26,49 @@ class ActionModule(LagoonActionBase):
 
         self.createClient(task_vars)
 
-        resource = task_vars.get('type', 'project')
+        resource = self._task.args.get('resource')
+        batch_size = self._task.args.get('batch_size', DEFAULT_BATCH_SIZE)
 
-        if resource != "project":
+        if resource not in SUPPORTED_RESOURCES:
             result['failed'] = True
-            self._display.v("Only 'project' is supported")
-        else:
-            lagoonProject = Project(self.client).all(
-            ).withEnvironments(batch_size=50)
-            if len(lagoonProject.errors):
-                if not len(lagoonProject.projects):
-                    raise AnsibleError(f"Unable to get projects.")
-                self._display.warning(
-                    f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
-            result['result'] = lagoonProject.projects
+            supported_resources_str = ", ".join(SUPPORTED_RESOURCES)
+            self._display.v(
+                f"Resource {resource} is not currently supported - supported resources are {supported_resources_str}")
+            return result
+
+        if resource == "project":
+            self.fetch_projects(result, batch_size)
+        elif resource == "environment":
+            self.fetch_environments(result, batch_size)
+        elif resource == "task_definition":
+            self.fetch_task_definitions(result)
 
         return result
+
+    def fetch_projects(self, result: dict, batch_size: int):
+        lagoonProject = Project(self.client).all()
+        if not len(lagoonProject.projects):
+            raise AnsibleError(f"Unable to get projects.")
+
+        lagoonProject.withEnvironments(batch_size=batch_size)
+        if len(lagoonProject.errors):
+            self._display.warning(
+                f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+
+        result['result'] = lagoonProject.projects
+
+    def fetch_environments(self, result: dict, batch_size: int):
+        lagoonEnvironment = Environment(self.client).all(batch_size=batch_size)
+        if not len(lagoonEnvironment.environments):
+            raise AnsibleError(f"Unable to get environments.")
+
+        lagoonEnvironment.withCluster(
+            batch_size=batch_size).withProject(batch_size=batch_size)
+        if len(lagoonEnvironment.errors):
+            self._display.warning(
+                f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
+
+        result['result'] = lagoonEnvironment.environments
+
+    def fetch_task_definitions(self, result: dict):
+        result['result'] = Task(self.client).get_definitions()

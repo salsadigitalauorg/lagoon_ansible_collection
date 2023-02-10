@@ -34,6 +34,4 @@ class Display:
 
     def verbose(self, msg, host=None, caplevel=2):
         if self.display:
-            self.display.display(msg, host, caplevel)
-
-
+            self.display.verbose(msg, host, caplevel)

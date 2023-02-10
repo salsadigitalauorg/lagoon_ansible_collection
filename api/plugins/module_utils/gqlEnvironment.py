@@ -16,7 +16,7 @@ class Environment(ResourceBase):
         super().__init__(client, options)
         self.environments = []
 
-    def all(self, fields: List[str] = None) -> Self:
+    def all(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Get a list of all environments, but only top level fields.
 
@@ -41,7 +41,7 @@ class Environment(ResourceBase):
         except TransportQueryError as e:
             self.v(f"{e.errors}")
             if e.errors[0]['message'] == 'Unauthorized: You don\'t have permission to "viewAll" on "environment": {}':
-                return self.allThroughProjects(fields)
+                return self.allThroughProjects(fields, batch_size)
             elif isinstance(e.data['allEnvironments'], list):
                 self.environments.extend(e.data['allEnvironments'])
                 self.errors.extend(e.errors)
