@@ -63,6 +63,7 @@ class GqlClient(Display):
         """
         query_ast = gql(query)
         self.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
+        self.vvvv(f"GraphQL query variables: \n{variables}")
         res = self.client.execute(query_ast, variable_values=variables)
         self.vvvv(f"GraphQL query result: {res}")
         return res

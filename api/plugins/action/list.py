@@ -4,7 +4,7 @@ from . import LagoonActionBase
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlResourceBase import DEFAULT_BATCH_SIZE
-from ..module_utils.gqlTask import Task
+from ..module_utils.gqlTaskDefinition import TaskDefinition
 
 SUPPORTED_RESOURCES = [
     "project",
@@ -71,4 +71,4 @@ class ActionModule(LagoonActionBase):
         result['result'] = lagoonEnvironment.environments
 
     def fetch_task_definitions(self, result: dict):
-        result['result'] = Task(self.client).get_definitions()
+        result['result'] = TaskDefinition(self.client).get_definitions()
