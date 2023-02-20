@@ -26,7 +26,10 @@ class ActionModule(LagoonActionBase):
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            {
+                'headers': self._task.args.get('headers', {}),
+                'timeout': self._task.args.get('timeout', 30),
+            }
         )
 
         lagoonProject = Project(self.client).byName(self._task.args.get('project')).withDeployTargetConfigs()
@@ -34,7 +37,7 @@ class ActionModule(LagoonActionBase):
         if len(lagoonProject.errors) > 0:
             result['failed'] = True
             return result
-
+        
         for project in lagoonProject.projects:
             if self._task.args.get('state', 'present') == 'present':
                 add_or_update(
