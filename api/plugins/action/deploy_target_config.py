@@ -19,75 +19,49 @@ class ActionModule(LagoonActionBase):
         del tmp  # tmp no longer has any effect
 
         result = {}
+        result['result'] = []
+
         self.createClient(task_vars)
 
         display.vvv("With: " + self._task.args.get('project'))
-
-        lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            {
-                'headers': self._task.args.get('headers', {}),
-                'timeout': self._task.args.get('timeout', 30),
-            }
-        )
-
         lagoonProject = Project(self.client).byName(self._task.args.get('project')).withDeployTargetConfigs()
 
         if len(lagoonProject.errors) > 0:
             result['failed'] = True
             return result
-        
+
+        state = self._task.args.get('state', 'present')
+        replace = self._task.args.get('replace', False)
+
         for project in lagoonProject.projects:
-            if self._task.args.get('state', 'present') == 'present':
-                add_or_update(
-                    lagoon,
-                    project,
-                    self._task.args.get('replace', False),
+            if state == "present":
+                changes = determine_required_updates(
                     project["deployTargetConfigs"],
                     self._task.args.get('configs', []),
-                    result
                 )
-            elif self._task.args.get('state') == 'absent':
-                delete_existing(
-                    lagoon,
-                    project,
-                    project["deployTargetConfigs"],
-                    result
-                )
+                result['changed'] = False
+                if len(changes) > 0:
+                    for _, config in changes:
+                        if replace:
+                            self.client.DeployTargetConfig.delete(project['id'], changes['_existing_id'])
 
+                        if self.client.DeployTargetConfig.add(
+                                project['id'], 
+                                config['branches'],
+                                config['deployTarget'],
+                                config['pullrequests'],
+                                config['weight']
+                            ):
+                            result['result'].append(config)
+                    result['changed'] = True
+            elif state == "absent":
+                result['changed'] = False
+                for _, c in project["deployTargetConfigs"]:
+                    if self.client.DeployTargetConfig.delete(project['id'], c['id']):
+                        result['result'].append(c['id'])
+                    result['changed'] = True
+                    
         return result
-
-
-def add_or_update(lagoon, project, replace, existing_configs, desired_configs, result):
-    if not existing_configs:
-        updates_required = desired_configs
-    elif not replace:
-        updates_required = determine_required_updates(
-            existing_configs, desired_configs)
-    elif replace:
-        delete_ids = [ec['id'] for ec in existing_configs]
-        lagoon.deploy_target_config_delete(project['id'], delete_ids)
-        updates_required = desired_configs
-
-    if not updates_required:
-        result['result'] = project['deployTargetConfigs']
-        return
-
-    result['result'] = lagoon.deploy_target_config_add(
-        project['id'], updates_required)
-    result['changed'] = True
-
-
-def delete_existing(lagoon, project, existing_configs, result):
-    if not existing_configs:
-        return
-    else:
-        delete_ids = [ec['id'] for ec in existing_configs]
-        result['result'] = lagoon.deploy_target_config_delete(
-            project['id'], delete_ids)
-        result['changed'] = True
-
 
 def determine_required_updates(existing_configs, desired_configs):
     updates_required = []
@@ -98,11 +72,13 @@ def determine_required_updates(existing_configs, desired_configs):
             if existing_config['branches'] != config['branches']:
                 continue
             else:
+                config['_existing_id'] = existing_config['id']
                 found = True
 
             if (existing_config['pullrequests'] != config['pullrequests'] or
                     str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
                     str(existing_config['weight']) != str(config['weight'])):
+                config['_existing_id'] = existing_config['id']
                 uptodate = False
                 break
 
