@@ -3,9 +3,8 @@ from .gql import GqlClient
 from .gqlProject import Project
 
 from ansible.errors import AnsibleError
-from gql.dsl import DSLQuery, dsl_gql
+from gql.dsl import DSLQuery
 from gql.transport.exceptions import TransportQueryError
-from graphql import print_ast
 from time import sleep
 from typing import List
 from typing_extensions import Self
@@ -17,7 +16,7 @@ class Environment(ResourceBase):
         super().__init__(client, options)
         self.environments = []
 
-    def all(self, fields: List[str] = None) -> Self:
+    def all(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
         """
         Get a list of all environments, but only top level fields.
 
@@ -36,15 +35,13 @@ class Environment(ResourceBase):
     }}
 }}"""
 
-        self.vvvv(f"{ query }")
-
         try:
             res = self.client.execute_query(query)
             self.environments.extend(res['allEnvironments'])
         except TransportQueryError as e:
             self.v(f"{e.errors}")
             if e.errors[0]['message'] == 'Unauthorized: You don\'t have permission to "viewAll" on "environment": {}':
-                return self.allThroughProjects(fields)
+                return self.allThroughProjects(fields, batch_size)
             elif isinstance(e.data['allEnvironments'], list):
                 self.environments.extend(e.data['allEnvironments'])
                 self.errors.extend(e.errors)
@@ -84,8 +81,6 @@ class Environment(ResourceBase):
     }}
 }}"""
 
-        self.vvvv(f"{ query }")
-
         try:
             res = self.client.execute_query(query)
             if res['environmentByKubernetesNamespaceName'] != None:
@@ -117,8 +112,6 @@ class Environment(ResourceBase):
         { joined_fields }
     }}
 }}"""
-
-        self.vvvv(f"{ query }")
 
         try:
             res = self.client.execute_query(query)
@@ -250,7 +243,7 @@ class Environment(ResourceBase):
         if not fields or not len(fields):
             fields = CLUSTER_FIELDS
 
-        clusters = {}
+        resources = {}
         with self.client as (_, ds):
             # Build the fragment.
             cluster_fields = ds.Environment.kubernetes.select(
@@ -268,23 +261,11 @@ class Environment(ResourceBase):
                 field_query.select(cluster_fields)
                 field_queries.append(field_query)
 
-            query = dsl_gql(DSLQuery(*field_queries))
-            self.vvvv(f"Built query: \n{print_ast(query)}")
-
-            try:
-                clusters = self.client.client.session.execute(query)
-            except TransportQueryError as e:
-                if isinstance(e.data, dict):
-                    clusters = e.data
-                    self.errors.extend(e.errors)
-                else:
-                    raise
-            except Exception:
-                raise
+            resources = self.queryResources(DSLQuery(*field_queries))
 
         for eName in env_names:
             try:
-                res[eName] = clusters.get(
+                res[eName] = resources.get(
                     self.sanitiseForQueryAlias(eName))['kubernetes']
             except:
                 res[eName] = None
@@ -297,7 +278,7 @@ class Environment(ResourceBase):
         if not fields or not len(fields):
             fields = VARIABLES_FIELDS
 
-        variables = {}
+        resources = {}
         with self.client as (_, ds):
             # Build the fragment.
             var_fields = ds.Environment.envVariables.select(
@@ -315,23 +296,11 @@ class Environment(ResourceBase):
                 field_query.select(var_fields)
                 field_queries.append(field_query)
 
-            query = dsl_gql(DSLQuery(*field_queries))
-            self.vvvv(f"Built query: \n{print_ast(query)}")
-
-            try:
-                variables = self.client.client.session.execute(query)
-            except TransportQueryError as e:
-                if isinstance(e.data, dict):
-                    variables = e.data
-                    self.errors.extend(e.errors)
-                else:
-                    raise
-            except Exception:
-                raise
+            resources = self.queryResources(DSLQuery(*field_queries))
 
         for eName in env_names:
             try:
-                res[eName] = variables.get(
+                res[eName] = resources.get(
                     self.sanitiseForQueryAlias(eName))['envVariables']
             except:
                 res[eName] = None
@@ -344,7 +313,7 @@ class Environment(ResourceBase):
         if not fields or not len(fields):
             fields = PROJECT_FIELDS
 
-        projects = {}
+        resources = {}
         with self.client as (_, ds):
             # Build the fragment.
             project_fields = ds.Environment.project.select(
@@ -362,23 +331,11 @@ class Environment(ResourceBase):
                 field_query.select(project_fields)
                 field_queries.append(field_query)
 
-            query = dsl_gql(DSLQuery(*field_queries))
-            self.vvvv(f"Built query: \n{print_ast(query)}")
-
-            try:
-                projects = self.client.client.session.execute(query)
-            except TransportQueryError as e:
-                if isinstance(e.data, dict):
-                    projects = e.data
-                    self.errors.extend(e.errors)
-                else:
-                    raise
-            except Exception:
-                raise
+            resources = self.queryResources(DSLQuery(*field_queries))
 
         for eName in env_names:
             try:
-                res[eName] = projects.get(
+                res[eName] = resources.get(
                     self.sanitiseForQueryAlias(eName))['project']
             except:
                 res[eName] = None
@@ -391,7 +348,7 @@ class Environment(ResourceBase):
         if not fields or not len(fields):
             fields = DEPLOYMENTS_FIELDS
 
-        deployments = {}
+        resources = {}
         with self.client as (_, ds):
             # Build the fragment.
             deployment_fields = ds.Environment.deployments.select(
@@ -409,23 +366,11 @@ class Environment(ResourceBase):
                 field_query.select(deployment_fields)
                 field_queries.append(field_query)
 
-            query = dsl_gql(DSLQuery(*field_queries))
-            self.vvvv(f"Built query: \n{print_ast(query)}")
-
-            try:
-                deployments = self.client.client.session.execute(query)
-            except TransportQueryError as e:
-                if isinstance(e.data, dict):
-                    deployments = e.data
-                    self.errors.extend(e.errors)
-                else:
-                    raise
-            except Exception:
-                raise
+            resources = self.queryResources(DSLQuery(*field_queries))
 
         for eName in env_names:
             try:
-                res[eName] = deployments.get(
+                res[eName] = resources.get(
                     self.sanitiseForQueryAlias(eName))['deployments']
             except:
                 res[eName] = None
