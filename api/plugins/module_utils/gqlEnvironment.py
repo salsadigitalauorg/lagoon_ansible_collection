@@ -415,7 +415,7 @@ class Environment(ResourceBase):
             raise AnsibleError(
                 'Maximium number of retries reached; view deployment logs for more information.')
 
-        self.display(
+        self.info(
             f"\033[30;1mRETRYING: Wait for deployment completion for {env_ns} ({retries - current_try} retries left).\033[0m")
         return self.checkDeployStatus(env_ns, wait, delay, retries, current_try + 1)
 

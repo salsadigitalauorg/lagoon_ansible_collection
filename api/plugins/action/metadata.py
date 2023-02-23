@@ -23,7 +23,10 @@ class ActionModule(ActionBase):
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
             task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
+            {
+                'headers': self._task.args.get('headers', {}),
+                'timeout': self._task.args.get('timeout', 30)
+            }
         )
 
         state = self._task.args.get('state', 'present')
