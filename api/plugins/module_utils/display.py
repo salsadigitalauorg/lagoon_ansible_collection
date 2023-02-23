@@ -10,6 +10,12 @@ class Display:
     def __init__(self) -> None:
         self.display = OrigDisplay() if HAS_DISPLAY else None
 
+    def info(self, msg, color=None, stderr=False, screen_only=False,
+             log_only=False, newline=True):
+        if self.display:
+            self.display.display(msg, color, stderr,
+                                 screen_only, log_only, newline)
+
     def v(self, msg, host=None):
         return self.verbose(msg, host=host, caplevel=0)
 
