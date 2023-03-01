@@ -4,6 +4,7 @@ __metaclass__ = type
 from ansible.utils.display import Display
 from . import LagoonActionBase
 from ..module_utils.gqlProject import Project
+from ..module_utils.gqlDeployTargetConfig import DeployTargetConfig
 from ..module_utils.api_client import ApiClient
 
 
@@ -41,23 +42,23 @@ class ActionModule(LagoonActionBase):
                 )
                 result['changed'] = False
                 if len(changes) > 0:
-                    for _, config in changes:
+                    for config in changes:
                         if replace:
-                            self.client.DeployTargetConfig.delete(project['id'], changes['_existing_id'])
+                            DeployTargetConfig(self.client).delete(project['id'], changes['_existing_id'])
 
-                        if self.client.DeployTargetConfig.add(
-                                project['id'], 
+                        if DeployTargetConfig(self.client).add(
+                                int(project['id']), 
                                 config['branches'],
-                                config['deployTarget'],
+                                int(config['deployTarget']),
                                 config['pullrequests'],
-                                config['weight']
+                                int(config['weight']) if 'weight' in config.keys() else 0
                             ):
                             result['result'].append(config)
                     result['changed'] = True
             elif state == "absent":
                 result['changed'] = False
-                for _, c in project["deployTargetConfigs"]:
-                    if self.client.DeployTargetConfig.delete(project['id'], c['id']):
+                for c in project["deployTargetConfigs"]:
+                    if DeployTargetConfig(self.client).delete(project['id'], c['id']):
                         result['result'].append(c['id'])
                     result['changed'] = True
                     

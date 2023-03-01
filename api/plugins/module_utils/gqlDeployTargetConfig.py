@@ -1,4 +1,5 @@
 from .gql import GqlClient
+from .gql import GqlClient
 from .gqlResourceBase import ResourceBase
 
 DEFAULT_DEPLOY_TARGET_WEIGHT = 0
@@ -30,11 +31,11 @@ class DeployTargetConfig(ResourceBase):
             }
             """,
             {
-                "project": project,
+                "project": int(project),
                 "branches": branches,
-                "target": target,
+                "target": int(target),
                 "pullrequests": pullrequests,
-                "weight": weight
+                "weight": int(weight)
             }
         )
 
