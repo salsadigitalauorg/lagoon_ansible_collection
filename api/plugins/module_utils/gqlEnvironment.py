@@ -377,6 +377,21 @@ class Environment(ResourceBase):
 
         return res
 
+    def delete(self, project_name: str, environment_name: str) -> bool:
+        res = self.client.execute_query("""
+            mutation deleteEnvironment($project_name: String!, $environment_name: String!) {
+                deleteEnvironment(input: { project: $project_name, name: $environment_name })
+            }
+        """,
+        {
+            "project_name": project_name,
+            "environment_name": environment_name
+        })
+        if 'errors' in res:
+            raise AnsibleError("Unable to delete environment.", res['errors'])
+
+        return res['deleteEnvironment'] == 'success'
+
     def deployBranch(self, project: str, branch: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
         mutation = """
         mutation deploy($project: String!, $branch: String!) {
