@@ -1,14 +1,7 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
-from ansible.utils.display import Display
 from . import LagoonActionBase
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlDeployTargetConfig import DeployTargetConfig
-from ..module_utils.api_client import ApiClient
 
-
-display = Display()
 
 class ActionModule(LagoonActionBase):
 
@@ -24,8 +17,10 @@ class ActionModule(LagoonActionBase):
 
         self.createClient(task_vars)
 
-        display.vvv("With: " + self._task.args.get('project'))
-        lagoonProject = Project(self.client).byName(self._task.args.get('project')).withDeployTargetConfigs()
+        self._display.vvv(f"With: {self._task.args}")
+        lagoonProject = Project(self.client).byName(
+            self._task.args.get('project'),
+            ['id', 'name']).withDeployTargetConfigs()
 
         if len(lagoonProject.errors) > 0:
             result['failed'] = True
@@ -33,35 +28,56 @@ class ActionModule(LagoonActionBase):
 
         state = self._task.args.get('state', 'present')
         replace = self._task.args.get('replace', False)
+        configs = self._task.args.get('configs', [])
 
         for project in lagoonProject.projects:
             if state == "present":
                 changes = determine_required_updates(
                     project["deployTargetConfigs"],
-                    self._task.args.get('configs', []),
+                    configs,
                 )
                 result['changed'] = False
                 if len(changes) > 0:
                     for config in changes:
-                        if replace:
-                            DeployTargetConfig(self.client).delete(project['id'], changes['_existing_id'])
+                        if replace and config.get('_existing_id'):
+                            self._display.vvvv(f"deleting config {config}")
+                            DeployTargetConfig(self.client).delete(
+                                project['id'], config['_existing_id'])
 
-                        if DeployTargetConfig(self.client).add(
-                                int(project['id']), 
-                                config['branches'],
-                                int(config['deployTarget']),
-                                config['pullrequests'],
-                                int(config['weight']) if 'weight' in config.keys() else 0
-                            ):
-                            result['result'].append(config)
+                        self._display.vvvv(f"adding config {config}")
+                        addResult = DeployTargetConfig(self.client).add(
+                            int(project['id']),
+                            config['branches'],
+                            int(config['deployTarget']),
+                            config['pullrequests'],
+                            int(config['weight']) if 'weight' in config.keys() else 0
+                        )
+                        if addResult:
+                            config['id'] = addResult['id']
+                        else:
+                            config['failed'] = True
+                        result['result'].append(config)
                     result['changed'] = True
             elif state == "absent":
                 result['changed'] = False
                 for c in project["deployTargetConfigs"]:
-                    if DeployTargetConfig(self.client).delete(project['id'], c['id']):
+                    delete_desired = False
+                    for given_config in configs:
+                        if given_config['branches'] != c['branches']:
+                            continue
+                        if given_config['pullrequests'] != c['pullrequests']:
+                            continue
+                        if str(given_config['deployTarget']) != str(c['deployTarget']['id']):
+                            continue
+                        if str(given_config['weight']) != str(c['weight']):
+                            continue
+                        delete_desired = True
+                        self._display.vvvv(f"deleting config {c}")
+                        break
+                    if delete_desired and DeployTargetConfig(self.client).delete(project['id'], c['id']):
                         result['result'].append(c['id'])
-                    result['changed'] = True
-                    
+                        result['changed'] = True
+
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
@@ -72,9 +88,9 @@ def determine_required_updates(existing_configs, desired_configs):
         for existing_config in existing_configs:
             if existing_config['branches'] != config['branches']:
                 continue
-            else:
-                config['_existing_id'] = existing_config['id']
-                found = True
+
+            config['_existing_id'] = existing_config['id']
+            found = True
 
             if (existing_config['pullrequests'] != config['pullrequests'] or
                     str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or

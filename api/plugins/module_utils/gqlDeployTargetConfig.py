@@ -8,7 +8,7 @@ class DeployTargetConfig(ResourceBase):
 
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
-    
+
     def add(self, project: int, branches: str, target: int, pullrequests: str, weight: int = DEFAULT_DEPLOY_TARGET_WEIGHT) -> bool:
         res = self.client.execute_query(
             """
@@ -40,8 +40,7 @@ class DeployTargetConfig(ResourceBase):
         )
 
         try:
-            res["addDeloyTargetConfig"]
-            return True
+            return res["addDeployTargetConfig"]
         except KeyError:
             return False
 
@@ -49,9 +48,9 @@ class DeployTargetConfig(ResourceBase):
         res = self.client.execute_query(
             """
             mutation deleteDeployTargetConfig(
-                $project: Int! 
+                $project: Int!
                 $id: Int!
-            ) { 
+            ) {
                 deleteDeployTargetConfig(input: {
                 project: $project
                 id: $id
