@@ -1,18 +1,6 @@
-EXAMPLES = r'''
-- name: Create a project
-  lagoon.api.project:
-    state: present
-    name: my-test-project
-    git_url: https://github.com/org/repo.git
-    development_environments_limit: 5
-    auto_idle: 1
-    production_environment: master
-    openshift: 1
-'''
-
+from . import LagoonActionBase
+from ..module_utils.gql import GqlClient
 from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 
 display = Display()

@@ -1,6 +1,6 @@
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
+from . import LagoonActionBase
+from ..module_utils.gqlEnvironment import Environment
+from ..module_utils.gqlProject import Project
 from ansible.errors import AnsibleError
 
 
@@ -18,9 +18,6 @@ class ActionModule(LagoonActionBase):
 
         name = self._task.args.get('name')
         type = self._task.args.get('type', 'project')
-        options = self._task.args.get('options', {})
-        if not 'headers' in options:
-            options['headers'] = {}
 
         self.createClient(task_vars)
 

@@ -1,16 +1,17 @@
-from ansible.errors import AnsibleError
-
 from . import LagoonActionBase
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlResourceBase import DEFAULT_BATCH_SIZE
 from ..module_utils.gqlTaskDefinition import TaskDefinition
+from ansible.errors import AnsibleError
+
 
 SUPPORTED_RESOURCES = [
     "project",
     "environment",
     "task_definition"
 ]
+
 
 class ActionModule(LagoonActionBase):
 

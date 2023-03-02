@@ -1,15 +1,5 @@
-EXAMPLES = r'''
-- name: Add user to group.
-  lagoon.api.user_group:
-    email: user@example.com
-    group: test-group
-    role: GUEST
-  register: group_add
-- debug: var=group_add
-'''
-
+from . import LagoonActionBase
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 
 
 class ActionModule(LagoonActionBase):

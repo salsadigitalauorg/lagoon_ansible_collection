@@ -1,11 +1,6 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
 
-display = Display()
 
 class ActionModule(ActionBase):
 
@@ -25,7 +20,7 @@ class ActionModule(ActionBase):
 
         if module_return.get('failed'):
             if self._play_context.verbosity >= 1 and module_return.get('module_stderr'):
-                display.error(module_return.get('module_stderr'))
+                self._display.error(module_return.get('module_stderr'))
             raise AnsibleError(module_return.get('msg'))
 
         result['changed'] = module_return['changed']

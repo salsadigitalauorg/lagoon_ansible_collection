@@ -1,12 +1,14 @@
-from ansible.errors import AnsibleError
 from . import LagoonActionBase
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
+from ansible.errors import AnsibleError
+
 
 SUPPORTED_RESOURCES = [
     "project",
     "environment",
 ]
+
 
 class ActionModule(LagoonActionBase):
 

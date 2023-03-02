@@ -1,50 +1,5 @@
-EXAMPLES = r'''
-- name: Query specific fields for all projects.
-  lagoon.api.query:
-    query: allProjects
-    mainType: Project
-    fields:
-      - id
-      - name
-  register: query_results
+from . import LagoonActionBase
 
-- name: Query specific fields for a project.
-  lagoon.api.query:
-    query: projectByName
-    mainType: Project
-    args:
-      name: '{{ project_name }}'
-    fields:
-      - id
-      - name
-      - branches
-      - metadata
-    subFields:
-      kubernetes:
-        type: Kubernetes
-        fields:
-          - id
-          - name
-  register: query_results
-
-- name: Query variables for a project.
-  lagoon.api.query:
-    query: projectByName
-    mainType: Project
-    args:
-      name: '{{ project_name }}'
-    subFields:
-      envVariables:
-        type: EnvKeyValue
-        fields:
-          - id
-          - name
-          - value
-          - scope
-  register: query_results
-'''
-
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
 
 class ActionModule(LagoonActionBase):
 
