@@ -24,6 +24,7 @@ def dsl_exes_to_str(*exes: DSLExecutable) -> str:
 def get_mock_gql_client() -> GqlClient:
     client = GqlClient('foo', 'bar')
     client.execute_query_dynamic = MagicMock()
+    client.execute_query = MagicMock()
     client.client.connect_sync = MagicMock()
     client.client.schema = load_schema()
     client.client.session = SyncClientSession(client=client.client)
