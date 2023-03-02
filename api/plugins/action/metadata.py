@@ -1,33 +1,20 @@
-from __future__ import (absolute_import, division, print_function)
-# __metaclass__ = type
-
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-
-display = Display()
+from . import LagoonActionBase
+from ..module_utils.gqlMetadata import Metadata
 
 
-class ActionModule(ActionBase):
-    ''' Perform copmarisons on dictionary objects '''
+class ActionModule(LagoonActionBase):
+    ''' Perform comparisons on dictionary objects '''
 
     def run(self, tmp=None, task_vars=None):
         if task_vars is None:
             task_vars = dict()
 
         result = super(ActionModule, self).run(tmp, task_vars)
-
         del tmp  # tmp no longer has any effect
 
-        lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            {
-                'headers': self._task.args.get('headers', {}),
-                'timeout': self._task.args.get('timeout', 30)
-            }
-        )
+        self._display.v("Task args: %s" % self._task.args)
+
+        self.createClient(task_vars)
 
         state = self._task.args.get('state', 'present')
         data = self._task.args.get('data', None)
@@ -43,6 +30,8 @@ class ActionModule(ActionBase):
                 'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
             }
 
+        lagoonMetadata = Metadata(self.client)
+
         if state == 'present':
             if isinstance(data, list):
                 for item in data:
@@ -54,22 +43,23 @@ class ActionModule(ActionBase):
                         result['invalid'].append(item)
                         continue
 
-                    result['result'].append(lagoon.update_metadata(project_id, item['key'], item['value']))
-
+                    result['result'].append(lagoonMetadata.update(
+                        project_id, item['key'], item['value']))
 
             else:
                 for key, value in data.items():
-                    result['result'].append(lagoon.update_metadata(project_id, key, value))
+                    result['result'].append(
+                        lagoonMetadata.update(project_id, key, value))
 
         elif state == 'absent':
             if isinstance(data, list):
                 for key in data:
                     result['result'].append(
-                        lagoon.remove_metadata(project_id, key))
+                        lagoonMetadata.remove(project_id, key))
             else:
                 for key, value in data.items():
                     result['result'].append(
-                        lagoon.remove_metadata(project_id, key))
+                        lagoonMetadata.remove(project_id, key))
 
         if len(result['result']) > 0:
             result['changed'] = True
