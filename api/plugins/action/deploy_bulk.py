@@ -1,6 +1,7 @@
 import json
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+
+from . import LagoonActionBase
+from ...plugins.module_utils.gqlEnvironment import Environment
 
 
 def is_variable_type(i):

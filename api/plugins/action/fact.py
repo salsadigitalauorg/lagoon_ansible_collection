@@ -1,7 +1,7 @@
+from . import LagoonActionBase
+from ..module_utils.gql import GqlClient
 from ansible.errors import AnsibleError
 from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
 
 
 display = Display()

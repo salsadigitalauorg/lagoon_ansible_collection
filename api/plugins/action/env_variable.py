@@ -1,8 +1,8 @@
+from . import LagoonActionBase
+from ..module_utils.gqlEnvironment import Environment
+from ..module_utils.gqlProject import Project
+from ..module_utils.gqlVariable import Variable
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
-from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
-from ansible_collections.lagoon.api.plugins.module_utils.gqlVariable import Variable
 from time import sleep
 
 

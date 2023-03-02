@@ -1,12 +1,7 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
+from ..module_utils.api_client import ApiClient
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
 
-display = Display()
 
 class ActionModule(ActionBase):
 
@@ -18,7 +13,7 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.vvv("Task args: %s" % self._task.args)
+        self._display.vvv("Task args: %s" % self._task.args)
 
         environment_name = self._task.args.get('environment')
         environment_id = self._task.args.get('environment_id')
@@ -60,6 +55,6 @@ class ActionModule(ActionBase):
 
         result['update'] = lagoon.environment_update(environment['id'], patch_values)
         result['changed'] = True
-        display.v("Update: %s" % result['update'])
+        self._display.v("Update: %s" % result['update'])
 
         return result

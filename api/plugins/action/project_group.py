@@ -1,15 +1,7 @@
-EXAMPLES = r'''
-- name: Ensure project is in group
-  lagoon.api.project_group:
-    state: present
-    project: "{{ project_name }}"
-    groups:
-      - my_group_name
-'''
-
 from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
+from . import LagoonActionBase
+from ..module_utils.gql import GqlClient
+
 
 display = Display()
 

@@ -1,40 +1,5 @@
-EXAMPLES = r'''
-- name: Verify the user.
-  lagoon.api.whoami: {}
-  register: whoami
-- debug: var=whoami
-'''
-
+from . import LagoonActionBase
 from ansible.errors import AnsibleError
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.action import LagoonActionBase
-from ansible_collections.lagoon.api.plugins.module_utils.gql import GqlClient
-
-display = Display()
-
-
-def whoAmI(client: GqlClient) -> dict:
-
-    res = client.execute_query(
-        """
-        query whoAmI {
-            me {
-                id
-                email
-                firstName
-                lastName
-                groups {
-                    name
-                    type
-                }
-            }
-        }
-"""
-    )
-    display.v(f"GraphQL query result: {res}")
-    if res['me'] == None:
-        raise AnsibleError(f"Unable to get user information.")
-    return res['me']
 
 
 class ActionModule(LagoonActionBase):
@@ -51,5 +16,22 @@ class ActionModule(LagoonActionBase):
 
         self.createClient(task_vars)
 
-        result['result'] = whoAmI(self.client)
+        res = self.client.execute_query(
+            """
+            query whoAmI {
+                me {
+                    id
+                    email
+                    firstName
+                    lastName
+                    groups {
+                        name
+                        type
+                    }
+                }
+            }""")
+        self._display.v(f"GraphQL query result: {res}")
+        if res['me'] == None:
+            raise AnsibleError(f"Unable to get user information.")
+        result['result'] = res['me']
         return result

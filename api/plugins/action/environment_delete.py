@@ -1,11 +1,5 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
+from ..module_utils.api_client import ApiClient
 from ansible.plugins.action import ActionBase
-from ansible.utils.display import Display
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-
-display = Display()
 
 
 class ActionModule(ActionBase):
@@ -18,7 +12,7 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        display.v("Task args: %s" % self._task.args)
+        self._display.v("Task args: %s" % self._task.args)
 
         lagoon = ApiClient(
             task_vars.get('lagoon_api_endpoint'),
@@ -30,6 +24,6 @@ class ActionModule(ActionBase):
             self._task.args.get('project'),
             self._task.args.get('branch'),
         )
-        display.v("Delete status: %s" % result['status'])
+        self._display.v("Delete status: %s" % result['status'])
 
         return result

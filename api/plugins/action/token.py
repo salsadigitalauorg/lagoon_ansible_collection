@@ -1,24 +1,6 @@
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
-
-EXAMPLES = r'''
-    - name: Fetch a Lagoon token.
-      lagoon.api.token:
-        ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
-      register: token
-      vars:
-        lagoon_ssh_host: ssh.lagoon.amazeeio.cloud
-        lagoon_ssh_port: 32222
-    - name: Verify the user.
-      lagoon.api.whoami: {}
-      vars:
-        lagoon_api_token: "{{ token.token }}"
-      register: whoami
-    - debug: var=whoami
-'''
-
+from ..module_utils import token as LagoonToken
 from ansible.plugins.action import ActionBase
-import ansible_collections.lagoon.api.plugins.module_utils.token as LagoonToken
+
 
 class ActionModule(ActionBase):
 

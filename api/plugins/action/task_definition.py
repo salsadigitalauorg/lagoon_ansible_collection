@@ -1,8 +1,8 @@
-from ansible.errors import AnsibleError, AnsibleOptionsError
+from . import LagoonActionBase
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlTaskDefinition import TaskDefinition
-from . import LagoonActionBase
+from ansible.errors import AnsibleError, AnsibleOptionsError
 
 
 class ActionModule(LagoonActionBase):
