@@ -28,7 +28,7 @@ def get_mock_gql_client(
     client.execute_query = MagicMock()
     if query_return_value:
         client.execute_query.return_value = query_return_value
-    client.execute_query_dynamic = MagicMock(return_value=query_dynamic_return_value)
+    client.execute_query_dynamic = MagicMock()
     if query_dynamic_return_value:
         client.execute_query_dynamic.return_value = query_dynamic_return_value
     client.client.connect_sync = MagicMock()
