@@ -1,9 +1,9 @@
-from ..module_utils.api_client import ApiClient
+from . import LagoonActionBase
+from ..module_utils.gqlEnvironment import Environment
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
@@ -25,16 +25,14 @@ class ActionModule(ActionBase):
         if not patch_values:
             raise AnsibleError("No value to update.")
 
-        lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
-            {'headers': self._task.args.get('headers', {})}
-        )
+        self.createClient(task_vars)
+        lagoonEnvironment = Environment(self.client)
 
         if environment_name:
-            environment = lagoon.environment(environment_name)
+            lagoonEnvironment.byNs(environment_name).withCluster()
         else:
-            environment = lagoon.environment_by_id(environment_name)
+            lagoonEnvironment.byId(environment_id).withCluster()
+        environment = lagoonEnvironment.environments[0]
 
         update_required = False
         for key, value in patch_values.items():
@@ -53,7 +51,7 @@ class ActionModule(ActionBase):
             result['update'] = environment
             return result
 
-        result['update'] = lagoon.environment_update(environment['id'], patch_values)
+        result['update'] = lagoonEnvironment.update(environment['id'], patch_values)
         result['changed'] = True
         self._display.v("Update: %s" % result['update'])
 

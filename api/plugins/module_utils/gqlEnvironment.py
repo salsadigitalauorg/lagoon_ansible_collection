@@ -392,6 +392,30 @@ class Environment(ResourceBase):
 
         return res['deleteEnvironment'] == 'success'
 
+    def update(self, environment_id: int, patch: dict) -> dict:
+        res = self.client.execute_query("""
+            mutation updateEnvironment($id: Int!, $patch: UpdateEnvironmentPatchInput) {
+                updateEnvironment(input: { id: $id, patch: $patch }) {
+                    id
+                    name
+                    openshift {
+                        id
+                        name
+                    }
+                    kubernetes {
+                        id
+                        name
+                    }
+                }
+            }
+        """,
+        {
+            "id": environment_id,
+            "patch": patch
+        })
+
+        return res['updateEnvironment']
+
     def deployBranch(self, project: str, branch: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
         mutation = """
         mutation deploy($project: String!, $branch: String!) {
