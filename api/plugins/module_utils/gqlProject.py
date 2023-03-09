@@ -156,7 +156,7 @@ class Project(ResourceBase):
         variables = Variable(self.client, self.options)
         for i, b in enumerate(batches):
             self.v(f"Fetching variables for batch {i+1}/{len(batches)}")
-            projectVars.update(variables.get(b, fields))
+            projectVars.update(variables.getForProjects(b, fields))
             self.raiseExceptionIfRequired("Error fetching project variables")
 
         for project in self.projects:

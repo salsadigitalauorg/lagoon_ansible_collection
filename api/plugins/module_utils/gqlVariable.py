@@ -10,7 +10,7 @@ class Variable(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
-    def get(self, project_names: List[str], fields: List[str] = None) -> dict:
+    def getForProjects(self, project_names: List[str], fields: List[str] = None) -> dict:
         res = {}
 
         if not fields or not len(fields):
