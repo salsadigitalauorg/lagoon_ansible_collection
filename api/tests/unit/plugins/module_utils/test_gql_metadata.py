@@ -52,3 +52,70 @@ class GqlMetadataTester(unittest.TestCase):
   }
 }""", f"got {resulting_query}"
 
+    def test_get_string(self):
+        """
+        Older versions of the Lagoon API returned metadata as a string.
+        """
+        client = get_mock_gql_client(query_return_value={
+            "allProjects": [
+                {
+                    "id": 999,
+                    "name": "test",
+                    "metadata": "{\"type\":\"saas\",\"version\":\"9\"}"
+                }
+            ]
+        })
+        lagoonMetadata = Metadata(client)
+        res = lagoonMetadata.get()
+
+        assert isinstance(res, dict), f"expected dict, got {type(res)}"
+        assert res == {'test': {'type': 'saas', 'version': '9'}}, f"got {res}"
+
+    def test_get_object(self):
+        """
+        Newer versions of the Lagoon API return metadata as an object.
+        """
+        client = get_mock_gql_client(query_return_value={
+            "allProjects": [
+                {
+                    "id": 999,
+                    "name": "test",
+                    "metadata": { "type": "saas", "version": "9" }
+                }
+            ]
+        })
+        lagoonMetadata = Metadata(client)
+        res = lagoonMetadata.get()
+
+        assert isinstance(res, dict), f"expected dict, got {type(res)}"
+        assert res == {'test': {'type': 'saas', 'version': '9'}}, f"got {res}"
+
+    def test_update_string(self):
+        """
+        Older versions of the Lagoon API returned metadata as a string.
+        """
+        client = get_mock_gql_client(query_return_value={
+            "updateProjectMetadata": {
+                "metadata": "{\"type\": \"paas\",\"version\": \"9\"}"
+            }
+        })
+        lagoonMetadata = Metadata(client)
+        res = lagoonMetadata.update(111, "type", "paas")
+
+        assert isinstance(res, str), f"expected str, got {type(res)}"
+        assert res == "type:paas", f"got {res}"
+
+    def test_update_object(self):
+        """
+        Newer versions of the Lagoon API return metadata as an object.
+        """
+        client = get_mock_gql_client(query_return_value={
+            "updateProjectMetadata": {
+                "metadata": { "type": "paas", "version": "9" }
+            }
+        })
+        lagoonMetadata = Metadata(client)
+        res = lagoonMetadata.update(111, "type", "paas")
+
+        assert isinstance(res, str), f"expected str, got {type(res)}"
+        assert res == "type:paas", f"got {res}"
