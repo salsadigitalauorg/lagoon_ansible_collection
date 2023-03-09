@@ -1,6 +1,9 @@
-from .gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE, ENVIRONMENTS_FIELDS, PROJECT_FIELDS, ResourceBase
+from .gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE
+from .gqlResourceBase import ENVIRONMENTS_FIELDS
+from .gqlResourceBase import PROJECT_FIELDS, ResourceBase
 from .gql import GqlClient
 from .gqlVariable import Variable
+from .gqlGroup import Group
 
 from gql.dsl import DSLQuery
 from typing import List
@@ -12,12 +15,6 @@ PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
     'branches',
     'pullrequests',
     'deployTarget',
-]
-
-PROJECT_GROUPS_FIELDS = [
-    'id',
-    'name',
-    'type',
 ]
 
 
@@ -182,9 +179,10 @@ class Project(ResourceBase):
             batches.append(project_names[i:i+batch_size])
 
         groups = {}
+        grouper = Group(self.client, self.options)
         for i, b in enumerate(batches):
             self.v(f"Fetching groups for batch {i+1}/{len(batches)}")
-            groups.update(self.getGroups(b, fields))
+            groups.update(grouper.get(b, fields))
             self.raiseExceptionIfRequired("Error fetching groups")
 
         for project in self.projects:
@@ -297,40 +295,6 @@ class Project(ResourceBase):
             try:
                 res[pName] = resources.get(
                     self.sanitiseForQueryAlias(pName))['deployTargetConfigs']
-            except:
-                res[pName] = None
-
-        return res
-
-    def getGroups(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
-        res = {}
-
-        if not fields or not len(fields):
-            fields = PROJECT_GROUPS_FIELDS
-
-        resources = {}
-        with self.client as (_, ds):
-            # Build the fragment.
-            groups_fields = ds.Project.groups.select(
-                getattr(ds.GroupInterface, fields[0]))
-            if len(fields) > 1:
-                for f in fields[1:]:
-                    groups_fields.select(getattr(ds.GroupInterface, f))
-
-            field_queries = []
-            for pName in project_names:
-                # Build the main query.
-                field_query = ds.Query.projectByName.args(
-                    name=pName).alias(self.sanitiseForQueryAlias(pName))
-                field_query.select(groups_fields)
-                field_queries.append(field_query)
-
-            resources = self.queryResources(DSLQuery(*field_queries))
-
-        for pName in project_names:
-            try:
-                res[pName] = resources.get(
-                    self.sanitiseForQueryAlias(pName))['groups']
             except:
                 res[pName] = None
 
