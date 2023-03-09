@@ -5,7 +5,7 @@ from .gqlResourceBase import ResourceBase
 
 
 from gql.dsl import DSLQuery
-from typing import List
+from typing import List, Union
 
 class Metadata(ResourceBase):
 
@@ -33,10 +33,10 @@ class Metadata(ResourceBase):
                     metadata = resources.get(
                         self.sanitiseForQueryAlias(pName)).get(
                             'projectByName', {}).get('metadata', None)
-                    if isinstance(metadata, dict):
-                        res[pName] = metadata
-                    else:
-                        res[pName] = json.loads(metadata)
+                    if not isinstance(metadata, dict):
+                        metadata = json.loads(metadata)
+                    self.unpack(metadata)
+                    res[pName] = metadata
                 except:
                     res[pName] = None
         else:
@@ -53,14 +53,18 @@ class Metadata(ResourceBase):
                 return res
 
             for p in resources.get('allProjects'):
-                if isinstance(p['metadata'], dict):
-                    res[p['name']] = p['metadata']
-                else:
-                    res[p['name']] = json.loads(p['metadata'])
+                metadata = p['metadata']
+                if not isinstance(metadata, dict):
+                    metadata = json.loads(metadata)
+                self.unpack(metadata)
+                res[p['name']] = metadata
 
         return res
 
-    def update(self, project_id: int, key: str, value: str) -> dict:
+    def update(self, project_id: int, key: str, value: Union[str, list, dict]) -> dict:
+        # Encode non-string values.
+        if not isinstance(value, str):
+            value = json.dumps(value)
         res = self.client.execute_query(
             """
             mutation UpdateMetadata(
@@ -84,15 +88,14 @@ class Metadata(ResourceBase):
                 "value": value
             }
         )
-        metadata_str = res.get('updateProjectMetadata',
+        metadata = res.get('updateProjectMetadata',
                                {}).get('metadata', None)
-        if not metadata_str:
+        if not metadata:
             return f'{key}:null'
 
-        if isinstance(metadata_str, dict):
-            metadata = metadata_str
-        else:
-            metadata = json.loads(metadata_str)
+        if not isinstance(metadata, dict):
+            metadata = json.loads(metadata)
+        self.unpack(metadata)
         return f"{key}:{metadata.get(key, 'null')}"
 
     def remove(self, project_id: int, key: str) -> bool:
@@ -106,4 +109,19 @@ class Metadata(ResourceBase):
             {"id": project_id, "key": key, }
         )
         return key
+
+    def unpack(self, metadata: dict):
+        """
+        Iterates through the metadata items and attempts
+        to decode the values as json
+        """
+        for key, value in metadata.items():
+            try:
+                metadata[key] = json.loads(value, parse_int=str, parse_float=str)
+            # Scalar values cannot be decoded and will throw the following error.
+            except json.decoder.JSONDecodeError:
+                continue
+            # List & dict cannot be decoded either and will throw a different error.
+            except TypeError:
+                continue
 
