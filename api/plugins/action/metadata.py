@@ -18,7 +18,7 @@ class ActionModule(LagoonActionBase):
 
         state = self._task.args.get('state', 'present')
         data = self._task.args.get('data', None)
-        project_id = self._task.args.get('project_id', None)
+        project_id = int(self._task.args.get('project_id', None))
 
         result = {}
         result['result'] = []
