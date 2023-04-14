@@ -2,14 +2,16 @@ from . import LagoonActionBase
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlResourceBase import DEFAULT_BATCH_SIZE
+from ..module_utils.gqlTask import Task
 from ..module_utils.gqlTaskDefinition import TaskDefinition
-from ansible.errors import AnsibleError
+from ansible.errors import AnsibleError, AnsibleOptionsError
 
 
 SUPPORTED_RESOURCES = [
     "project",
     "environment",
-    "task_definition"
+    "task_definition",
+    "task"
 ]
 
 
@@ -29,6 +31,7 @@ class ActionModule(LagoonActionBase):
 
         resource = self._task.args.get('resource')
         batch_size = self._task.args.get('batch_size', DEFAULT_BATCH_SIZE)
+        environment = self._task.args.get('environment')
 
         if resource not in SUPPORTED_RESOURCES:
             result['failed'] = True
@@ -43,6 +46,10 @@ class ActionModule(LagoonActionBase):
             self.fetch_environments(result, batch_size)
         elif resource == "task_definition":
             self.fetch_task_definitions(result)
+        elif resource == "task":
+            if not environment:
+                raise AnsibleOptionsError("Environment namespace is required")
+            self.fetch_tasks(result, environment)
 
         return result
 
@@ -73,3 +80,6 @@ class ActionModule(LagoonActionBase):
 
     def fetch_task_definitions(self, result: dict):
         result['result'] = TaskDefinition(self.client).get_definitions()
+
+    def fetch_tasks(self, result: dict, environment: str):
+        result['result'] = Task(self.client).get([environment])

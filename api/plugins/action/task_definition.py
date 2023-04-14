@@ -52,7 +52,8 @@ class ActionModule(LagoonActionBase):
         # Fetch definitions only for the specific project's environment.
         elif project and environment:
             project_id = self.get_project_id(project)
-            environment_id = self.get_environment_id(project, environment)
+            environment_id = self.getEnvironmentIdFromNs(
+                self.sanitiseName(f"{project}-{environment}"))
             existing_task_definitions = lagoonTaskDefinition.get_definitions(
                 project_id=project_id, environment_id=environment_id)
         elif project:
@@ -60,7 +61,8 @@ class ActionModule(LagoonActionBase):
             existing_task_definitions = lagoonTaskDefinition.get_definitions(
                 project_id=project_id)
         else:
-            environment_id = self.get_environment_id(project, environment)
+            environment_id = self.getEnvironmentIdFromNs(
+                self.sanitiseName(f"{project}-{environment}"))
             existing_task_definitions = lagoonTaskDefinition.get_definitions(
                 environment_ids=environment_id)
 
@@ -129,17 +131,6 @@ class ActionModule(LagoonActionBase):
         if not len(lagoonProject.projects):
             raise AnsibleError(f"Project '{name}' not found")
         return lagoonProject.projects[0]["id"]
-
-    def get_environment_id(self, project: str, name: str):
-        lagoonEnvironment = Environment(self.client)
-        environment_ns = lagoonEnvironment.sanitisedName(f"{project}-{name}")
-        lagoonEnvironment.byNs(environment_ns, ["id"])
-        if len(lagoonEnvironment.errors):
-            raise AnsibleError("Error fetching environment: %s" %
-                               lagoonEnvironment.errors)
-        if not len(lagoonEnvironment.environments):
-            raise AnsibleError(f"Environment '{name}' for project '{project}' not found")
-        return lagoonEnvironment.environments[0]["id"]
 
     def def_has_changed(self, current: dict, desired: dict) -> bool:
         compare_fields = [
