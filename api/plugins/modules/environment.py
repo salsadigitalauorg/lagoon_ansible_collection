@@ -1,7 +1,4 @@
-#!/usr/bin/python
-
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# -*- coding: utf-8 -*-
 
 DOCUMENTATION = r'''
 ---
@@ -77,45 +74,3 @@ EXAMPLES = r'''
     environment: 'feature/baz'
     state: absent
 '''
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.lagoon.api.plugins.module_utils.api_client import ApiClient
-
-def run_module():
-    module_args = dict(
-        lagoon_api_endpoint=dict(type='str', required=True),
-        lagoon_api_token=dict(type='str', required=True, no_log=True),
-        headers=dict(type='dict', required=False, default={}),
-        project=dict(type='str', required=True),
-        environment=dict(type='str', required=True),
-        state=dict(type='str', required=False, default='present'),
-    )
-
-    result = dict(changed=False, result={})
-
-    module = AnsibleModule(
-        argument_spec=module_args,
-        supports_check_mode=True
-    )
-
-    if module.check_mode:
-        module.exit_json(**result)
-
-    lagoon = ApiClient(
-        module.params['lagoon_api_endpoint'],
-        module.params['lagoon_api_token'],
-        {'headers': module.params['headers']}
-    )
-
-    if module.params['state'] == 'absent':
-        res = lagoon.environment_delete(
-            module.params['project'], module.params['environment'])
-        result['changed'] = res
-
-    module.exit_json(**result)
-
-def main():
-    run_module()
-
-if __name__ == '__main__':
-    main()

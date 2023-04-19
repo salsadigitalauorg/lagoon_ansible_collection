@@ -69,6 +69,12 @@ DEPLOYMENTS_FIELDS = [
     'uiLink',
 ]
 
+GROUPS_FIELDS = [
+    'id',
+    'name',
+    'type',
+]
+
 DEFAULT_BATCH_SIZE = 100
 
 
