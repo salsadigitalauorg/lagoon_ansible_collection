@@ -1,0 +1,16 @@
+version: '3'
+
+x-environment:
+  &default-environment
+  lagoon_api_token: ${lagoon_api_token:-}
+  lagoon_api_endpoint: ${lagoon_api_endpoint:-}
+
+services:
+  ansible:
+    image: singledigital/awx-ee:5.x
+    command: tail -F anything
+    volumes:
+      - ./api:/usr/share/ansible/collections/ansible_collections/lagoon/api
+    working_dir: /usr/share/ansible/collections/ansible_collections/lagoon/api
+    environment:
+      << : *default-environment
