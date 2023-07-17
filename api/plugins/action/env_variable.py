@@ -32,7 +32,7 @@ class ActionModule(LagoonActionBase):
         # additional calls to the API until it matches.
         verify_value = self._task.args.get('verify_value', False)
 
-        if state == 'present' and (not value or not scope):
+        if state == 'present' and (value is None or not scope):
             raise AnsibleError(
                 "Value and scope are required when creating a variable")
 
