@@ -27,5 +27,5 @@ EXAMPLES = r'''
     name: AUDIT - Admin shipshape
   register: task_result
 - name: Display the task id
-  debug: var=task_result.id
+  debug: var=task_result.task_id
 '''

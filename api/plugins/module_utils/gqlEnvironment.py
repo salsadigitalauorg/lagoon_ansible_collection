@@ -42,7 +42,7 @@ class Environment(ResourceBase):
             self.v(f"{e.errors}")
             if e.errors[0]['message'] == 'Unauthorized: You don\'t have permission to "viewAll" on "environment": {}':
                 return self.allThroughProjects(fields, batch_size)
-            elif isinstance(e.data['allEnvironments'], list):
+            elif e.data and isinstance(e.data['allEnvironments'], list):
                 self.environments.extend(e.data['allEnvironments'])
                 self.errors.extend(e.errors)
             else:
@@ -87,7 +87,7 @@ class Environment(ResourceBase):
                 self.environments.append(
                     res['environmentByKubernetesNamespaceName'])
         except TransportQueryError as e:
-            if isinstance(e.data['environmentByKubernetesNamespaceName'], list):
+            if e.data and isinstance(e.data['environmentByKubernetesNamespaceName'], list):
                 self.environments.append(e.data['environmentByKubernetesNamespaceName'])
                 self.errors.extend(e.errors)
             else:
@@ -118,7 +118,7 @@ class Environment(ResourceBase):
             if res['environmentById'] != None:
                 self.environments.append(res['environmentById'])
         except TransportQueryError as e:
-            if isinstance(e.data['environmentById'], list):
+            if e.data and isinstance(e.data['environmentById'], list):
                 self.environments.append(e.data['environmentById'])
                 self.errors.extend(e.errors)
             else:

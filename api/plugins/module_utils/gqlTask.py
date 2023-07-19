@@ -2,6 +2,7 @@ from .gql import GqlClient
 from .gqlResourceBase import ResourceBase
 
 from gql.dsl import DSLQuery
+from gql.transport.exceptions import TransportQueryError
 from typing import List
 
 
@@ -10,12 +11,9 @@ TASK_FIELDS_COMMON = [
     'name',
     'taskName',
     'service',
-    'command',
     'status',
     'started',
     'completed',
-    'logs',
-    'files',
 ]
 
 class Task(ResourceBase):
@@ -63,6 +61,28 @@ class Task(ResourceBase):
                     self.sanitiseForQueryAlias(ns))['tasks']
             except:
                 res[ns] = None
+
+        return res
+
+    def byId(self, id: int, fields: List[str] = None) -> dict:
+        """
+        Get the top-level information for an environment by id.
+        """
+
+        if not fields:
+            fields = TASK_FIELDS_COMMON
+
+        joined_fields = "\n        ".join(fields)
+
+        query = f"""query {{
+    taskById (id: { id }) {{
+        { joined_fields }
+    }}
+}}"""
+
+        res = self.client.execute_query(query)
+        if res['taskById'] != None:
+            return res['taskById']
 
         return res
 

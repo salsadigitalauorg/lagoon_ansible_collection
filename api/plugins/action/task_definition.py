@@ -1,5 +1,4 @@
 from . import LagoonActionBase
-from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlTaskDefinition import TaskDefinition
 from ansible.errors import AnsibleError, AnsibleOptionsError
@@ -28,7 +27,7 @@ class ActionModule(LagoonActionBase):
         service = self._task.args.get("service")
         image = self._task.args.get("image")
         command = self._task.args.get("command")
-        arguments = self._task.args.get("arguments")
+        arguments = self._task.args.get("arguments", [])
         state = self._task.args.get("state")
 
         project_id = None
