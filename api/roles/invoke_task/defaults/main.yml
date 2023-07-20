@@ -1,0 +1,3 @@
+throttle_count: "{{ lagoon_invoke_task_throttle | default(3) }}"
+wait_retries: "{{ lagoon_invoke_task_wait_retries | default(6) }}"
+wait_delay: "{{ lagoon_invoke_task_wait_delay | default(20) }}"
