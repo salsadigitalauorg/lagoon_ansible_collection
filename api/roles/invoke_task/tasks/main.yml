@@ -3,14 +3,16 @@
     environment: "{{ task_environment_ns }}"
     name: "{{ task_name }}"
   register: task_result
-  throttle: 3
+  throttle: "{{ throttle_count | int }}"
 - name: "Wait for the task ({{ task_result.task_id }}) to complete"
   lagoon.api.info:
     resource: task
     id: "{{ task_result.task_id }}"
   register: task_info_output
-  throttle: 3
-  until: task_info_output.result.completed != None
-  retries: 6
-  delay: 10
+  throttle: "{{ throttle_count | int }}"
+  until:
+    - task_info_output.result.completed != None
+    - task_info_output.result.status != 'running'
+  retries: "{{ wait_retries | int }}"
+  delay: "{{ wait_delay | int }}"
   failed_when: task_info_output.result.status == 'failed'
