@@ -23,7 +23,6 @@ def get_facts(client: GqlClient, environment_id):
             "environment_id": environment_id
         }
     )
-    display.v(f"GraphQL query result: {res}")
 
     try:
         return res["environmentById"]["facts"]
@@ -104,7 +103,6 @@ def add_fact(client: GqlClient, environment_id, name, category, value, source="a
         }
     )
 
-    display.v(f"GraphQL mutation result: {res}")
     return res["addFact"]
 
 

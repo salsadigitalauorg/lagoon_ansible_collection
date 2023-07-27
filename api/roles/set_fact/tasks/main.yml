@@ -1,0 +1,17 @@
+- name: "Clear existing Lagoon fact: {{ lagoon_fact.name }}"
+  lagoon.api.fact:
+    state: absent
+    environment: "{{ lagoon_fact.environment_id }}"
+    name: "{{ lagoon_fact.name }}"
+  throttle: "{{ throttle_count | int }}"
+- name: "Set Lagoon fact: {{ lagoon_fact.name }}"
+  lagoon.api.fact:
+    state: present
+    category: "{{ lagoon_fact.category | default(omit) }}"
+    environment: "{{ lagoon_fact.environment_id }}"
+    name: "{{ lagoon_fact.name }}"
+    value: "{{ lagoon_fact.value }}"
+    source: "{{ lagoon_fact.source | default(omit) }}"
+    description: "{{ lagoon_fact.description | default(omit) }}"
+  when: not (lagoon_fact.clear_only | default(false) | bool)
+  throttle: "{{ throttle_count | int }}"

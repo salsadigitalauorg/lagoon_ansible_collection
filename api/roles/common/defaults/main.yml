@@ -1,3 +1,7 @@
-lagoon_api_endpoint: https://api.lagoon.amazeeio.cloud/graphql
-lagoon_ssh_host: ssh.lagoon.amazeeio.cloud
-lagoon_ssh_port: 32222
+api_endpoint: "{{ lagoon_api_endpoint | default('https://api.lagoon.amazeeio.cloud/graphql') }}"
+ssh_host: "{{ lagoon_ssh_host | default('ssh.lagoon.amazeeio.cloud') }}"
+ssh_port: "{{ lagoon_ssh_port | default(32222) }}"
+
+throttle_count: "{{ lagoon_throttle | default(3) }}"
+wait_retries: "{{ lagoon_wait_retries | default(6) }}"
+wait_delay: "{{ lagoon_wait_delay | default(20) }}"
