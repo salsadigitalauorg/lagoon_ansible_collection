@@ -2,15 +2,15 @@
 
 - name: Set Lagoon API endpoint.
   set_fact:
-    lagoon_api_endpoint: '{{ lagoon_api_endpoint }}'
+    lagoon_api_endpoint: '{{ api_endpoint }}'
   when: lagoon_api_endpoint is not defined
 
 - name: Set Lagoon SSH host.
   set_fact:
-    lagoon_ssh_host: '{{ lagoon_ssh_host }}'
+    lagoon_ssh_host: '{{ ssh_host }}'
   when: lagoon_ssh_host is not defined
 
 - name: Set Lagoon SSH port.
   set_fact:
-    lagoon_ssh_port: '{{ lagoon_ssh_port }}'
+    lagoon_ssh_port: '{{ ssh_port }}'
   when: lagoon_ssh_port is not defined

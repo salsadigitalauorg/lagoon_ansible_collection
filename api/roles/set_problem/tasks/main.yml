@@ -1,0 +1,10 @@
+- name: "Clear existing Lagoon problem: {{ lagoon_problem.name }}"
+  lagoon.api.problem:
+    state: absent
+    environment: "{{ lagoon_problem.environment }}"
+    identifier: "{{ lagoon_problem.identifier }}"
+  throttle: "{{ throttle_count | int }}"
+- name: "Set Lagoon problem: {{ lagoon_problem.name }}"
+  lagoon.api.problem: "{{ lagoon_problem | combine({'state': 'present'}) }}"
+  when: not (lagoon_problem.clear_only | default(false) | bool)
+  throttle: "{{ throttle_count | int }}"
