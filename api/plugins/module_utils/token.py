@@ -4,8 +4,13 @@ from typing import List, Union
 
 def write_ssh_key(key_content: str, key_path: str):
     """Helper function for writing a private key to a file."""
-    with open(key_path, 'w') as fh:
-        fh.write(key_content)
+    try:
+        with open(key_path, 'w') as fh:
+            fh.write(key_content)
+    except IOError as e:
+        print('unable to write ssh key to file')
+        print(e)
+        raise
 
 def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path: str):
     """Fetch a token from Lagoon via SSH."""

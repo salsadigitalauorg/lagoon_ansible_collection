@@ -16,10 +16,13 @@ class ActionModule(ActionBase):
         lagoon_ssh_private_key_file = task_vars.get('lagoon_ssh_private_key_file')
 
         if lagoon_ssh_private_key:
+            self._display.vvvv("writing private key to file")
             if not lagoon_ssh_private_key_file:
                 lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
             LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
 
+        self._display.vvvv(
+            f"lagoon_ssh_private_key_file: {lagoon_ssh_private_key_file}")
         rc, result['token'], result['error'] = LagoonToken.fetch_token(
             self._templar.template(task_vars.get('lagoon_ssh_host')),
             self._templar.template(task_vars.get('lagoon_ssh_port')),
