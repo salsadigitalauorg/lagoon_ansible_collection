@@ -1,3 +1,5 @@
+typing-extensions
+
 gql
 # Dependencies for the gql requests transport.
 requests-toolbelt<1,>=0.9.1
