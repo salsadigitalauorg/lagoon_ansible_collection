@@ -19,7 +19,12 @@ class ActionModule(ActionBase):
             self._display.vvvv("writing private key to file")
             if not lagoon_ssh_private_key_file:
                 lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
-            LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
+            try:
+                LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
+            except IOError as e:
+                result['failed'] = True
+                result['error'] = e
+                return result
 
         self._display.vvvv(
             f"lagoon_ssh_private_key_file: {lagoon_ssh_private_key_file}")
