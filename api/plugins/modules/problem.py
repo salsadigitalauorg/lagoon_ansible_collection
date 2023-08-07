@@ -20,7 +20,7 @@ options:
     description:
       - A description of the problem.
     type: str
-  environment_id:
+  environment:
     description:
       - The ID of the environment.
     required: true
