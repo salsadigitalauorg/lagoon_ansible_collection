@@ -10,9 +10,9 @@ from ansible.module_utils._text import to_native
 from ansible.module_utils.six.moves.urllib.error import HTTPError, URLError
 
 # This has been commented out due to modules failing because of it.
-# from ansible.utils.display import Display
+from ansible.utils.display import Display
 
-# display = Display()
+display = Display()
 
 class ApiClient:
 
@@ -641,7 +641,9 @@ class ApiClient:
 		    input: { project: %d, id: %d })""" % (config_id, project_id, config_id)
 
     def make_api_call(self, payload):
-        # display.v("API call payload: %s" % payload)
+        verbosity = int(os.getenv('ANSIBLE_VERBOSITY'))
+        if verbosity >= 1:
+            display.v("API call payload: %s" % payload)
         try:
             response = open_url(self.options.get('endpoint'), data=payload,
                                 validate_certs=self.options.get(
