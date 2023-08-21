@@ -2,6 +2,7 @@ from .display import Display
 
 from ansible.module_utils.errors import AnsibleValidationError
 from gql.transport.requests import RequestsHTTPTransport
+from gql.transport.exceptions import TransportQueryError
 from gql import Client, gql
 from gql.dsl import DSLExecutable, DSLField, DSLSchema, DSLType, dsl_gql
 from graphql import print_ast
@@ -64,9 +65,12 @@ class GqlClient(Display):
         query_ast = gql(query)
         self.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
         self.vvvv(f"GraphQL query variables: \n{variables}")
-        res = self.client.execute(query_ast, variable_values=variables)
-        self.vvvv(f"GraphQL query result: {res}")
-        return res
+        try:
+            res = self.client.execute(query_ast, variable_values=variables)
+            self.vvvv(f"GraphQL query result: {res}")
+            return res
+        except TransportQueryError as e:
+            return e
 
     def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
         """
