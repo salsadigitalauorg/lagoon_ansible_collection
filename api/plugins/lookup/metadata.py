@@ -73,10 +73,16 @@ class LookupModule(LagoonLookupBase):
 
     lagoonProject = Project(self.client).byName(project, ['metadata'])
     if not len(lagoonProject.projects):
-        raise AnsibleError(
-            f"Unable to get metadata for project {project}; please make sure the project name is correct")
+        raise AnsibleError(f"Unable to get metadata for project {project}; please make sure the project name is correct")
 
-    metadata = json.loads(lagoonProject.projects[0]['metadata'])
+    try:
+      metadata = lagoonProject.projects[0]['metadata']
+    except (IndexError, KeyError, ValueError) as e:
+      raise AnsibleError(f"Unable to get metadata for project {project}; please make sure the project name is correct")
+
+    if type(metadata) is str:
+      metadata = json.loads(metadata)
+
     self._display.v(f"metadata: {metadata}")
 
     if not len(terms):
