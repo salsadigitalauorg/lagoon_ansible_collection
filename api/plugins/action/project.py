@@ -25,7 +25,7 @@ def has_project(client: GqlClient, project):
 
     try:
         return res["projectByName"] is not None
-    except TypeError:
+    except (KeyError, TypeError):
         return False
 
 
