@@ -3,5 +3,5 @@ gql ; python_version >= '3.8'
 # Locking requests-toolbet and urllib3 to fix failing tests.
 # See https://stackoverflow.com/questions/76175487
 requests-toolbelt==0.10.1 ; python_version >= '3.8'
-urllib3==1.26.15 ; python_version >= '3.8'
+urllib3==1.26.17 ; python_version >= '3.8'
 requests<3,>=2.26 ; python_version >= '3.8'
