@@ -40,6 +40,7 @@ class ActionModule(LagoonActionBase):
                 update_required = True
                 break
             if key in ['openshift', 'kubernetes']:
+                value = int(value)
                 if str(value) != str(environment[key]['id']):
                     update_required = True
                     break
