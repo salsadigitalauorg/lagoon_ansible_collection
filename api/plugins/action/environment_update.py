@@ -40,6 +40,9 @@ class ActionModule(LagoonActionBase):
                 update_required = True
                 break
             if key in ['openshift', 'kubernetes']:
+                # Cast the cluster id to int here - it will be used
+                # further down when updating the environment.
+                value = int(value)
                 if str(value) != str(environment[key]['id']):
                     update_required = True
                     break
