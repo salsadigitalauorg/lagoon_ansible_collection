@@ -25,8 +25,8 @@ class ActionModule(ActionBase):
             raise AnsibleError("No value to update.")
 
         lagoon = ApiClient(
-            task_vars.get('lagoon_api_endpoint'),
-            task_vars.get('lagoon_api_token'),
+            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
+            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
             {'headers': self._task.args.get('headers', {})}
         )
 
