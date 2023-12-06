@@ -1,5 +1,5 @@
+from gql.dsl import DSLQuery
 from . import LagoonActionBase
-
 
 class ActionModule(LagoonActionBase):
 
@@ -22,6 +22,6 @@ class ActionModule(LagoonActionBase):
         with self.client:
             queryObj = self.client.build_dynamic_query(
                 query, mainType, args, fields, subFields)
-            res = self.client.execute_query_dynamic(queryObj)
+            res = self.client.execute_query_dynamic(DSLQuery(queryObj))
             result['result'] = res[query]
         return result
