@@ -28,3 +28,13 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 docker-compose build
 docker-compose run --rm test units -v --requirements
 ```
+
+## Running action plugins ad hoc
+Navigate to the collection's directory then run the following:
+
+```sh
+export ANSIBLE_ACTION_PLUGINS='{{CWD}}/plugins/action:{{ ANSIBLE_HOME ~ "/plugins/action:/usr/share/ansible/plugins/action" }}'
+
+# Example using the lagoon.api.config plugin.
+ansible localhost -m config -a '{"config_file":"'$HOME'/govcms/scaffold/.lagoon.yml","crons":{"master":[{"name":"custom cron","command":"drush cron", "schedule":"M * * * *"}]},"state":"absent"}'
+```
