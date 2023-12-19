@@ -10,18 +10,18 @@ sys.modules['ansible.utils.display'] = unittest.mock.Mock()
 
 class GqlVariableTester(unittest.TestCase):
 
-    def test_add(self):
+    def test_variable_addOrUpdateByName(self):
         client = GqlClient('foo', 'bar')
         client.execute_query = MagicMock()
 
         lagoonVariable = Variable(client)
-        lagoonVariable.add('PROJECT', 1, 'SOME_VAR', 'foo', 'RUNTIME')
+        lagoonVariable.addOrUpdateByName('projectname', "environmentname", 'SOME_VAR', 'foo', 'RUNTIME')
         _, query_args = client.execute_query.call_args.args
 
-        assert isinstance(query_args['type'], str)
-        assert query_args['type'] == 'PROJECT'
-        assert isinstance(query_args['type_id'], int)
-        assert query_args['type_id'] == 1
+        assert isinstance(query_args['project'], str)
+        assert query_args['project'] == 'projectname'
+        assert isinstance(query_args['environment'], str)
+        assert query_args['environment'] == 'environmentname'
         assert isinstance(query_args['scope'], str)
         assert query_args['scope'] == 'RUNTIME'
         assert isinstance(query_args['name'], str)
@@ -35,12 +35,12 @@ class GqlVariableTester(unittest.TestCase):
 
         lagoonVariable = Variable(client)
 
-        lagoonVariable.add('PROJECT', 1, 'SOME_VAR', True, 'RUNTIME')
+        lagoonVariable.addOrUpdateByName('projectname', "environmentname", 'SOME_VAR', True, 'RUNTIME')
         _, query_args = client.execute_query.call_args.args
         assert isinstance(query_args['value'], str)
         assert query_args['value'] == 'True'
 
-        lagoonVariable.add('PROJECT', 1, 'SOME_VAR2', 50, 'RUNTIME')
+        lagoonVariable.addOrUpdateByName('projectname', "environmentname", 'SOME_VAR2', 50, 'RUNTIME')
         _, query_args = client.execute_query.call_args.args
         assert isinstance(query_args['value'], str)
         assert query_args['value'] == '50'

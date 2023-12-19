@@ -113,13 +113,9 @@ class ActionModule(LagoonActionBase):
                 result['id'] = existing_var['id']
                 return result
 
-            # Delete before recreating.
-            # lagoonVariable.delete(existing_var['id'])
-
         if state == 'absent':
             return result
 
-        # result['data'] = lagoonVariable.add(type, type_id, name, value, scope)
         result['data'] = lagoonVariable.addOrUpdateByName(lagoon_project_name, lagoon_environment_name, name, value, scope)
         self._display.v("Variable add result: %s" % result['data'])
 
