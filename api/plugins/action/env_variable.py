@@ -25,6 +25,10 @@ class ActionModule(LagoonActionBase):
         value = self._task.args.get('value', None)
         scope = self._task.args.get('scope', None)
         replace_existing = self._task.args.get('replace_existing', False)
+        
+        # These, used to add and update, are filled in below
+        lagoon_project_name = None
+        lagoon_environment_name = None
 
         self.createClient(task_vars)
 
@@ -50,9 +54,10 @@ class ActionModule(LagoonActionBase):
             type_id = lagoonProject.projects[0]['id']
             env_vars = lagoonProject.projects[0]['envVariables']
             self._display.v("Project variables: %s" % env_vars)
+            lagoon_project_name = type_name
         elif (type == 'ENVIRONMENT'):
             lagoonEnvironment.byNs(
-                type_name, ['id', 'kubernetesNamespaceName'])
+                type_name, ['id', 'name', 'kubernetesNamespaceName', "project {id, name}"])
             if not len(lagoonEnvironment.environments):
                 raise AnsibleError("Environment not found.")
 
@@ -60,8 +65,9 @@ class ActionModule(LagoonActionBase):
             self._display.v(f"environment: {lagoonEnvironment.environments[0]}")
             type_id = lagoonEnvironment.environments[0]['id']
             env_vars = lagoonEnvironment.environments[0]['envVariables']
+            lagoon_environment_name = lagoonEnvironment.environments[0]['name']
+            lagoon_project_name = lagoonEnvironment.environments[0]['project']['name']
             self._display.v("Environment variables: %s" % env_vars)
-
         if env_vars == None:
             raise AnsibleError(
                 "Incorrect variable type: %s. Should be PROJECT or ENVIRONMENT." % type)
@@ -108,12 +114,13 @@ class ActionModule(LagoonActionBase):
                 return result
 
             # Delete before recreating.
-            lagoonVariable.delete(existing_var['id'])
+            # lagoonVariable.delete(existing_var['id'])
 
         if state == 'absent':
             return result
 
-        result['data'] = lagoonVariable.add(type, type_id, name, value, scope)
+        # result['data'] = lagoonVariable.add(type, type_id, name, value, scope)
+        result['data'] = lagoonVariable.addOrUpdateByName(lagoon_project_name, lagoon_environment_name, name, value, scope)
         self._display.v("Variable add result: %s" % result['data'])
 
         result['changed'] = True

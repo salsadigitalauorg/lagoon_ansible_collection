@@ -44,6 +44,36 @@ class Variable(ResourceBase):
 
         return res
 
+    def addOrUpdateByName(self, projectName:str, environmentName: str, name:str, value:str, scope:str) -> dict:
+        res = self.client.execute_query(
+            """
+            mutation addOrUpdateEnvVariableByName(
+                $environment: String
+                $project: String!
+                $name: String!
+                $value: String!
+                $scope: EnvVariableScope!
+            ) {
+                addOrUpdateEnvVariableByName(input: {
+                    project: $project
+                    environment: $environment
+                    scope: $scope
+                    name: $name
+                    value: $value
+                }) {
+                    id
+                }
+            }""",
+            {
+                "environment": environmentName,
+                "project": projectName,
+                "scope": scope,
+                "name": name,
+                "value": str(value),
+            }
+        )
+        return res['addOrUpdateEnvVariableByName']
+
     def add(self, type: str, type_id: int, name: str, value: str, scope: str) -> dict:
         res = self.client.execute_query(
             """
