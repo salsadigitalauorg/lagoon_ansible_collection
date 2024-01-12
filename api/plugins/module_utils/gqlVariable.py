@@ -44,19 +44,19 @@ class Variable(ResourceBase):
 
         return res
 
-    def add(self, type: str, type_id: int, name: str, value: str, scope: str) -> dict:
+    def addOrUpdateByName(self, projectName:str, environmentName: str, name:str, value:str, scope:str) -> dict:
         res = self.client.execute_query(
             """
-            mutation addEnvVariable(
-                $type: EnvVariableType!
-                $type_id: Int!
+            mutation addOrUpdateEnvVariableByName(
+                $environment: String
+                $project: String!
                 $name: String!
                 $value: String!
                 $scope: EnvVariableScope!
             ) {
-                addEnvVariable(input: {
-                    type: $type
-                    typeId: $type_id
+                addOrUpdateEnvVariableByName(input: {
+                    project: $project
+                    environment: $environment
                     scope: $scope
                     name: $name
                     value: $value
@@ -65,14 +65,14 @@ class Variable(ResourceBase):
                 }
             }""",
             {
-                "type": type,
-                "type_id": int(type_id),
+                "environment": environmentName,
+                "project": projectName,
                 "scope": scope,
                 "name": name,
                 "value": str(value),
             }
         )
-        return res['addEnvVariable']
+        return res['addOrUpdateEnvVariableByName']
 
     def delete(self, id: int) -> bool:
         res = self.client.execute_query(

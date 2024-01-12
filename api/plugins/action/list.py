@@ -19,6 +19,8 @@ class ActionModule(LagoonActionBase):
 
     def run(self, tmp=None, task_vars=None):
 
+        self._display.v("Task args: %s" % self._task.args)
+
         if task_vars is None:
             task_vars = dict()
 
