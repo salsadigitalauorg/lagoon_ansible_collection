@@ -58,6 +58,12 @@ class ActionModule(LagoonActionBase):
                             config['failed'] = True
                         result['result'].append(config)
                     result['changed'] = True
+                for existing_config in existing_configs:
+                    if existing_config['id'] not in specified_ids:
+                        self._display.vvvv(f"Deleting unmatched config with ID {existing_config['id']}")
+                        if DeployTargetConfig(self.client).delete(project['id'], existing_config['id']):
+                            result['result'].append({'id': existing_config['id'], 'deleted': True})
+                            result['changed'] = True
             elif state == "absent":
                 result['changed'] = False
                 for c in project["deployTargetConfigs"]:
