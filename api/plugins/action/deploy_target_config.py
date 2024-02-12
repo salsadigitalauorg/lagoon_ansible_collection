@@ -32,6 +32,8 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
+                existing_config_ids = [config['id'] for config in project["deployTargetConfigs"]]
+                specified_config_ids = []
                 changes = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
@@ -58,12 +60,13 @@ class ActionModule(LagoonActionBase):
                             config['failed'] = True
                         result['result'].append(config)
                     result['changed'] = True
-                for existing_config in existing_configs:
-                    if existing_config['id'] not in specified_ids:
-                        self._display.vvvv(f"Deleting unmatched config with ID {existing_config['id']}")
-                        if DeployTargetConfig(self.client).delete(project['id'], existing_config['id']):
-                            result['result'].append({'id': existing_config['id'], 'deleted': True})
+                for config_id in existing_config_ids:
+                    if config_id not in specified_config_ids:
+                        self._display.vvvv(f"Deleting unmatched config with ID {config_id}")
+                        if DeployTargetConfig(self.client).delete(project['id'], config_id):
+                            result['result'].append({'id': config_id, 'deleted': True})
                             result['changed'] = True
+
             elif state == "absent":
                 result['changed'] = False
                 for c in project["deployTargetConfigs"]:
