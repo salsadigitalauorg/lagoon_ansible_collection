@@ -60,6 +60,7 @@ class ActionModule(LagoonActionBase):
                             config['failed'] = True
                         result['result'].append(config)
                     result['changed'] = True
+                # Cleanup code for deploytargetconfig when replace == true 
                 if replace:
                     for existing_config in project["deployTargetConfigs"]:
                         if existing_config['id'] in existing_config_ids and existing_config['branches'] not in specified_branch_patterns:
