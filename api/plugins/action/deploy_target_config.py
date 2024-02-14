@@ -59,13 +59,14 @@ class ActionModule(LagoonActionBase):
                         else:
                             config['failed'] = True
                         result['result'].append(config)
-                    result['changed'] = True
-                for existing_config in project["deployTargetConfigs"]:
-                    if existing_config['id'] in existing_config_ids and existing_config['branches'] not in specified_branch_patterns:
-                        self._display.vvvv(f"Deleting unmatched config with ID {existing_config['id']}")
-                        if DeployTargetConfig(self.client).delete(project['id'], existing_config['id']):
-                            result['result'].append({'id': existing_config['id'], 'deleted': True})
-                            result['changed'] = True
+                        result['changed'] = True
+                        #Added deploytargetconfig cleanup 
+                        for existing_config in project["deployTargetConfigs"]:
+                            if existing_config['id'] in existing_config_ids and existing_config['branches'] not in specified_branch_patterns:
+                                self._display.vvvv(f"Deleting unmatched config with ID {existing_config['id']}")
+                                if DeployTargetConfig(self.client).delete(project['id'], existing_config['id']):
+                                    result['result'].append({'id': existing_config['id'], 'deleted': True})
+                                    result['changed'] = True
 
             elif state == "absent":
                 result['changed'] = False
