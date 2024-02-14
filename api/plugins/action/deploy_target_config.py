@@ -34,7 +34,6 @@ class ActionModule(LagoonActionBase):
             if state == "present":
                 specified_branch_patterns = [config['branches'] for config in configs]
                 existing_config_ids = [config['id'] for config in project["deployTargetConfigs"]]
-                specified_config_ids = []
                 changes = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
