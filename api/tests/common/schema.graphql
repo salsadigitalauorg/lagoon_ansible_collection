@@ -6,11 +6,39 @@ type Query {
   """Returns User Object by a given sshKey"""
   userBySshKey(sshKey: String!): User
 
+  """Returns User Object by a given sshKey Fingerprint"""
+  userBySshFingerprint(fingerprint: String!): User
+
+  """Returns User Object by a given email address"""
+  userByEmail(email: String!): User
+
   """Returns Project Object by a given name"""
   projectByName(name: String!): Project
 
+  """"""
+  orgProjectByName(name: String!): OrgProject
+
+  """
+  Returns all Environment Objects for a specified Kubernetes matching given filter (all if no filter defined)
+  """
+  environmentsByKubernetes(kubernetes: KubernetesInput!, order: EnvOrderType, createdAfter: String, type: EnvType): [Environment]
+
   """Returns Group Object by a given name"""
   groupByName(name: String!): GroupInterface
+
+  """"""
+  groupByNameAndOrganization(name: String!, organization: Int!): OrgGroupInterface
+
+  """
+  Retrieves all users that have been added to groups within an organization.
+  """
+  usersByOrganization(organization: Int!): [OrgUser]
+
+  """
+  Retrieve information about a specific user within groups within an organization.
+  This will only return group information if this user is in any groups within this organization
+  """
+  userByEmailAndOrganization(email: String!, organization: Int!): OrgUser
 
   """
   Returns Project Object by a given gitUrl (only the first one if there are multiple)
@@ -42,6 +70,9 @@ type Query {
   deploymentByRemoteId(id: String): Deployment
 
   """"""
+  deploymentByName(input: DeploymentByNameInput): Deployment
+
+  """"""
   deploymentsByBulkId(bulkId: String): [Deployment]
 
   """"""
@@ -59,16 +90,16 @@ type Query {
   """
   Returns all Project Objects matching given filters (all if no filter defined)
   """
-  allProjects(createdAfter: String, gitUrl: String, order: ProjectOrderType): [Project]
+  allProjects(createdAfter: String, gitUrl: String, order: ProjectOrderType, buildImage: Boolean): [Project]
 
   """Returns all Project Objects matching metadata filters"""
   projectsByMetadata(metadata: [MetadataKeyValue]): [Project]
 
   """Returns all OpenShift Objects"""
-  allOpenshifts: [Openshift]
+  allOpenshifts(disabled: Boolean, buildImage: Boolean): [Openshift]
 
   """Returns all Kubernetes Objects"""
-  allKubernetes: [Kubernetes]
+  allKubernetes(disabled: Boolean, buildImage: Boolean): [Kubernetes]
 
   """
   Returns all Environments matching given filter (all if no filter defined)
@@ -80,6 +111,9 @@ type Query {
 
   """"""
   problemSources: [String]
+
+  """Returns all Users"""
+  allUsers(id: String, email: String, gitlabId: Int): [User]
 
   """Returns all Groups matching given filter (all if no filter defined)"""
   allGroups(name: String, type: String): [GroupInterface]
@@ -121,6 +155,27 @@ type Query {
 
   """"""
   allDeployTargetConfigs: [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """List all organizations"""
+  allOrganizations: [Organization] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """Get an organization by its ID"""
+  organizationById(id: Int!): Organization
+
+  """"""
+  organizationByName(name: String!): Organization
+
+  """"""
+  getGroupProjectOrganizationAssociation(input: AddGroupToOrganizationInput!): String @deprecated(reason: "Use checkBulkImportProjectsAndGroupsToOrganization instead")
+
+  """"""
+  getProjectGroupOrganizationAssociation(input: ProjectOrgGroupsInput!): String @deprecated(reason: "Use checkBulkImportProjectsAndGroupsToOrganization instead")
+
+  """"""
+  getEnvVariablesByProjectEnvironmentName(input: EnvVariableByProjectEnvironmentNameInput!): [EnvKeyValue]
+
+  """"""
+  checkBulkImportProjectsAndGroupsToOrganization(input: AddProjectToOrganizationInput!): ProjectGroupsToOrganization
 }
 
 """"""
@@ -148,6 +203,12 @@ type User {
 
   """"""
   groups: [GroupInterface]
+
+  """
+  This just returns the group name, id and the role the user has in that group.
+  This is a neat way to visualize a users specific access without having to get all members of a group
+  """
+  groupRoles: [GroupRoleInterface]
 }
 
 """"""
@@ -189,7 +250,13 @@ interface GroupInterface {
   members: [GroupMembership]
 
   """"""
+  memberCount: Int
+
+  """"""
   projects: [Project]
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -227,6 +294,9 @@ type Project {
   """Name of project"""
   name: String
 
+  """ID of organization"""
+  organization: Int
+
   """
   Git URL, needs to be SSH Git URL in one of these two formats
   - git@172.17.0.1/project1.git
@@ -249,6 +319,11 @@ type Project {
       ```
   """
   privateKey: String
+
+  """
+  SSH Public Key for Project, can be added to git repositories to allow Lagoon read access.
+  """
+  publicKey: String
 
   """
   Set if the .lagoon.yml should be found in a subfolder
@@ -419,6 +494,12 @@ type Project {
   DeployTargetConfigs are a way to define which deploy targets are used for a project
   """
   deployTargetConfigs: [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """Build image this project will use if set"""
+  buildImage: String
+
+  """"""
+  sharedBaasBucket: Boolean
 }
 
 """"""
@@ -506,6 +587,9 @@ type NotificationRocketChat {
 
   """"""
   notificationSeverityThreshold: ProblemSeverityRating
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -527,6 +611,9 @@ type NotificationSlack {
 
   """"""
   notificationSeverityThreshold: ProblemSeverityRating
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -545,6 +632,9 @@ type NotificationMicrosoftTeams {
 
   """"""
   notificationSeverityThreshold: ProblemSeverityRating
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -563,6 +653,9 @@ type NotificationEmail {
 
   """"""
   notificationSeverityThreshold: ProblemSeverityRating
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -581,6 +674,9 @@ type NotificationWebhook {
 
   """"""
   notificationSeverityThreshold: ProblemSeverityRating
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -626,6 +722,12 @@ type Openshift {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -674,6 +776,12 @@ type Kubernetes {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -822,7 +930,7 @@ type Environment {
   routes: String
 
   """"""
-  monitoringUrls: String
+  monitoringUrls: String @deprecated(reason: "No longer in use")
 
   """"""
   deployments(name: String, limit: Int): [Deployment]
@@ -964,6 +1072,9 @@ type Deployment {
 
   """"""
   bulkName: String
+
+  """"""
+  buildStep: String
 }
 
 """"""
@@ -1037,6 +1148,9 @@ type Restore {
   """"""
   restoreLocation: String
 
+  """The size of the restored file in bytes"""
+  restoreSize: Int
+
   """"""
   created: String
 }
@@ -1072,6 +1186,15 @@ type Task {
 
   """"""
   command: String
+
+  """"""
+  deployTokenInjection: Boolean
+
+  """"""
+  projectKeyInjection: Boolean
+
+  """"""
+  adminOnlyView: Boolean
 
   """"""
   remoteId: String
@@ -1137,6 +1260,21 @@ type AdvancedTaskDefinitionImage {
   permission: TaskPermission
 
   """"""
+  deployTokenInjection: Boolean
+
+  """"""
+  projectKeyInjection: Boolean
+
+  """"""
+  adminOnlyView: Boolean
+
+  """"""
+  showUi: Boolean @deprecated(reason: "Use adminOnlyView instead")
+
+  """"""
+  adminTask: Boolean @deprecated(reason: "Use deployTokenInjection and projectKeyInjection instead")
+
+  """"""
   advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgument]
 
   """"""
@@ -1182,6 +1320,12 @@ type AdvancedTaskDefinitionArgument {
   type: String
 
   """"""
+  defaultValue: String
+
+  """"""
+  optional: Boolean
+
+  """"""
   range: [String]
 
   """"""
@@ -1222,6 +1366,21 @@ type AdvancedTaskDefinitionCommand {
 
   """"""
   permission: TaskPermission
+
+  """"""
+  deployTokenInjection: Boolean
+
+  """"""
+  projectKeyInjection: Boolean
+
+  """"""
+  adminOnlyView: Boolean
+
+  """"""
+  showUi: Boolean @deprecated(reason: "Use adminOnlyView instead")
+
+  """"""
+  adminTask: Boolean @deprecated(reason: "Use deployTokenInjection and projectKeyInjection instead")
 
   """"""
   advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgument]
@@ -1396,6 +1555,125 @@ type DeployTargetConfig {
 }
 
 """"""
+type GroupRoleInterface {
+  """"""
+  id: String
+
+  """"""
+  name: String
+
+  """"""
+  role: GroupRole
+
+  """"""
+  groupType: String
+
+  """"""
+  organization: Int
+}
+
+"""
+OrgProject is a small selection of fields for organization owners to view
+"""
+type OrgProject {
+  """"""
+  id: Int
+
+  """"""
+  name: String
+
+  """"""
+  organization: Int
+
+  """"""
+  groups: [OrgGroupInterface]
+
+  """"""
+  groupCount: Int
+
+  """"""
+  notifications: [OrganizationNotification]
+}
+
+""""""
+interface OrgGroupInterface {
+  """"""
+  id: String
+
+  """"""
+  name: String
+
+  """"""
+  type: String
+
+  """"""
+  groups: [OrgGroupInterface]
+
+  """"""
+  members: [GroupMembership]
+
+  """"""
+  memberCount: Int
+
+  """"""
+  projects: [OrgProject]
+
+  """"""
+  organization: Int
+}
+
+""""""
+type OrganizationNotification {
+  """"""
+  name: String
+
+  """"""
+  type: NotificationType
+}
+
+"""Must provide id OR name"""
+input KubernetesInput {
+  """"""
+  id: Int
+
+  """"""
+  name: String
+}
+
+""""""
+enum EnvOrderType {
+  """"""
+  NAME
+
+  """"""
+  UPDATED
+}
+
+""""""
+type OrgUser {
+  """"""
+  id: String
+
+  """"""
+  email: String
+
+  """"""
+  firstName: String
+
+  """"""
+  lastName: String
+
+  """"""
+  owner: Boolean
+
+  """"""
+  comment: String
+
+  """"""
+  groupRoles: [GroupRoleInterface]
+}
+
+""""""
 type ProjectFactSearchResults {
   """"""
   count: Int
@@ -1411,6 +1689,18 @@ type EnvironmentFactSearchResults {
 
   """"""
   environments: [Environment]
+}
+
+""""""
+input DeploymentByNameInput {
+  """The environment name"""
+  environment: String
+
+  """The project name"""
+  project: String
+
+  """The deployment name (eg, lagoon-build-abc)"""
+  name: String
 }
 
 """"""
@@ -1435,6 +1725,9 @@ enum DeploymentStatusType {
 
   """"""
   COMPLETE
+
+  """"""
+  QUEUED
 }
 
 """"""
@@ -1453,15 +1746,6 @@ input MetadataKeyValue {
 
   """"""
   value: String
-}
-
-""""""
-enum EnvOrderType {
-  """"""
-  NAME
-
-  """"""
-  UPDATED
 }
 
 """"""
@@ -1495,6 +1779,170 @@ type ProblemHarborScanMatch {
 
   """"""
   regex: String
+}
+
+""""""
+type Organization {
+  """"""
+  id: Int
+
+  """"""
+  name: String
+
+  """"""
+  friendlyName: String
+
+  """"""
+  description: String
+
+  """"""
+  quotaProject: Int
+
+  """"""
+  quotaGroup: Int
+
+  """"""
+  quotaNotification: Int
+
+  """"""
+  quotaEnvironment: Int
+
+  """"""
+  quotaRoute: Int
+
+  """"""
+  deployTargets: [Openshift]
+
+  """"""
+  projects: [OrgProject]
+
+  """"""
+  environments: [OrgEnvironment]
+
+  """"""
+  groups: [OrgGroupInterface]
+
+  """"""
+  owners: [OrgUser]
+
+  """"""
+  notifications(type: NotificationType): [Notification]
+}
+
+"""
+OrgEnvironment is a small selection of fields for organization owners to view
+"""
+type OrgEnvironment {
+  """"""
+  id: Int
+
+  """"""
+  name: String
+
+  """"""
+  project: OrgProject
+
+  """"""
+  deployType: String
+
+  """"""
+  deployHeadRef: String
+
+  """"""
+  deployTitle: String
+
+  """"""
+  autoIdle: Int
+
+  """"""
+  environmentType: String
+
+  """"""
+  openshiftProjectName: String
+
+  """"""
+  kubernetesNamespaceName: String
+
+  """"""
+  updated: String
+
+  """"""
+  created: String
+
+  """"""
+  deleted: String
+
+  """"""
+  route: String
+
+  """"""
+  routes: String
+
+  """"""
+  services: [EnvironmentService]
+
+  """"""
+  openshift: Openshift
+
+  """"""
+  kubernetes: Kubernetes
+}
+
+""""""
+input AddGroupToOrganizationInput {
+  """"""
+  name: String!
+
+  """"""
+  organization: Int!
+
+  """"""
+  parentGroup: GroupInput
+
+  """"""
+  addOrgOwner: Boolean
+}
+
+""""""
+input ProjectOrgGroupsInput {
+  """"""
+  project: Int!
+
+  """"""
+  organization: Int!
+}
+
+""""""
+input EnvVariableByProjectEnvironmentNameInput {
+  """"""
+  environment: String
+
+  """"""
+  project: String!
+}
+
+""""""
+input AddProjectToOrganizationInput {
+  """"""
+  project: Int!
+
+  """"""
+  organization: Int!
+}
+
+""""""
+type ProjectGroupsToOrganization {
+  """"""
+  projects: [Project]
+
+  """"""
+  groups: [GroupInterface]
+
+  """"""
+  otherOrgProjects: [Project]
+
+  """"""
+  otherOrgGroups: [GroupInterface]
 }
 
 """"""
@@ -1643,6 +2091,21 @@ type Mutation {
   """"""
   updateUser(input: UpdateUserInput!): User
 
+  """
+  Add a user to an organization as a viewer or owner of the organization.
+  This allows the user to view or manage the organizations groups, projects, and notifications
+  """
+  addUserToOrganization(input: addUserToOrganizationInput!): Organization
+
+  """
+  Remove a viewer or owner from an organization.
+  This removes the users ability to view or manage the organizations groups, projects, and notifications
+  """
+  removeUserFromOrganization(input: addUserToOrganizationInput!): Organization
+
+  """"""
+  resetUserPassword(input: ResetUserPasswordInput!): String
+
   """"""
   deleteUser(input: DeleteUserInput!): String
 
@@ -1686,7 +2149,10 @@ type Mutation {
   addFact(input: AddFactInput!): Fact
 
   """"""
-  addFacts(input: AddFactsInput!): [Fact]
+  addFacts(input: AddFactsInput!): [Fact] @deprecated(reason: "Use addFactsByName instead")
+
+  """"""
+  addFactsByName(input: AddFactsByNameInput!): [Fact]
 
   """"""
   deleteFact(input: DeleteFactInput!): String
@@ -1716,10 +2182,16 @@ type Mutation {
   updateRestore(input: UpdateRestoreInput!): Restore
 
   """"""
-  addEnvVariable(input: EnvVariableInput!): EnvKeyValue
+  addEnvVariable(input: EnvVariableInput!): EnvKeyValue @deprecated(reason: "Use addOrUpdateEnvVariableByName instead")
 
   """"""
-  deleteEnvVariable(input: DeleteEnvVariableInput!): String
+  deleteEnvVariable(input: DeleteEnvVariableInput!): String @deprecated(reason: "Use deleteEnvVariableByName instead")
+
+  """"""
+  addOrUpdateEnvVariableByName(input: EnvVariableByNameInput!): EnvKeyValue
+
+  """"""
+  deleteEnvVariableByName(input: DeleteEnvVariableByNameInput!): String
 
   """"""
   addTask(input: TaskInput!): Task
@@ -1773,6 +2245,9 @@ type Mutation {
   updateTask(input: UpdateTaskInput): Task
 
   """"""
+  cancelTask(input: CancelTaskInput!): String
+
+  """"""
   setEnvironmentServices(input: SetEnvironmentServicesInput!): [EnvironmentService]
 
   """"""
@@ -1820,6 +2295,12 @@ type Mutation {
   """"""
   removeGroupsFromProject(input: ProjectGroupsInput!): Project
 
+  """
+  This is a way to quickly remove a user from all groups within an organization.
+  Effectively removing all access to any projects that are assigned to those groups.
+  """
+  removeUserFromOrganizationGroups(input: UserOrganizationInput): Organization
+
   """"""
   updateProjectMetadata(input: UpdateMetadataInput!): Project
 
@@ -1840,6 +2321,43 @@ type Mutation {
 
   """"""
   updateEnvironmentDeployTarget(environment: Int!, deployTarget: Int!): Environment
+
+  """Add an organization"""
+  addOrganization(input: AddOrganizationInput!): Organization
+
+  """Update an organization"""
+  updateOrganization(input: UpdateOrganizationInput!): Organization
+
+  """Delete an organization"""
+  deleteOrganization(input: DeleteOrganizationInput!): String
+
+  """Add a group to an organization"""
+  addGroupToOrganization(input: AddGroupToOrganizationInput!): OrgGroupInterface @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """Add an existing group to an organization"""
+  addExistingGroupToOrganization(input: AddGroupToOrganizationInput!): OrgGroupInterface @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """Add an existing project to an organization"""
+  addExistingProjectToOrganization(input: AddProjectToOrganizationInput): Project @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """
+  Remove a project from an organization, this will return the project to a state where it has no groups or notifications associated to it
+  """
+  removeProjectFromOrganization(input: RemoveProjectFromOrganizationInput): Project
+
+  """Add a deploytarget to an organization"""
+  addDeployTargetToOrganization(input: AddDeployTargetToOrganizationInput): Organization
+
+  """Remove a deploytarget from an organization"""
+  removeDeployTargetFromOrganization(input: RemoveDeployTargetFromOrganizationInput): Organization
+
+  """
+  Run the query checkBulkImportProjectsAndGroupsToOrganization first to see the changes that would be made before executing this, as it may contain undesirable changes
+  Add an existing project to an organization, this will include all the groups and all the projects that those groups contain
+  Optionally detach any notifications attached to the projects, they will be need to be recreated within the organization afterwards
+  This mutation performs a lot of actions, on big project and group imports, if it times out, subsequent runs will perform only the changes necessary
+  """
+  bulkImportProjectsAndGroupsToOrganization(input: AddProjectToOrganizationInput, detachNotification: Boolean): ProjectGroupsToOrganization
 }
 
 """"""
@@ -1999,6 +2517,9 @@ input AddNotificationSlackInput {
 
   """"""
   channel: String!
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -2038,6 +2559,9 @@ input AddNotificationRocketChatInput {
 
   """"""
   channel: String!
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -2074,6 +2598,9 @@ input AddNotificationMicrosoftTeamsInput {
 
   """"""
   webhook: String!
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -2110,6 +2637,9 @@ input AddNotificationWebhookInput {
 
   """"""
   webhook: String!
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -2143,6 +2673,9 @@ input AddNotificationEmailInput {
 
   """"""
   emailAddress: String!
+
+  """"""
+  organization: Int
 }
 
 """"""
@@ -2239,6 +2772,12 @@ input AddOpenshiftInput {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -2287,6 +2826,12 @@ input UpdateOpenshiftPatchInput {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -2335,6 +2880,12 @@ input AddKubernetesInput {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -2383,6 +2934,12 @@ input UpdateKubernetesPatchInput {
 
   """"""
   buildImage: String
+
+  """"""
+  sharedBaasBucketName: String
+
+  """"""
+  disabled: Boolean
 }
 
 """"""
@@ -2488,6 +3045,18 @@ input AddProjectInput {
 
   """"""
   deploymentsDisabled: Int
+
+  """"""
+  organization: Int
+
+  """"""
+  addOrgOwner: Boolean
+
+  """"""
+  buildImage: String
+
+  """"""
+  sharedBaasBucket: Boolean
 }
 
 """"""
@@ -2593,6 +3162,12 @@ input UpdateProjectPatchInput {
 
   """"""
   deploymentsDisabled: Int
+
+  """"""
+  buildImage: String
+
+  """"""
+  sharedBaasBucket: Boolean
 }
 
 """"""
@@ -2695,6 +3270,9 @@ input AddUserInput {
 
   """"""
   gitlabId: Int
+
+  """"""
+  resetPassword: Boolean
 }
 
 """"""
@@ -2722,6 +3300,24 @@ input UpdateUserPatchInput {
 
   """"""
   gitlabId: Int
+}
+
+""""""
+input addUserToOrganizationInput {
+  """"""
+  user: UserInput!
+
+  """"""
+  organization: Int!
+
+  """"""
+  owner: Boolean
+}
+
+""""""
+input ResetUserPasswordInput {
+  """"""
+  user: UserInput!
 }
 
 """"""
@@ -2764,6 +3360,9 @@ input AddDeploymentInput {
 
   """"""
   bulkName: String
+
+  """"""
+  buildStep: String
 }
 
 """"""
@@ -2875,6 +3474,9 @@ input UpdateDeploymentPatchInput {
 
   """"""
   bulkName: String
+
+  """"""
+  buildStep: String
 }
 
 """"""
@@ -2986,6 +3588,9 @@ input DeleteProblemInput {
 
   """"""
   identifier: String!
+
+  """"""
+  service: String
 }
 
 """"""
@@ -3012,7 +3617,7 @@ input AddFactInput {
   id: Int
 
   """"""
-  environment: Int!
+  environment: Int
 
   """"""
   name: String!
@@ -3041,6 +3646,18 @@ input AddFactInput {
 
 """"""
 input AddFactsInput {
+  """"""
+  facts: [AddFactInput]!
+}
+
+""""""
+input AddFactsByNameInput {
+  """"""
+  project: String
+
+  """"""
+  environment: String
+
   """"""
   facts: [AddFactInput]!
 }
@@ -3205,6 +3822,36 @@ input DeleteEnvVariableInput {
 }
 
 """"""
+input EnvVariableByNameInput {
+  """"""
+  environment: String
+
+  """"""
+  project: String!
+
+  """"""
+  scope: EnvVariableScope
+
+  """"""
+  name: String!
+
+  """"""
+  value: String!
+}
+
+""""""
+input DeleteEnvVariableByNameInput {
+  """"""
+  environment: String
+
+  """"""
+  project: String!
+
+  """"""
+  name: String!
+}
+
+""""""
 input TaskInput {
   """"""
   id: Int
@@ -3243,15 +3890,6 @@ input TaskInput {
 """"""
 enum TaskStatusType {
   """"""
-  ACTIVE
-
-  """"""
-  SUCCEEDED
-
-  """"""
-  FAILED
-
-  """"""
   NEW
 
   """"""
@@ -3267,7 +3905,19 @@ enum TaskStatusType {
   ERROR
 
   """"""
+  FAILED
+
+  """"""
   COMPLETE
+
+  """"""
+  QUEUED
+
+  """"""
+  ACTIVE
+
+  """"""
+  SUCCEEDED
 }
 
 """"""
@@ -3307,6 +3957,15 @@ input AdvancedTaskDefinitionInput {
 
   """"""
   confirmationText: String
+
+  """"""
+  deployTokenInjection: Boolean
+
+  """"""
+  projectKeyInjection: Boolean
+
+  """"""
+  adminOnlyView: Boolean
 }
 
 """"""
@@ -3319,6 +3978,12 @@ input AdvancedTaskDefinitionArgumentInput {
 
   """"""
   displayName: String
+
+  """"""
+  defaultValue: String
+
+  """"""
+  optional: Boolean
 }
 
 """"""
@@ -3382,6 +4047,15 @@ input UpdateAdvancedTaskDefinitionPatchInput {
 
   """"""
   confirmationText: String
+
+  """"""
+  deployTokenInjection: Boolean
+
+  """"""
+  projectKeyInjection: Boolean
+
+  """"""
+  adminOnlyView: Boolean
 }
 
 """"""
@@ -3484,6 +4158,24 @@ input UpdateTaskPatchInput {
 
   """"""
   remoteId: String
+}
+
+""""""
+input CancelTaskInput {
+  """"""
+  task: CancelTaskNameInput!
+}
+
+""""""
+input CancelTaskNameInput {
+  """"""
+  id: Int
+
+  """"""
+  taskName: String
+
+  """"""
+  environment: EnvironmentInput
 }
 
 """"""
@@ -3673,6 +4365,15 @@ input ProjectGroupsInput {
 }
 
 """"""
+input UserOrganizationInput {
+  """"""
+  user: UserInput!
+
+  """"""
+  organization: Int!
+}
+
+""""""
 input UpdateMetadataInput {
   """"""
   id: Int!
@@ -3751,6 +4452,105 @@ input DeleteDeployTargetConfigInput {
 
   """"""
   execute: Boolean
+}
+
+""""""
+input AddOrganizationInput {
+  """"""
+  id: Int
+
+  """"""
+  name: String!
+
+  """"""
+  friendlyName: String
+
+  """"""
+  description: String
+
+  """"""
+  quotaProject: Int
+
+  """"""
+  quotaGroup: Int
+
+  """"""
+  quotaNotification: Int
+
+  """"""
+  quotaEnvironment: Int
+
+  """"""
+  quotaRoute: Int
+}
+
+""""""
+input UpdateOrganizationInput {
+  """"""
+  id: Int!
+
+  """"""
+  patch: UpdateOrganizationPatchInput!
+}
+
+""""""
+input UpdateOrganizationPatchInput {
+  """"""
+  name: String
+
+  """"""
+  friendlyName: String
+
+  """"""
+  description: String
+
+  """"""
+  quotaProject: Int
+
+  """"""
+  quotaGroup: Int
+
+  """"""
+  quotaNotification: Int
+
+  """"""
+  quotaEnvironment: Int
+
+  """"""
+  quotaRoute: Int
+}
+
+""""""
+input DeleteOrganizationInput {
+  """"""
+  id: Int!
+}
+
+""""""
+input RemoveProjectFromOrganizationInput {
+  """"""
+  project: Int!
+
+  """"""
+  organization: Int!
+}
+
+""""""
+input AddDeployTargetToOrganizationInput {
+  """"""
+  deployTarget: Int!
+
+  """"""
+  organization: Int!
+}
+
+""""""
+input RemoveDeployTargetFromOrganizationInput {
+  """"""
+  deployTarget: Int!
+
+  """"""
+  organization: Int!
 }
 
 """"""
@@ -3894,7 +4694,40 @@ type Group implements GroupInterface {
   members: [GroupMembership]
 
   """"""
+  memberCount: Int
+
+  """"""
   projects: [Project]
+
+  """"""
+  organization: Int
+}
+
+""""""
+type OrgGroup implements OrgGroupInterface {
+  """"""
+  id: String
+
+  """"""
+  name: String
+
+  """"""
+  type: String
+
+  """"""
+  groups: [OrgGroupInterface]
+
+  """"""
+  members: [GroupMembership]
+
+  """"""
+  memberCount: Int
+
+  """"""
+  projects: [OrgProject]
+
+  """"""
+  organization: Int
 }
 
 """"""

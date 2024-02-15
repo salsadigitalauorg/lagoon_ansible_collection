@@ -41,6 +41,8 @@ fragment Image on AdvancedTaskDefinitionImage {
     type
     range
   }
+  deployTokenInjection
+  projectKeyInjection
   image
 }
 
@@ -62,6 +64,8 @@ fragment Command on AdvancedTaskDefinitionCommand {
     type
     range
   }
+  deployTokenInjection
+  projectKeyInjection
   command
 }
 
