@@ -28,6 +28,8 @@ class ActionModule(LagoonActionBase):
         image = self._task.args.get("image")
         command = self._task.args.get("command")
         arguments = self._task.args.get("arguments", [])
+        deploy_token_injection = self._task.args.get("deploy_token_injection", False)
+        project_key_injection = self._task.args.get("project_key_injection", False)
         state = self._task.args.get("state")
 
         project_id = None
@@ -77,7 +79,7 @@ class ActionModule(LagoonActionBase):
             result["result"] = lagoonTaskDefinition.delete(found_def["id"])
         # Update existing if required.
         elif found_def:
-            if self.def_has_changed(
+            changed, deleteAndAdd = self.def_has_changed(
                 found_def,
                 {
                     "type": task_type,
@@ -87,8 +89,28 @@ class ActionModule(LagoonActionBase):
                     "command": command,
                     "image": image,
                     "arguments": arguments,
+                    "deployTokenInjection": deploy_token_injection,
+                    "projectKeyInjection": project_key_injection,
                 }
-            ):
+            )
+            if deleteAndAdd:
+                lagoonTaskDefinition.delete(found_def["id"])
+                result["result"] = lagoonTaskDefinition.add(
+                    task_type,
+                    permission,
+                    project_id if project_id else None,
+                    environment_id if environment_id else None,
+                    name,
+                    description,
+                    service,
+                    image,
+                    command,
+                    arguments,
+                    deploy_token_injection,
+                    project_key_injection
+                )
+                result["changed"] = True
+            elif changed:
                 result["changed"] = True
                 result["result"] = lagoonTaskDefinition.update(
                     found_def["id"],
@@ -101,7 +123,9 @@ class ActionModule(LagoonActionBase):
                     service,
                     image,
                     command,
-                    arguments
+                    arguments,
+                    deploy_token_injection,
+                    project_key_injection
                 )
             else:
                 result["changed"] = False
@@ -118,7 +142,9 @@ class ActionModule(LagoonActionBase):
                 service,
                 image,
                 command,
-                arguments
+                arguments,
+                deploy_token_injection,
+                project_key_injection
             )
 
         return result
@@ -131,29 +157,34 @@ class ActionModule(LagoonActionBase):
             raise AnsibleError(f"Project '{name}' not found")
         return lagoonProject.projects[0]["id"]
 
-    def def_has_changed(self, current: dict, desired: dict) -> bool:
+    def def_has_changed(self, current: dict, desired: dict) -> tuple[bool, bool]:
+        # If the type has changed, we need to delete and add.
+        if current["type"] != desired["type"]:
+            return True, True
+
         compare_fields = [
-            "type",
             "permission",
             "description",
             "service",
             "arguments",
+            "deployTokenInjection",
+            "projectKeyInjection",
         ]
         for field in compare_fields:
             if field == "arguments":
                 if self.args_have_changed(current["advancedTaskDefinitionArguments"], desired["arguments"]):
-                    return True
+                    return True, False
                 continue
             if current[field] != desired[field]:
-                return True
+                return True, False
 
         if current["type"] == "COMMAND" and current["command"] != desired["command"]:
-            return True
+            return True, False
 
         if current["type"] == "IMAGE" and current["image"] != desired["image"]:
-            return True
+            return True, False
 
-        return False
+        return False, False
 
     def args_have_changed(self, current: list, desired: list) -> bool:
         if not len(current) and not len(desired):
