@@ -86,22 +86,21 @@ def determine_required_updates(existing_configs, desired_configs):
         found = False
         uptodate = True
         for existing_config in existing_configs:
-            if existing_config['branches'] != config['branches']:
-                continue
-
-            config['_existing_id'] = existing_config['id']
-            found = True
-
-            if (existing_config['pullrequests'] != config['pullrequests'] or
-                    str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
-                    str(existing_config['weight']) != str(config['weight'])):
+            # Check if branches match as the first condition
+            if existing_config['branches'] == config['branches']:
+                # Mark as found if branches match
+                found = True
                 config['_existing_id'] = existing_config['id']
-                uptodate = False
-                break
-
-            if found:
-                break
-
+                
+                # Check all other conditions to determine if the config is up-to-date
+                if (existing_config['pullrequests'] != config['pullrequests'] or
+                        str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
+                        str(existing_config['weight']) != str(config['weight'])):
+                    # If any condition does not match, mark as not up-to-date
+                    uptodate = False
+                    break  # No need to check other existing configs if a discrepancy is found
+                
+        # If the config is not found or not up-to-date, it requires updates
         if not found or not uptodate:
             updates_required.append(config)
 
