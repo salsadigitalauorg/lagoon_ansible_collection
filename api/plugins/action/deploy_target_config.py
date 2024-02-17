@@ -81,37 +81,33 @@ class ActionModule(LagoonActionBase):
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
-    updates_required = []
-    specified_branch_patterns = [config['branches'] for config in desired_configs]
+    required_updates = []
+    marked_for_deletion = []
 
-    # First, identify existing configs that don't match any desired branch patterns
-    for existing_config in existing_configs:
-        if not any(existing_config['branches'] == pattern for pattern in specified_branch_patterns):
-            # Mark this existing config for deletion by including it in updates_required
-            # with only the '_existing_id' set, indicating it doesn't match the desired state
-            updates_required.append({'_existing_id': existing_config['id'], 'delete': True})
+    # Existing configs mapped by branch for easier comparison
+    existing_by_branch = {ec['branches']: ec for ec in existing_configs}
 
-    # Then, process desired configs to find updates or additions
-    for config in desired_configs:
-        found = False
-        uptodate = True
-        for existing_config in existing_configs:
-            if existing_config['branches'] != config['branches']:
-                continue
+    # Desired branch patterns
+    desired_branch_patterns = [dc['branches'] for dc in desired_configs]
 
-            # Found a matching config by branches
-            config['_existing_id'] = existing_config['id']
-            found = True
+    # Mark existing configs for deletion if their branches don't match any desired config
+    for ec in existing_configs:
+        if ec['branches'] not in desired_branch_patterns:
+            marked_for_deletion.append(ec['id'])
 
-            # Check other attributes to see if an update is needed
-            if (existing_config['pullrequests'] != config['pullrequests'] or
-                str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
-                str(existing_config['weight']) != str(config['weight'])):
-                uptodate = False
-                break
+    # Determine updates or additions for desired configs
+    for dc in desired_configs:
+        if dc['branches'] in existing_by_branch:
+            ec = existing_by_branch[dc['branches']]
+            # Compare other attributes to determine if an update is needed
+            if (ec['pullrequests'] != dc['pullrequests'] or
+                str(ec['deployTarget']['id']) != str(dc['deployTarget']) or
+                str(ec['weight']) != str(dc.get('weight', 0))):
+                # Mark for update, include '_existing_id'
+                dc['_existing_id'] = ec['id']
+                required_updates.append(dc)
+        else:
+            # New config, doesn't exist in existing configs
+            required_updates.append(dc)
 
-        if not found or not uptodate:
-            updates_required.append(config)
-
-    return updates_required
-
+    return required_updates, marked_for_deletion
