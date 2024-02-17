@@ -82,9 +82,16 @@ class ActionModule(LagoonActionBase):
 
 def determine_required_updates(existing_configs, desired_configs):
     updates_required = []
-    # A list of config IDs marked for deletion based on unmatched criteria
-    marked_for_deletion = [config['id'] for config in existing_configs if not any(config['branches'] == desired['branches'] for desired in desired_configs)]
+    specified_branch_patterns = [config['branches'] for config in desired_configs]
 
+    # First, identify existing configs that don't match any desired branch patterns
+    for existing_config in existing_configs:
+        if not any(existing_config['branches'] == pattern for pattern in specified_branch_patterns):
+            # Mark this existing config for deletion by including it in updates_required
+            # with only the '_existing_id' set, indicating it doesn't match the desired state
+            updates_required.append({'_existing_id': existing_config['id'], 'delete': True})
+
+    # Then, process desired configs to find updates or additions
     for config in desired_configs:
         found = False
         uptodate = True
@@ -92,21 +99,19 @@ def determine_required_updates(existing_configs, desired_configs):
             if existing_config['branches'] != config['branches']:
                 continue
 
+            # Found a matching config by branches
             config['_existing_id'] = existing_config['id']
             found = True
 
-            # Mark for update if there are discrepancies other than the branch
+            # Check other attributes to see if an update is needed
             if (existing_config['pullrequests'] != config['pullrequests'] or
                 str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
                 str(existing_config['weight']) != str(config['weight'])):
-                config['_existing_id'] = existing_config['id']
                 uptodate = False
                 break
 
         if not found or not uptodate:
             updates_required.append(config)
 
-    # Remove IDs marked for deletion from updates, as they'll be handled separately
-    updates_filtered = [config for config in updates_required if config.get('_existing_id') not in marked_for_deletion]
+    return updates_required
 
-    return updates_filtered, marked_for_deletion
