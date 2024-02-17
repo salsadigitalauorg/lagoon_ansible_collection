@@ -59,7 +59,7 @@ class ActionModule(LagoonActionBase):
                             config['branches'],
                             int(config['deployTarget']),
                             config['pullrequests'],
-                            int(config['weight']) if 'weight' in config else 0
+                            int(config['weight']) if 'weight' in config.keys() else 0
                         )
                         if addResult:
                             config['id'] = addResult['id']
@@ -103,18 +103,18 @@ def determine_required_updates(existing_configs, desired_configs):
     for desired in desired_configs:
         found = False
         uptodate = True
-        for existing in existing_configs:
-            if existing['branches'] != desired['branches']:
+        for existing_config in existing_configs:
+            if existing_config['branches'] != desired['branches']:
                 continue
 
-            desired['_existing_id'] = existing['id']
+            desired['_existing_id'] = existing_config['id']
             found = True
 
             # Mark for update (or in this context, addition) if there are discrepancies in any key property
-            if (existing['pullrequests'] != desired['pullrequests'] or
-                str(existing['deployTarget']['id']) != str(desired['deployTarget']) or
-                str(existing['weight']) != str(desired['weight']) or
-                existing['branches'] != desired['branches']):
+            if (existing_config['pullrequests'] != desired['pullrequests'] or
+                    str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
+                    str(existing_config['weight']) != str(desired['weight'])):
+                desired['_existing_id'] = existing_config['id']
                 uptodate = False
                 break
 
