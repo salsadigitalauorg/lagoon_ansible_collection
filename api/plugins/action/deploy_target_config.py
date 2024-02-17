@@ -82,6 +82,12 @@ class ActionModule(LagoonActionBase):
 
 def determine_required_updates(existing_configs, desired_configs):
     updates_required = []
+    deletions_required = []
+
+    # Extract specified branch patterns from desired configs
+    specified_branch_patterns = [config['branches'] for config in desired_configs]
+
+    # Determine updates and additions
     for config in desired_configs:
         found = False
         uptodate = True
@@ -105,4 +111,9 @@ def determine_required_updates(existing_configs, desired_configs):
         if not found or not uptodate:
             updates_required.append(config)
 
-    return updates_required
+    # Identify deletions for existing configs not matching any specified branch pattern
+    for existing_config in existing_configs:
+        if existing_config['branches'] not in specified_branch_patterns:
+            deletions_required.append(existing_config['id'])
+
+    return updates_required, deletions_required
