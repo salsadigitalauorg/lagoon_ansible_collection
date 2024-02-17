@@ -32,10 +32,14 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                changes = determine_required_updates(
+                changes, deletions = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
                 )
+                for deletion_id in deletions:
+                    self._display.vvvv(f"Deleting config with ID {deletion_id}")
+                    DeployTargetConfig(self.client).delete(project['id'], deletion_id)
+                
                 result['changed'] = False
                 if len(changes) > 0:
                     for config in changes:
@@ -81,33 +85,32 @@ class ActionModule(LagoonActionBase):
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
-    required_updates = []
-    marked_for_deletion = []
+    updates_required = []
+    # A list of config IDs marked for deletion based on unmatched criteria
+    marked_for_deletion = [config['id'] for config in existing_configs if not any(config['branches'] == desired['branches'] for desired in desired_configs)]
 
-    # Existing configs mapped by branch for easier comparison
-    existing_by_branch = {ec['branches']: ec for ec in existing_configs}
+    for config in desired_configs:
+        found = False
+        uptodate = True
+        for existing_config in existing_configs:
+            if existing_config['branches'] != config['branches']:
+                continue
 
-    # Desired branch patterns
-    desired_branch_patterns = [dc['branches'] for dc in desired_configs]
+            config['_existing_id'] = existing_config['id']
+            found = True
 
-    # Mark existing configs for deletion if their branches don't match any desired config
-    for ec in existing_configs:
-        if ec['branches'] not in desired_branch_patterns:
-            marked_for_deletion.append(ec['id'])
+            # Mark for update if there are discrepancies other than the branch
+            if (existing_config['pullrequests'] != config['pullrequests'] or
+                str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
+                str(existing_config['weight']) != str(config['weight'])):
+                config['_existing_id'] = existing_config['id']
+                uptodate = False
+                break
 
-    # Determine updates or additions for desired configs
-    for dc in desired_configs:
-        if dc['branches'] in existing_by_branch:
-            ec = existing_by_branch[dc['branches']]
-            # Compare other attributes to determine if an update is needed
-            if (ec['pullrequests'] != dc['pullrequests'] or
-                str(ec['deployTarget']['id']) != str(dc['deployTarget']) or
-                str(ec['weight']) != str(dc.get('weight', 0))):
-                # Mark for update, include '_existing_id'
-                dc['_existing_id'] = ec['id']
-                required_updates.append(dc)
-        else:
-            # New config, doesn't exist in existing configs
-            required_updates.append(dc)
+        if not found or not uptodate:
+            updates_required.append(config)
 
-    return required_updates, marked_for_deletion
+    # Remove IDs marked for deletion from updates, as they'll be handled separately
+    updates_filtered = [config for config in updates_required if config.get('_existing_id') not in marked_for_deletion]
+
+    return updates_filtered, marked_for_deletion
