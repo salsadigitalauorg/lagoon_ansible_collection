@@ -32,14 +32,23 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                changes= determine_required_updates(
+                addition_required, deletion_required = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
                 )            
                 result['changed'] = False
-                if len(changes) > 0:
-                    for config in changes:
-                        if replace and config.get('_existing_id'):
+
+                # Handle deletions for deletion_required IDs
+                if replace and len(deletion_required) > 0:
+                    for config_id in deletion_required:
+                        self._display.vvvv(f"deleting config with ID {config_id}")
+                        DeployTargetConfig(self.client).delete(project['id'], config_id)
+                        result['changed'] = True
+
+                # Process additions and updates
+                if len(addition_required) > 0:
+                    for config in addition_required:
+                        if '_existing_id' in config and replace:
                             self._display.vvvv(f"deleting config {config}")
                             DeployTargetConfig(self.client).delete(
                                 project['id'], config['_existing_id'])
@@ -50,7 +59,7 @@ class ActionModule(LagoonActionBase):
                             config['branches'],
                             int(config['deployTarget']),
                             config['pullrequests'],
-                            int(config['weight']) if 'weight' in config.keys() else 0
+                            int(config['weight']) if 'weight' in config else 0
                         )
                         if addResult:
                             config['id'] = addResult['id']
@@ -81,10 +90,8 @@ class ActionModule(LagoonActionBase):
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
-    updates_required = []
-    # A list of config IDs marked for deletion based on unmatched criteria
-    # This list will now be repurposed to also include configs that are outdated and need replacement.
-    marked_for_deletion = [
+    addition_required = []  
+    deletion_required = [
         config['id']
         for config in existing_configs
         if not any(
@@ -103,7 +110,7 @@ def determine_required_updates(existing_configs, desired_configs):
             desired['_existing_id'] = existing['id']
             found = True
 
-            # Mark for update if there are discrepancies in any key property
+            # Mark for update (or in this context, addition) if there are discrepancies in any key property
             if (existing['pullrequests'] != desired['pullrequests'] or
                 str(existing['deployTarget']['id']) != str(desired['deployTarget']) or
                 str(existing['weight']) != str(desired['weight']) or
@@ -112,12 +119,12 @@ def determine_required_updates(existing_configs, desired_configs):
                 break
 
         if not found or not uptodate:
-            updates_required.append(desired)
+            addition_required.append(desired)
 
-    # Filter out updates for configs already marked for deletion
-    updates_filtered = [
-        config for config in updates_required
-        if config.get('_existing_id') not in marked_for_deletion
+    # Filter out additions for configs already marked for deletion
+    additions_filtered = [
+        config for config in addition_required
+        if config.get('_existing_id') not in deletion_required
     ]
 
-    return updates_filtered, marked_for_deletion
+    return additions_filtered, deletion_required
