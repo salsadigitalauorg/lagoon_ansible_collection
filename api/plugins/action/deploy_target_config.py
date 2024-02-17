@@ -32,14 +32,10 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                changes, deletions = determine_required_updates(
+                changes= determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
-                )
-                for deletion_id in deletions:
-                    self._display.vvvv(f"Deleting config with ID {deletion_id}")
-                    DeployTargetConfig(self.client).delete(project['id'], deletion_id)
-                
+                )            
                 result['changed'] = False
                 if len(changes) > 0:
                     for config in changes:
@@ -87,8 +83,14 @@ class ActionModule(LagoonActionBase):
 def determine_required_updates(existing_configs, desired_configs):
     updates_required = []
     # A list of config IDs marked for deletion based on unmatched criteria
-    marked_for_deletion = [config['id'] for config in existing_configs if not any(config['branches'] == desired['branches'] for desired in desired_configs)]
-
+    marked_for_deletion = [
+        config['id']
+        for config in existing_configs
+        if not any(
+            config['branches'] == desired['branches']
+            for desired in desired_configs
+        )
+    ]
     for config in desired_configs:
         found = False
         uptodate = True
@@ -110,7 +112,6 @@ def determine_required_updates(existing_configs, desired_configs):
         if not found or not uptodate:
             updates_required.append(config)
 
-    # Remove IDs marked for deletion from updates, as they'll be handled separately
-    updates_filtered = [config for config in updates_required if config.get('_existing_id') not in marked_for_deletion]
 
-    return updates_filtered, marked_for_deletion
+
+    return updates_required, marked_for_deletion
