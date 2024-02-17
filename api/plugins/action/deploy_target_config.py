@@ -48,7 +48,7 @@ class ActionModule(LagoonActionBase):
                 # Process additions and updates
                 if len(addition_required) > 0:
                     for config in addition_required:
-                        if '_existing_id' in config and replace:
+                        if replace and config.get('_existing_id'):
                             self._display.vvvv(f"deleting config {config}")
                             DeployTargetConfig(self.client).delete(
                                 project['id'], config['_existing_id'])
