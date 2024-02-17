@@ -83,6 +83,7 @@ class ActionModule(LagoonActionBase):
 def determine_required_updates(existing_configs, desired_configs):
     updates_required = []
     # A list of config IDs marked for deletion based on unmatched criteria
+    # This list will now be repurposed to also include configs that are outdated and need replacement.
     marked_for_deletion = [
         config['id']
         for config in existing_configs
@@ -91,27 +92,32 @@ def determine_required_updates(existing_configs, desired_configs):
             for desired in desired_configs
         )
     ]
-    for config in desired_configs:
+
+    for desired in desired_configs:
         found = False
         uptodate = True
-        for existing_config in existing_configs:
-            if existing_config['branches'] != config['branches']:
+        for existing in existing_configs:
+            if existing['branches'] != desired['branches']:
                 continue
 
-            config['_existing_id'] = existing_config['id']
+            desired['_existing_id'] = existing['id']
             found = True
 
-            # Mark for update if there are discrepancies other than the branch
-            if (existing_config['pullrequests'] != config['pullrequests'] or
-                str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
-                str(existing_config['weight']) != str(config['weight'])):
-                config['_existing_id'] = existing_config['id']
+            # Mark for update if there are discrepancies in any key property
+            if (existing['pullrequests'] != desired['pullrequests'] or
+                str(existing['deployTarget']['id']) != str(desired['deployTarget']) or
+                str(existing['weight']) != str(desired['weight']) or
+                existing['branches'] != desired['branches']):
                 uptodate = False
                 break
 
         if not found or not uptodate:
-            updates_required.append(config)
+            updates_required.append(desired)
 
+    # Filter out updates for configs already marked for deletion
+    updates_filtered = [
+        config for config in updates_required
+        if config.get('_existing_id') not in marked_for_deletion
+    ]
 
-
-    return updates_required, marked_for_deletion
+    return updates_filtered, marked_for_deletion
