@@ -35,7 +35,7 @@ class ActionModule(LagoonActionBase):
                 addition_required, deletion_required = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
-                )            
+                )
                 result['changed'] = False
 
                 # Handle deletions for deletion_required IDs
@@ -109,7 +109,6 @@ def determine_required_updates(existing_configs, desired_configs):
 
             desired['_existing_id'] = existing_config['id']
             found = True
-            print("Found a match based on branches. Appended _existing_id:", desired) # checking desired
 
             # Mark for update (or in this context, addition) if there are discrepancies in any key property
             if (existing_config['pullrequests'] != desired['pullrequests'] or
@@ -117,20 +116,15 @@ def determine_required_updates(existing_configs, desired_configs):
                     str(existing_config['weight']) != str(desired['weight'])):
                 desired['_existing_id'] = existing_config['id']
                 uptodate = False
-                print("Discrepancy found. Marked as not up-to-date:", desired)
                 break
 
         if not found or not uptodate:
             addition_required.append(desired)
-            print("Added to addition_required:", desired) # checking desired 
 
     # Filter out additions for configs already marked for deletion
     additions_filtered = [
         config for config in addition_required
         if config.get('_existing_id') not in deletion_required
     ]
-
-    print("Final additions_filtered:", additions_filtered) # checking final addititions filtered
-    print("deletion_required:", deletion_required)  # checking final deletion required
 
     return additions_filtered, deletion_required
