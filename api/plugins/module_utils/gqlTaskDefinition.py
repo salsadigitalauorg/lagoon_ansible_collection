@@ -16,7 +16,9 @@ TASK_DEFINITION_FIELDS_COMMON = [
     'service',
     'confirmationText',
     'groupName',
-    'advancedTaskDefinitionArguments'
+    'advancedTaskDefinitionArguments',
+    'deployTokenInjection',
+    'projectKeyInjection',
 ]
 
 TASK_DEFINITION_FIELDS_COMMAND = [
@@ -109,7 +111,9 @@ class TaskDefinition(ResourceBase):
     def add_update_variables(self, task_type: str, permission: str,
                              project_id: int, environment_id: int, name: str,
                              description: str, service: str, image: str,
-                             command: str, arguments: list):
+                             command: str, arguments: list,
+                             deploy_token_injection: bool,
+                             project_key_injection: bool):
         variables = """
             $type: AdvancedTaskDefinitionTypes
             $permission: TaskPermission
@@ -117,6 +121,8 @@ class TaskDefinition(ResourceBase):
             $description: String
             $service: String
             $arguments: [AdvancedTaskDefinitionArgumentInput]
+            $deployTokenInjection: Boolean
+            $projectKeyInjection: Boolean
         """
         variables_input = """
             type: $type
@@ -125,6 +131,8 @@ class TaskDefinition(ResourceBase):
             description: $description
             service: $service
             advancedTaskDefinitionArguments: $arguments
+            deployTokenInjection: $deployTokenInjection
+            projectKeyInjection: $projectKeyInjection
         """
         variables_dict = {
             "type": task_type,
@@ -133,6 +141,8 @@ class TaskDefinition(ResourceBase):
             "description": description,
             "service": service,
             "arguments": arguments,
+            "deployTokenInjection": deploy_token_injection,
+            "projectKeyInjection": project_key_injection,
         }
 
         if project_id:
@@ -158,11 +168,13 @@ class TaskDefinition(ResourceBase):
 
     def add(self, task_type: str, permission: str, project_id: int,
             environment_id: int, name: str, description: str, service: str,
-            image: str, command: str, arguments: list) -> dict:
+            image: str, command: str, arguments: list,
+            deploy_token_injection: bool, project_key_injection: bool) -> dict:
 
         variables, variables_input, variables_dict = self.add_update_variables(
             task_type, permission, project_id, environment_id, name,
-            description, service, image, command, arguments)
+            description, service, image, command, arguments,
+            deploy_token_injection, project_key_injection)
 
         res = self.client.execute_query(
             f"""
@@ -185,12 +197,14 @@ class TaskDefinition(ResourceBase):
         return res['addAdvancedTaskDefinition']
 
     def update(self, id: int, task_type: str, permission: str, project_id: int,
-               environment_id: int, name: str, description: str, service: str,
-               image: str, command: str, arguments: list) -> dict:
+            environment_id: int, name: str, description: str, service: str,
+            image: str, command: str, arguments: list,
+            deploy_token_injection: bool, project_key_injection: bool) -> dict:
 
         variables, variables_input, variables_dict = self.add_update_variables(
             task_type, permission, project_id, environment_id, name,
-            description, service, image, command, arguments)
+            description, service, image, command, arguments,
+            deploy_token_injection, project_key_injection)
 
         res = self.client.execute_query(
             f"""
