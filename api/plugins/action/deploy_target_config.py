@@ -121,10 +121,4 @@ def determine_required_updates(existing_configs, desired_configs):
         if not found or not uptodate:
             addition_required.append(desired)
 
-    # Filter out additions for configs already marked for deletion
-    additions_filtered = [
-        config for config in addition_required
-        if config.get('_existing_id') not in deletion_required
-    ]
-
-    return additions_filtered, deletion_required
+    return addition_required, deletion_required
