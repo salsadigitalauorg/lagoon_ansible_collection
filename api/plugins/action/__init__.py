@@ -10,6 +10,10 @@ from ansible.errors import AnsibleError
 class LagoonActionBase(ActionBase):
 
     def createClient(self, task_vars):
+        if not task_vars.get('lagoon_api_endpoint'):
+            raise AnsibleError("lagoon_api_endpoint is required")
+        if not task_vars.get('lagoon_api_token'):
+            raise AnsibleError("lagoon_api_token is required")
         self.client = GqlClient(
             self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
             self._templar.template(task_vars.get('lagoon_api_token')).strip(),
