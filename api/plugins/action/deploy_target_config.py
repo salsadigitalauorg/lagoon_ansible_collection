@@ -32,13 +32,22 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                changes = determine_required_updates(
+                addition_required, deletion_required = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
                 )
                 result['changed'] = False
-                if len(changes) > 0:
-                    for config in changes:
+
+                # Handle deletions for deletion_required IDs
+                if replace and len(deletion_required) > 0:
+                    for config_id in deletion_required:
+                        self._display.vvvv(f"deleting config with ID {config_id}")
+                        DeployTargetConfig(self.client).delete(project['id'], config_id)
+                        result['changed'] = True
+
+                # Process additions and updates
+                if len(addition_required) > 0:
+                    for config in addition_required:
                         if replace and config.get('_existing_id'):
                             self._display.vvvv(f"deleting config {config}")
                             DeployTargetConfig(self.client).delete(
@@ -81,28 +90,35 @@ class ActionModule(LagoonActionBase):
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
-    updates_required = []
-    for config in desired_configs:
+    addition_required = []  
+    deletion_required = [
+        config['id']
+        for config in existing_configs
+        if not any(
+            config['branches'] == desired['branches']
+            for desired in desired_configs
+        )
+    ]
+
+    for desired in desired_configs:
         found = False
         uptodate = True
         for existing_config in existing_configs:
-            if existing_config['branches'] != config['branches']:
+            if existing_config['branches'] != desired['branches']:
                 continue
 
-            config['_existing_id'] = existing_config['id']
+            desired['_existing_id'] = existing_config['id']
             found = True
 
-            if (existing_config['pullrequests'] != config['pullrequests'] or
-                    str(existing_config['deployTarget']['id']) != str(config['deployTarget']) or
-                    str(existing_config['weight']) != str(config['weight'])):
-                config['_existing_id'] = existing_config['id']
+            # Mark for update (or in this context, addition) if there are discrepancies in any key property
+            if (existing_config['pullrequests'] != desired['pullrequests'] or
+                    str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
+                    str(existing_config['weight']) != str(desired['weight'])):
+                desired['_existing_id'] = existing_config['id']
                 uptodate = False
                 break
 
-            if found:
-                break
-
         if not found or not uptodate:
-            updates_required.append(config)
+            addition_required.append(desired)
 
-    return updates_required
+    return addition_required, deletion_required
