@@ -11,7 +11,6 @@ class ActionModule(LagoonActionBase):
             task_vars = dict()
 
         result = super(ActionModule, self).run(tmp, task_vars)
-        del tmp  # tmp no longer has any effect
 
         self._display.v("Task args: %s" % self._task.args)
         print(f"Debug: Task arguments - {self._task.args}")  # Debug print
@@ -35,24 +34,23 @@ class ActionModule(LagoonActionBase):
                 'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
             }
 
-        # Fetch current metadata using the optimized byName method
+        # Fetch current metadata
         current_metadata = {}
         if project_name:
             print(f"Debug: Fetching metadata for project {project_name}")  # Debug print
-            project_instance = Project(self.client).byName(project_name, ['metadata'])
-            print(f"Debug: Project instance - {project_instance}")  # Debug print
-            if project_instance:
-                # Assuming get_metadata() is the correct method to fetch metadata, replace it with the actual method if different
-                project_metadata = project_instance.get_metadata() if hasattr(project_instance, 'get_metadata') else {}
-                print(f"Debug: Current metadata - {project_metadata}")  # Debug print
-                current_metadata = project_metadata if isinstance(project_metadata, dict) else {}
+            project_info = Project(self.client).byName(project_name, ['metadata'])
+            print(f"Debug: Project info - {project_info}")  # Debug print
+            if project_info:
+                # Extract the metadata from the GraphQL query result
+                graphql_metadata = project_info['projectByName']['metadata'] if 'projectByName' in project_info and 'metadata' in project_info['projectByName'] else {}
+                current_metadata = graphql_metadata
+                print(f"Debug: Current metadata - {current_metadata}")  # Debug print
             else:
-                print("Debug: Project instance is None")  # Debug print
+                print("Debug: Failed to fetch project info or project not found.")  # Debug print
                 return {
                     'failed': True,
                     'message': f'Project {project_name} not found or could not retrieve metadata.'
                 }
-
 
         def is_change_required(key, value):
             # Check if the current metadata value is different from the intended update
@@ -63,8 +61,8 @@ class ActionModule(LagoonActionBase):
         lagoonMetadata = Metadata(self.client)
 
         if state == 'present':
-            for item in (data if isinstance(data, list) else data.items()):
-                key, value = (item['key'], item['value']) if isinstance(item, dict) else item
+            for item in (data if isinstance(data, list) else [data.items()]):
+                key, value = item if isinstance(data, dict) else (item['key'], item['value'])
                 print(f"Debug: Processing {key} with value {value}")  # Debug print
                 if is_change_required(key, value):
                     update_result = lagoonMetadata.update(project_id, key, value)
@@ -88,5 +86,5 @@ class ActionModule(LagoonActionBase):
         if len(result['invalid']) > 0:
             result['failed'] = True
 
-        print(f"Debug: Final result - {result}")
+        print(f"Debug: Final result - {result}")  
         return result
