@@ -1,5 +1,6 @@
 from . import LagoonActionBase
 from ..module_utils.gqlMetadata import Metadata
+from ..module_utils.gqlProject import Project
 import json
 
 class ActionModule(LagoonActionBase):
@@ -33,7 +34,7 @@ class ActionModule(LagoonActionBase):
             }
 
         lagoonMetadata = Metadata(self.client)
-        current_metadata = lagoonMetadata.getProjectByName(project_name) if project_name else {}
+        current_metadata = Project(self.client).byName(project_name, ['metadata']) if project_name else {}
 
         def is_change_required(key, value):
             # Check if the current metadata value is different from the intended update

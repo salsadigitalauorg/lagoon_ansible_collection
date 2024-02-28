@@ -124,25 +124,3 @@ class Metadata(ResourceBase):
             # List & dict cannot be decoded either and will throw a different error.
             except TypeError:
                 continue
-
-
-
-    def getProjectByName(self, project_name: str) -> dict:
-        """
-        Fetch project metadata by project name.
-        """
-        query = """
-        query GetProjectByName($name: String!) {
-            projectByName(name: $name) {
-                metadata
-            }
-        }
-        """
-        variables = {"name": project_name}
-        result = self.client.execute_query(query, variables)
-        project_data = result.get('projectByName', {})
-        metadata = project_data.get('metadata', {})
-        if not isinstance(metadata, dict):
-            metadata = json.loads(metadata)
-        self.unpack(metadata)
-        return metadata
