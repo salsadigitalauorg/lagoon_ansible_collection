@@ -11,80 +11,78 @@ class ActionModule(LagoonActionBase):
             task_vars = dict()
 
         result = super(ActionModule, self).run(tmp, task_vars)
+        del tmp  # tmp no longer has any effect
 
-        self._display.v("Task args: %s" % self._task.args)
-        print(f"Debug: Task arguments - {self._task.args}")  # Debug print
+        print("Task args: %s" % self._task.args)
 
-        self.createClient(task_vars)
+        try:
+            self.createClient(task_vars)
+        except Exception as e:
+            print(f"Error creating client: {e}")
+            return {'failed': True, 'message': f"Error creating client: {e}"}
 
         state = self._task.args.get('state', 'present')
         data = self._task.args.get('data', None)
         project_id = int(self._task.args.get('project_id', None))
         project_name = self._task.args.get('project_name', None)  
 
-        print(f"Debug: State - {state}, Project ID - {project_id}, Project Name - {project_name}")  # Debug print
-        print(f"Debug: Data - {data}")  # Debug print
+        print(f"State: {state}, Project ID: {project_id}, Project Name: {project_name}")
+        print(f"Data: {data}")
 
         result = {'result': [], 'invalid': [], 'changed': False}
 
         if not isinstance(data, list) and not isinstance(data, dict):
-            print("Debug: Data is neither a list nor a dict")  # Debug print
             return {
                 'failed': True,
                 'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
             }
 
-        # Fetch current metadata
-        current_metadata = {}
-        if project_name:
-            print(f"Debug: Fetching metadata for project {project_name}")  # Debug print
-            project_info = Project(self.client).byName(project_name, ['metadata'])
-            print(f"Debug: Project info - {project_info}")  # Debug print
-            if project_info:
-                # Extract the metadata from the GraphQL query result
-                graphql_metadata = project_info['projectByName']['metadata'] if 'projectByName' in project_info and 'metadata' in project_info['projectByName'] else {}
-                current_metadata = graphql_metadata
-                print(f"Debug: Current metadata - {current_metadata}")  # Debug print
-            else:
-                print("Debug: Failed to fetch project info or project not found.")  # Debug print
-                return {
-                    'failed': True,
-                    'message': f'Project {project_name} not found or could not retrieve metadata.'
-                }
+        try:
+            current_metadata = Project(self.client).byName(project_name, ['metadata']) if project_name else {}
+            if not current_metadata:
+                raise ValueError(f"No metadata found for project {project_name}")
+        except Exception as e:
+            print(f"Error fetching metadata for project {project_name}: {e}")
+            return {'failed': True, 'message': f"Error fetching metadata for project {project_name}: {e}"}
 
         def is_change_required(key, value):
             # Check if the current metadata value is different from the intended update
-            required = current_metadata.get(key) != value
-            print(f"Debug: Is change required for {key}? - {required}")  # Debug print
-            return required
+            return current_metadata.get(key) != value
 
         lagoonMetadata = Metadata(self.client)
-
+        
         if state == 'present':
-            for item in (data if isinstance(data, list) else [data.items()]):
-                key, value = item if isinstance(data, dict) else (item['key'], item['value'])
-                print(f"Debug: Processing {key} with value {value}")  # Debug print
+            for item in (data if isinstance(data, list) else data.items()):
+                key, value = (item['key'], item['value']) if isinstance(item, dict) else item
                 if is_change_required(key, value):
-                    update_result = lagoonMetadata.update(project_id, key, value)
-                    print(f"Debug: Update result for {key} - {update_result}")  # Debug print
-                    result['result'].append(update_result)
-                    result['changed'] = True
+                    try:
+                        update_result = lagoonMetadata.update(project_id, key, value)
+                        print(f"Update result for {key}: {update_result}")
+                        result['result'].append(update_result)
+                        result['changed'] = True
+                    except Exception as e:
+                        print(f"Error updating metadata for {key}: {e}")
+                        result['invalid'].append(key)
                 else:
-                    print(f"Debug: No change required for {key}")
+                    print(f"No change required for {key}")
 
         elif state == 'absent':
             for key in (data if isinstance(data, list) else data.keys()):
-                print(f"Debug: Checking for absence of {key}")  # Debug print
                 if key in current_metadata:
-                    remove_result = lagoonMetadata.remove(project_id, key)
-                    print(f"Debug: Remove result for {key} - {remove_result}")  # Debug print
-                    result['result'].append(remove_result)
-                    result['changed'] = True
+                    try:
+                        remove_result = lagoonMetadata.remove(project_id, key)
+                        print(f"Remove result for {key}: {remove_result}")
+                        result['result'].append(remove_result)
+                        result['changed'] = True
+                    except Exception as e:
+                        print(f"Error removing metadata for {key}: {e}")
+                        result['invalid'].append(key)
                 else:
-                    print(f"Debug: No need to remove {key}, not present")
+                    print(f"No need to remove {key}, not present")
 
         if len(result['invalid']) > 0:
             result['failed'] = True
+            result['message'] = f"Errors occurred with keys: {result['invalid']}"
 
-        print(f"Debug: Final result - {result}")  
+        print(f"Final result: {result}")
         return result
