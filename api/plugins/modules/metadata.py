@@ -32,4 +32,5 @@ EXAMPLES = r'''
     data:
       solr-version: 6
     project_id: 7
+    project_name: project-pheonix
 '''
