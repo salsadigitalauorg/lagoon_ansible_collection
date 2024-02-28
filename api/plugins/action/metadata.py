@@ -34,7 +34,9 @@ class ActionModule(LagoonActionBase):
         try:
             if project_name:
                 project_instance = Project(self.client).byName(project_name, ['metadata'])
+                print(f"rmk-debug: project_instance details: {project_instance}")
                 current_metadata = project_instance.projects[0]['metadata'] if project_instance.projects else {}
+                print(f"rmk-debug: current_metadata: {current_metadata}")
                 print(f"rmk-debug: Fetched current metadata for project '{project_name}'.")
             else:
                 current_metadata = {}  # Assuming no project name means no current metadata
