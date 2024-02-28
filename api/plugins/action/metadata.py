@@ -86,11 +86,8 @@ class ActionModule(LagoonActionBase):
 
         elif state == 'absent':
             print("rmk-debug: Processing state 'absent'.")
-            keys_to_remove = [k if isinstance(data, list) else k for k in (data if isinstance(data, list) else data.keys())]
+            keys_to_remove = [item['key'] for item in data]
             for key in keys_to_remove:
-                if isinstance(key, dict):  # Handle unexpected dictionary
-                    print(f"rmk-debug: Skipping unexpected dict in keys_to_remove: {key}")
-                    continue  # Skip or handle dictionaries differently
                 if key in current_metadata:
                     try:
                         remove_result = lagoonMetadata.remove(project_id, key)
@@ -100,6 +97,7 @@ class ActionModule(LagoonActionBase):
                     except Exception as e:
                         result['invalid'].append(key)
                         print(f"rmk-debug: Exception caught while removing '{key}': {e}")
+
 
         if result['invalid']:
             result['failed'] = True
