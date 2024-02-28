@@ -33,11 +33,20 @@ class ActionModule(LagoonActionBase):
                 'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
             }
 
-        # Fetch current metadata 
+        # Fetch current metadata using the optimized byName method
         current_metadata = {}
         if project_name:
-            project_info = Project(self.client).byName(project_name, ['metadata'])
-            current_metadata = project_info['metadata'] if 'metadata' in project_info else {}
+            project_instance = Project(self.client).byName(project_name, ['metadata'])
+            if project_instance:
+                project_metadata = project_instance.get_metadata() if hasattr(project_instance, 'get_metadata') else {}
+                current_metadata = project_metadata if isinstance(project_metadata, dict) else {}
+            else:
+                # Handle the case where the project is not found or an error occurred
+                return {
+                    'failed': True,
+                    'message': f'Project {project_name} not found or could not retrieve metadata.'
+                }
+
 
         def is_change_required(key, value):
             # Check if the current metadata value is different from the intended update
