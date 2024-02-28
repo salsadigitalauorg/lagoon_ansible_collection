@@ -33,12 +33,17 @@ class ActionModule(LagoonActionBase):
                 'message': 'Invalid data type (%s) expected List or Dict' % (str(type(data)))
             }
 
-        lagoonMetadata = Metadata(self.client)
-        current_metadata = Project(self.client).byName(project_name, ['metadata']) if project_name else {}
+        # Fetch current metadata 
+        current_metadata = {}
+        if project_name:
+            project_info = Project(self.client).byName(project_name, ['metadata'])
+            current_metadata = project_info['metadata'] if 'metadata' in project_info else {}
 
         def is_change_required(key, value):
             # Check if the current metadata value is different from the intended update
             return current_metadata.get(key) != value
+
+        lagoonMetadata = Metadata(self.client)
 
         if state == 'present':
             for item in (data if isinstance(data, list) else data.items()):
