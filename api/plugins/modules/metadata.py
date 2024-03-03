@@ -7,6 +7,11 @@ short_description: Manage a project's metadata
 description:
     - Manages a project's metadata.
 options:
+  project_name:
+    description:
+      - The project's name.
+    required: true
+    type: string
   project_id:
     description:
       - The project's ID.
@@ -21,16 +26,46 @@ options:
   data:
     description:
       - The metadata values.
-    type: dict
+    type: dict & list of dicts
     default: None
 '''
 
 EXAMPLES = r'''
-- name: Add project metadata
+- name: Add project metadata (dict)
   lagoon.api.metadata:
     state: present
     data:
       solr-version: 6
+    project_id: 7
+    project_name: project-pheonix
+    
+- name: Add project metadata (list of dicts)
+  lagoon.api.metadata:
+    state: present
+    data:
+      - key: movie
+        value: star-wars
+      - key: music
+        value: rock
+    project_id: 7
+    project_name: project-pheonix
+
+- name: Remove project metadata (dict)
+  lagoon.api.metadata:
+    state: absent
+    data:
+      solr-version: 6
+    project_id: 7
+    project_name: project-pheonix
+
+- name: Add project metadata (list of dicts)
+  lagoon.api.metadata:
+    state: absent
+    data:
+      - key: movie
+        value: star-wars
+      - key: music
+        value: rock
     project_id: 7
     project_name: project-pheonix
 '''
