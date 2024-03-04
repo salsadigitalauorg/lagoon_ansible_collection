@@ -124,4 +124,3 @@ class Metadata(ResourceBase):
             # List & dict cannot be decoded either and will throw a different error.
             except TypeError:
                 continue
-
