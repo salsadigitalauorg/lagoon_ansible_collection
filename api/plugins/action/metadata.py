@@ -87,6 +87,7 @@ class ActionModule(LagoonActionBase):
         elif state == 'absent':
             print("rmk-debug: Processing state 'absent'.")
             keys_to_remove = [k if isinstance(data, list) else k for k in (data if isinstance(data, list) else data.keys())]
+            print("rmk-debug: Keys to remove -- ", keys_to_remove)
             for key in keys_to_remove:
                 if isinstance(key, dict):  # Handle unexpected dictionary
                     print(f"rmk-debug: Skipping unexpected dict in keys_to_remove: {key}")
