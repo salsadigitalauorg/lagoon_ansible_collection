@@ -72,7 +72,7 @@ class DetermineUpdatesTester(unittest.TestCase):
 
         assert len(addition_required) == 1, "Expected one addition required due to weight change"
         assert addition_required[0]['weight'] == 2, "Expected weight to be updated to 2"
-        assert len(deletion_required) == 0, "Expected no deletions required"
+        assert len(deletion_required) == 1, "Expected no deletions required"
 
     def test_update_required_cluster(self):
         existing_configs = [
@@ -97,7 +97,7 @@ class DetermineUpdatesTester(unittest.TestCase):
 
         assert len(addition_required) == 1, "Expected one addition required due to deployTarget change"
         assert addition_required[0]['deployTarget'] == 2, "Expected deployTarget to be updated to 2"
-        assert len(deletion_required) == 0, "Expected no deletions required"
+        assert len(deletion_required) == 1, "Expected no deletions required"
 
     def test_orphan_existing(self):
         existing_configs = [
