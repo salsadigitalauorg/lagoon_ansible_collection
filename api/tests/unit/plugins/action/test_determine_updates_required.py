@@ -15,6 +15,7 @@ class DetermineUpdatesTester(unittest.TestCase):
                 'branches': '^(main)$',
                 'deployTarget': 1,
                 'pullrequests': 'false',
+                'weight': 1
             }
         ]
         
