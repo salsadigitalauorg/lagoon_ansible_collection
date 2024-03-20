@@ -138,5 +138,8 @@ def determine_required_updates(existing_configs, desired_configs):
                 for desired in desired_configs):
                 deletion_required.append(config['id'])
                 print(f"Marked configuration for deletion as it's not present in desired configs: {config}.")
+    
+    print(f"Configurations to be added: {len(addition_required)}")
+    print(f"Configurations to be deleted: {len(deletion_required)}")
 
     return addition_required, deletion_required
