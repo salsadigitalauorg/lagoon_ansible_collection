@@ -32,7 +32,7 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                addition_required, deletion_required = determine_required_updates(
+                addition_required, deletion_required = self.determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
                 )
@@ -89,36 +89,42 @@ class ActionModule(LagoonActionBase):
 
         return result
 
-def determine_required_updates(existing_configs, desired_configs):
-    addition_required = []  
-    deletion_required = [
-        config['id']
-        for config in existing_configs
-        if not any(
-            config['branches'] == desired['branches']
-            for desired in desired_configs
-        )
-    ]
+    def determine_required_updates(self, existing_configs, desired_configs):
+            addition_required = []
+            deletion_required = []
 
-    for desired in desired_configs:
-        found = False
-        uptodate = True
-        for existing_config in existing_configs:
-            if existing_config['branches'] != desired['branches']:
-                continue
+            grouped_configs = {}
+            for config in existing_configs:
+                key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
+                if key not in grouped_configs:
+                    grouped_configs[key] = []
+                grouped_configs[key].append(config)
+            self._display.vvv("Grouped existing configurations by branches, pullrequests, deployTarget ID, and weight.")
 
-            desired['_existing_id'] = existing_config['id']
-            found = True
 
-            # Mark for update (or in this context, addition) if there are discrepancies in any key property
-            if (existing_config['pullrequests'] != desired['pullrequests'] or
-                    str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
-                    str(existing_config['weight']) != str(desired['weight'])):
-                desired['_existing_id'] = existing_config['id']
-                uptodate = False
-                break
+            for desired in desired_configs:
+                key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
+                if key not in grouped_configs:
+                    addition_required.append(desired)
+                    self._display.vvv(f"Marked new configuration for addition: {desired}.")
+                else:
+                    existing_config = grouped_configs[key][0]
+                    if (existing_config['pullrequests'] != desired['pullrequests'] or
+                        str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
+                        str(existing_config['weight']) != str(desired['weight'])):
+                        desired['_existing_id'] = existing_config['id']
+                        addition_required.append(desired)
+                        self._display.vvv(f"Marked configuration for update/addition: {desired}.")
 
-        if not found or not uptodate:
-            addition_required.append(desired)
+            for configs in grouped_configs.values():
+                for config in configs:
+                    if not any(
+                        config['branches'] == desired['branches'] and
+                        str(config['deployTarget']['id']) == str(desired['deployTarget']) and
+                        config['pullrequests'] == desired['pullrequests'] and
+                        str(config['weight']) == str(desired['weight'])
+                        for desired in desired_configs):
+                        deletion_required.append(config['id'])
+                        self._display.vvv(f"Marked configuration for deletion as it's not present in desired configs: {config}.")
 
-    return addition_required, deletion_required
+            return addition_required, deletion_required
