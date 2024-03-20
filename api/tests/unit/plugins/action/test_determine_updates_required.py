@@ -151,7 +151,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             },
             {
                 'branches': '^(main)$',
-                'deployTarget': {'id': 1, 'name': 'cluster.io'},
+                'deployTarget': {'id': 3, 'name': 'cluster.io'},
                 'id': 1,
                 'pullrequests': 'false',
                 'weight': 1
@@ -181,5 +181,5 @@ class DetermineUpdatesTester(unittest.TestCase):
 
         addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
 
-        assert len(addition_required) == 0, "Expected two additions required due to changes"
+        assert len(addition_required) == 0, "Expected no additions changes"
         assert len(deletion_required) == 1, "Expected one deletion of duplicate deploytarget config"
