@@ -107,14 +107,7 @@ class ActionModule(LagoonActionBase):
                 if key not in grouped_configs:
                     addition_required.append(desired)
                     self._display.vvv(f"Marked new configuration for addition: {desired}.")
-                else:
-                    existing_config = grouped_configs[key][0]
-                    if (existing_config['pullrequests'] != desired['pullrequests'] or
-                        str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
-                        str(existing_config['weight']) != str(desired['weight'])):
-                        desired['_existing_id'] = existing_config['id']
-                        addition_required.append(desired)
-                        self._display.vvv(f"Marked configuration for update/addition: {desired}.")
+
 
             for configs in grouped_configs.values():
                 for config in configs:
