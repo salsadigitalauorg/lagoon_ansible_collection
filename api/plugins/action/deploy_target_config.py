@@ -32,7 +32,7 @@ class ActionModule(LagoonActionBase):
 
         for project in lagoonProject.projects:
             if state == "present":
-                addition_required, deletion_required = self.determine_required_updates(
+                addition_required, deletion_required = determine_required_updates(
                     project["deployTargetConfigs"],
                     configs,
                 )
@@ -89,35 +89,32 @@ class ActionModule(LagoonActionBase):
 
         return result
 
-    def determine_required_updates(self, existing_configs, desired_configs):
-            addition_required = []
-            deletion_required = []
+def determine_required_updates(existing_configs, desired_configs):
+        addition_required = []
+        deletion_required = []
+        grouped_configs = {}
 
-            grouped_configs = {}
-            for config in existing_configs:
-                key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
-                if key not in grouped_configs:
-                    grouped_configs[key] = []
-                grouped_configs[key].append(config)
-            self._display.vvv("Grouped existing configurations by branches, pullrequests, deployTarget ID, and weight.")
+        for config in existing_configs:
+            key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
+            if key not in grouped_configs:
+                grouped_configs[key] = []
+            grouped_configs[key].append(config)
+        
 
+        for desired in desired_configs:
+            key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
+            if key not in grouped_configs:
+                addition_required.append(desired)
+                
 
-            for desired in desired_configs:
-                key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
-                if key not in grouped_configs:
-                    addition_required.append(desired)
-                    self._display.vvv(f"Marked new configuration for addition: {desired}.")
-
-
-            for configs in grouped_configs.values():
-                for config in configs:
-                    if not any(
-                        config['branches'] == desired['branches'] and
-                        str(config['deployTarget']['id']) == str(desired['deployTarget']) and
-                        config['pullrequests'] == desired['pullrequests'] and
-                        str(config['weight']) == str(desired['weight'])
-                        for desired in desired_configs):
-                        deletion_required.append(config['id'])
-                        self._display.vvv(f"Marked configuration for deletion as it's not present in desired configs: {config}.")
-
-            return addition_required, deletion_required
+        for configs in grouped_configs.values():
+            for config in configs:
+                if not any(
+                    config['branches'] == desired['branches'] and
+                    str(config['deployTarget']['id']) == str(desired['deployTarget']) and
+                    config['pullrequests'] == desired['pullrequests'] and
+                    str(config['weight']) == str(desired['weight'])
+                    for desired in desired_configs):
+                    deletion_required.append(config['id'])
+                    
+        return addition_required, deletion_required
