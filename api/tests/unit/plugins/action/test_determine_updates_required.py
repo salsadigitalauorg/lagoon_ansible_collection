@@ -1,18 +1,12 @@
 import unittest
 import sys
-from unittest.mock import MagicMock
-
 
 sys.modules['ansible.utils.display'] = unittest.mock.Mock()
 sys.modules['typing_extensions'] = unittest.mock.Mock()
 
-from .....plugins.action.deploy_target_config import ActionModule
+from .....plugins.action.deploy_target_config import determine_required_updates
 
 class DetermineUpdatesTester(unittest.TestCase):
-
-    def setUp(self):
-        self.action_module = ActionModule()
-        self.action_module.client = MagicMock()
 
     def test_update_required(self):
         existing_configs = []
@@ -24,7 +18,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             }
         ]
         
-        addition_required, deletion_required = self.action_module.determine_required_updates(existing_configs, desired_configs)
+        addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
         
         assert len(addition_required) == 1, "Expected one addition required"
         assert addition_required[0]['branches'] == '^(main)$', "Expected branches to match ^(main)$"
@@ -50,7 +44,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             }
         ]
 
-        addition_required, deletion_required = self.action_module.determine_required_updates(existing_configs, desired_configs)
+        addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
 
         assert len(addition_required) == 0, "Expected no additions required"
         assert len(deletion_required) == 0, "Expected no deletions required"
@@ -74,7 +68,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             }
         ]
 
-        addition_required, deletion_required = self.action_module.determine_required_updates(existing_configs, desired_configs)
+        addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
 
         assert len(addition_required) == 1, "Expected one addition required due to weight change"
         assert addition_required[0]['weight'] == 2, "Expected weight to be updated to 2"
@@ -99,7 +93,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             }
         ]
 
-        addition_required, deletion_required = self.action_module.determine_required_updates(existing_configs, desired_configs)
+        addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
 
         assert len(addition_required) == 1, "Expected one addition required due to deployTarget change"
         assert addition_required[0]['deployTarget'] == 2, "Expected deployTarget to be updated to 2"
@@ -137,7 +131,7 @@ class DetermineUpdatesTester(unittest.TestCase):
             }
         ] 
 
-        addition_required, deletion_required = self.action_module.determine_required_updates(existing_configs, desired_configs)
+        addition_required, deletion_required = determine_required_updates(existing_configs, desired_configs)
 
         assert len(addition_required) == 2, "Expected two additions required due to changes"
         assert addition_required[0]['deployTarget'] == 1, "Expected the first addition to have deployTarget 1"
