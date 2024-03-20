@@ -102,15 +102,15 @@ def determine_required_updates(existing_configs, desired_configs):
         grouped_configs[key].append(config)
     print("Grouped existing configurations by branches, pullrequests, deployTarget ID, and weight.")
 
-    # Step 2: Identify duplicates and mark older ones for deletion
-    for key, configs in grouped_configs.items():
-        if len(configs) > 1:
-            sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
-            newest_config = sorted_configs[0]
-            for config in sorted_configs[1:]:
-                deletion_required.append(config['id'])
-            print(f"Marked older duplicate configurations for deletion based on key {key}, keeping newest configuration with ID {newest_config['id']}.")
-            grouped_configs[key] = [newest_config]
+    ## Step 2: Identify duplicates and mark older ones for deletion
+    #for key, configs in grouped_configs.items():
+    #    if len(configs) > 1:
+    #        sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
+    #        newest_config = sorted_configs[0]
+    #        for config in sorted_configs[1:]:
+    #            deletion_required.append(config['id'])
+    #        print(f"Marked older duplicate configurations for deletion based on key {key}, keeping newest configuration with ID {newest_config['id']}.")
+    #        grouped_configs[key] = [newest_config]
 
     # Adjusted logic for handling additions and deletions
     for desired in desired_configs:
@@ -118,14 +118,14 @@ def determine_required_updates(existing_configs, desired_configs):
         if key not in grouped_configs:
             addition_required.append(desired)
             print(f"Marked new configuration for addition: {desired}.")
-        else:
-            existing_config = grouped_configs[key][0]
-            if (existing_config['pullrequests'] != desired['pullrequests'] or
-                str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
-                str(existing_config['weight']) != str(desired['weight'])):
-                desired['_existing_id'] = existing_config['id']
-                addition_required.append(desired)
-                print(f"Marked configuration for update/addition: {desired}.")
+    #    else:
+    #        existing_config = grouped_configs[key][0]
+    #        if (existing_config['pullrequests'] != desired['pullrequests'] or
+    #            str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
+    #            str(existing_config['weight']) != str(desired['weight'])):
+    #            desired['_existing_id'] = existing_config['id']
+    #            addition_required.append(desired)
+    #            print(f"Marked configuration for update/addition: {desired}.")
 
     # Check for configurations that are not present in desired configs
     for configs in grouped_configs.values():
