@@ -95,19 +95,25 @@ def determine_required_updates(existing_configs, desired_configs):
 
     grouped_configs = {}
     for config in existing_configs:
-        # Creating a unique key based on config properties
         key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
         if key not in grouped_configs:
             grouped_configs[key] = []
         grouped_configs[key].append(config)
-        # Print grouped existing configurations for debugging
-        print(f"Grouped existing config: {key} -> {grouped_configs[key]}")
+    print("Grouped existing configurations by branches, pullrequests, deployTarget ID, and weight.")
 
+    # Step 2: Identify duplicates and mark older ones for deletion
+    for key, configs in grouped_configs.items():
+        if len(configs) > 1:
+            sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
+            newest_config = sorted_configs[0]
+            for config in sorted_configs[1:]:
+                deletion_required.append(config['id'])
+            print(f"Marked older duplicate configurations for deletion based on key {key}, keeping newest configuration with ID {newest_config['id']}.")
+            grouped_configs[key] = [newest_config]
+
+    # Adjusted logic for handling additions and deletions
     for desired in desired_configs:
-        # Creating a key for desired configuration to check against grouped existing configurations
         key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
-        # Print to show what we are trying to find in existing configurations
-        print(f"Checking if desired config exists: {key}")
         if key not in grouped_configs:
             addition_required.append(desired)
             print(f"Marked new configuration for addition: {desired}.")
@@ -123,7 +129,15 @@ def determine_required_updates(existing_configs, desired_configs):
                 str(config['weight']) == str(desired['weight'])
                 for desired in desired_configs):
                 deletion_required.append(config['id'])
-                # Print configurations marked for deletion
-                print(f"Marked for deletion: {config['id']}")
+                print(f"Marked configuration for deletion as it's not present in desired configs: {config}.")
+
+
+    print("Addition Required:")
+    for addition in addition_required:
+        print(addition)
+    
+    print("\nDeletion Required:")
+    for deletion in deletion_required:
+        print(deletion)
 
     return addition_required, deletion_required
