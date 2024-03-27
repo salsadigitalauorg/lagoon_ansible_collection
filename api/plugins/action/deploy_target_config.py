@@ -100,13 +100,23 @@ def determine_required_updates(existing_configs, desired_configs):
             grouped_configs[key] = []
         grouped_configs[key].append(config)
 
+    #Identify duplicates and mark older ones for deletion
+    for key, configs in grouped_configs.items():
+        if len(configs) > 1:
+            sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
+            newest_config = sorted_configs[0]
+            for config in sorted_configs[1:]:
+                deletion_required.append(config['id'])
+            grouped_configs[key] = [newest_config]
 
+    # Adjusted logic for handling additions 
     for desired in desired_configs:
         key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
         if key not in grouped_configs:
             addition_required.append(desired)
-            print(f"Marked new configuration for addition: {desired}.")
+            
 
+    # checking existing configurations for deletions
     for configs in grouped_configs.values():
         for config in configs:
             if not any(
@@ -116,5 +126,6 @@ def determine_required_updates(existing_configs, desired_configs):
                 str(config['weight']) == str(desired['weight'])
                 for desired in desired_configs):
                 deletion_required.append(config['id'])
+                
 
     return addition_required, deletion_required
