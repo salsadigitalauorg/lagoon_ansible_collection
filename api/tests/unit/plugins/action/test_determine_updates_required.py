@@ -151,8 +151,8 @@ class DetermineUpdatesTester(unittest.TestCase):
             },
             {
                 'branches': '^(main)$',
-                'deployTarget': {'id': 3, 'name': 'cluster.io'},
-                'id': 1,
+                'deployTarget': {'id': 1, 'name': 'cluster.io'},
+                'id': 3,
                 'pullrequests': 'false',
                 'weight': 1
             },
