@@ -99,27 +99,24 @@ def determine_required_updates(existing_configs, desired_configs):
         if key not in grouped_configs:
             grouped_configs[key] = []
         grouped_configs[key].append(config)
-    print("Grouped existing configurations by branches, pullrequests, deployTarget ID, and weight.")
 
-    # Step 2: Identify duplicates and mark older ones for deletion
+    #Identify duplicates and mark older ones for deletion
     for key, configs in grouped_configs.items():
         if len(configs) > 1:
             sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
             newest_config = sorted_configs[0]
             for config in sorted_configs[1:]:
                 deletion_required.append(config['id'])
-            print(f"Marked older duplicate configurations for deletion based on key {key}, keeping newest configuration with ID {newest_config['id']}.")
             grouped_configs[key] = [newest_config]
 
-    # Adjusted logic for handling additions and deletions
+    # Adjusted logic for handling additions 
     for desired in desired_configs:
         key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
         if key not in grouped_configs:
             addition_required.append(desired)
-            print(f"Marked new configuration for addition: {desired}.")
+            
 
-    # Printing existing configurations before checking for deletions
-    print(f"Existing configurations before deletion check: {grouped_configs}")
+    # checking existing configurations for deletions
     for configs in grouped_configs.values():
         for config in configs:
             if not any(
@@ -129,15 +126,6 @@ def determine_required_updates(existing_configs, desired_configs):
                 str(config['weight']) == str(desired['weight'])
                 for desired in desired_configs):
                 deletion_required.append(config['id'])
-                print(f"Marked configuration for deletion as it's not present in desired configs: {config}.")
-
-
-    print("Addition Required:")
-    for addition in addition_required:
-        print(addition)
-    
-    print("\nDeletion Required:")
-    for deletion in deletion_required:
-        print(deletion)
+                
 
     return addition_required, deletion_required
