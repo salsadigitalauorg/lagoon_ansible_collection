@@ -95,18 +95,25 @@ def determine_required_updates(existing_configs, desired_configs):
 
     grouped_configs = {}
     for config in existing_configs:
+        # Creating a unique key based on config properties
         key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
         if key not in grouped_configs:
             grouped_configs[key] = []
         grouped_configs[key].append(config)
-
+        # Print grouped existing configurations for debugging
+        print(f"Grouped existing config: {key} -> {grouped_configs[key]}")
 
     for desired in desired_configs:
+        # Creating a key for desired configuration to check against grouped existing configurations
         key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
+        # Print to show what we are trying to find in existing configurations
+        print(f"Checking if desired config exists: {key}")
         if key not in grouped_configs:
             addition_required.append(desired)
             print(f"Marked new configuration for addition: {desired}.")
 
+    # Printing existing configurations before checking for deletions
+    print(f"Existing configurations before deletion check: {grouped_configs}")
     for configs in grouped_configs.values():
         for config in configs:
             if not any(
@@ -116,5 +123,7 @@ def determine_required_updates(existing_configs, desired_configs):
                 str(config['weight']) == str(desired['weight'])
                 for desired in desired_configs):
                 deletion_required.append(config['id'])
+                # Print configurations marked for deletion
+                print(f"Marked for deletion: {config['id']}")
 
     return addition_required, deletion_required
