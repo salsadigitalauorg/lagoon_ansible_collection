@@ -93,39 +93,34 @@ def determine_required_updates(existing_configs, desired_configs):
     addition_required = []
     deletion_required = []
 
-    grouped_configs = {}
+    seen = {}
     for config in existing_configs:
-        key = (config['branches'], config['pullrequests'], str(config['deployTarget']['id']), str(config['weight']))
-        if key not in grouped_configs:
-            grouped_configs[key] = []
-        grouped_configs[key].append(config)
+        key = config['branches']
+        weight = config.get('weight', 0)  
 
-    #Identify duplicates and mark older ones for deletion
-    for key, configs in grouped_configs.items():
-        if len(configs) > 1:
-            sorted_configs = sorted(configs, key=lambda x: x['id'], reverse=True)
-            newest_config = sorted_configs[0]
-            for config in sorted_configs[1:]:
+    
+        if key in seen:
+            if seen[key]['weight'] <= weight:
+                deletion_required.append(seen[key]['id'])
+                seen[key] = {'id': config['id'], 'weight': weight}
+            else:
                 deletion_required.append(config['id'])
-            grouped_configs[key] = [newest_config]
+        else:
+            seen[key] = {'id': config['id'], 'weight': weight}
 
-    # Adjusted logic for handling additions 
+
     for desired in desired_configs:
-        key = (desired['branches'], desired['pullrequests'], str(desired['deployTarget']), str(desired['weight']))
-        if key not in grouped_configs:
+        key = desired['branches']
+        if key not in seen:
             addition_required.append(desired)
-            
+        else:
+            existing = seen[key]
+            if (desired['pullrequests'] != existing.get('pullrequests') or
+                    str(desired['deployTarget']) != str(existing.get('deployTarget')) or
+                    int(desired.get('weight', 0)) != existing.get('weight')):
+                desired['_existing_id'] = existing['id']  
+                addition_required.append(desired)
 
-    # checking existing configurations for deletions
-    for configs in grouped_configs.values():
-        for config in configs:
-            if not any(
-                config['branches'] == desired['branches'] and
-                str(config['deployTarget']['id']) == str(desired['deployTarget']) and
-                config['pullrequests'] == desired['pullrequests'] and
-                str(config['weight']) == str(desired['weight'])
-                for desired in desired_configs):
-                deletion_required.append(config['id'])
-                
+    
 
     return addition_required, deletion_required
