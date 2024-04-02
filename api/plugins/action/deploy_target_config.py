@@ -90,37 +90,47 @@ class ActionModule(LagoonActionBase):
         return result
 
 def determine_required_updates(existing_configs, desired_configs):
+    print("Initial existing configs:", existing_configs)  # Debug line
+    print("Initial desired configs:", desired_configs)  # Debug line
     addition_required = []
-    deletion_required = []
-
-    seen = {}
-    for config in existing_configs:
-        key = config['branches']
-        weight = config.get('weight', 0)  
-
-    
-        if key in seen:
-            if seen[key]['weight'] <= weight:
-                deletion_required.append(seen[key]['id'])
-                seen[key] = {'id': config['id'], 'weight': weight}
-            else:
-                deletion_required.append(config['id'])
-        else:
-            seen[key] = {'id': config['id'], 'weight': weight}
-
+    deletion_required = [
+        config['id']
+        for config in existing_configs
+        if not any(
+            config['branches'] == desired['branches']
+            for desired in desired_configs
+        )
+    ]
+    print("Deletion required:", deletion_required)  # Debug line
 
     for desired in desired_configs:
-        key = desired['branches']
-        if key not in seen:
-            addition_required.append(desired)
-        else:
-            existing = seen[key]
-            if (desired['pullrequests'] != existing.get('pullrequests') or
-                    str(desired['deployTarget']) != str(existing.get('deployTarget')) or
-                    int(desired.get('weight', 0)) != existing.get('weight')):
-                desired['_existing_id'] = existing['id']  
-                addition_required.append(desired)
+        found = False
+        uptodate = True
+        for existing_config in existing_configs:
+            if existing_config['branches'] != desired['branches']:
+                continue
 
-    
+            print(f"Matching branches found for config ID {existing_config['id']}")  # Debug line
+            desired['_existing_id'] = existing_config['id']
+            found = True
+
+            # Check for discrepancies in any key property
+            if (existing_config['pullrequests'] != desired['pullrequests'] or
+                    str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
+                    str(existing_config['weight']) != str(desired['weight'])):
+                print(f"Config ID {existing_config['id']} requires update.")  # Debug line
+                uptodate = False
+                break
+
+        if not found:
+            print(f"Config for branches {desired['branches']} not found.")  # Debug line
+        if not uptodate:
+            print(f"Config for branches {desired['branches']} not up to date.")  # Debug line
+
+        if not found or not uptodate:
+            addition_required.append(desired)
+
+    print("Addition required:", addition_required)  # Debug line
 
     return addition_required, deletion_required
+
