@@ -1,0 +1,12 @@
+FROM node:lts
+
+COPY .docker/graphql-mock/ /app/
+COPY api/tests/common/schema.graphql /app/schema.graphql
+
+WORKDIR /app
+
+RUN npm install
+
+EXPOSE 4000
+
+CMD ["npm", "start"]

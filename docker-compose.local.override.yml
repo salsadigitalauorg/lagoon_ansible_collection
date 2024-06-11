@@ -1,5 +1,3 @@
-version: '3'
-
 x-environment:
   &default-environment
   lagoon_api_token: ${lagoon_api_token:-}
