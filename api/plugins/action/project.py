@@ -55,6 +55,7 @@ def add_project(
     name,
     gitUrl,
     productionEnvironment,
+    organization,
     subfolder=None,
     branches=None,
     pullrequests=None,
@@ -97,6 +98,7 @@ def add_project(
             $branches: String
             $pullrequests: String
             $openshift: Int!
+            $organization: Int!
             $productionEnvironment: String!
             $standbyProductionEnvironment: String
             $autoIdle: Int
@@ -111,6 +113,7 @@ def add_project(
                 branches: $branches
                 pullrequests: $pullrequests
                 openshift: $openshift
+                organization: $organization
                 productionEnvironment: $productionEnvironment
                 standbyProductionEnvironment: $standbyProductionEnvironment
                 autoIdle: $autoIdle
@@ -128,6 +131,7 @@ def add_project(
             "branches": branches,
             "pullrequests": pullrequests,
             "openshift": int(openshift),
+            "organization": int(organization),  
             "productionEnvironment": productionEnvironment,
             "standbyProductionEnvironment": standbyProductionEnvironment,
             "autoIdle": int(autoIdle),
@@ -164,6 +168,7 @@ class ActionModule(LagoonActionBase):
         branches = self._task.args.get("branches")
         pullrequests = self._task.args.get("pullrequests")
         openshift = self._task.args.get("openshift")
+        organization = self._task.args.get("organization")
         productionEnvironment = self._task.args.get("production_environment")
         standbyProductionEnvironment = self._task.args.get("standby_production_environment")
         autoIdle = self._task.args.get("auto_idle", True)
@@ -187,6 +192,7 @@ class ActionModule(LagoonActionBase):
                 name,
                 gitUrl,
                 productionEnvironment,
+                organization,
                 subfolder,
                 branches,
                 pullrequests,
