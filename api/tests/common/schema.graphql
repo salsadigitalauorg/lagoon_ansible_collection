@@ -125,7 +125,7 @@ type Query {
   lagoonVersion: JSON
 
   """Returns all ProblemHarborScanMatchers"""
-  allProblemHarborScanMatchers: [ProblemHarborScanMatch]
+  allProblemHarborScanMatchers: [ProblemHarborScanMatch] @deprecated(reason: "Harbor-Trivy integration with core removed in Lagoon 2")
 
   """Returns all AdvancedTaskDefinitions"""
   allAdvancedTaskDefinitions: [AdvancedTaskDefinition]
@@ -339,35 +339,20 @@ type Project {
   """Notifications that should be sent for this project"""
   notifications(type: NotificationType, contentType: NotificationContentType, notificationSeverityThreshold: ProblemSeverityRating): [Notification]
 
-  """
-  Which internal Lagoon System is responsible for deploying
-  Currently only 'lagoon_controllerBuildDeploy' exists
-  """
-  activeSystemsDeploy: String
+  """"""
+  activeSystemsDeploy: String @deprecated(reason: "No longer in use")
 
-  """
-  Which internal Lagoon System is responsible for promoting
-  Currently only 'lagoon_controllerBuildDeploy' exists
-  """
-  activeSystemsPromote: String
+  """"""
+  activeSystemsPromote: String @deprecated(reason: "No longer in use")
 
-  """
-  Which internal Lagoon System is responsible for promoting
-  Currently only 'lagoon_controllerRemove' exists
-  """
-  activeSystemsRemove: String
+  """"""
+  activeSystemsRemove: String @deprecated(reason: "No longer in use")
 
-  """
-  Which internal Lagoon System is responsible for tasks
-  Currently only 'lagoon_controllerJob' exists
-  """
-  activeSystemsTask: String
+  """"""
+  activeSystemsTask: String @deprecated(reason: "No longer in use")
 
-  """
-  Which internal Lagoon System is responsible for miscellaneous tasks
-  Currently only 'lagoon_controllerMisc' exists
-  """
-  activeSystemsMisc: String
+  """"""
+  activeSystemsMisc: String @deprecated(reason: "No longer in use")
 
   """
   Which branches should be deployed, can be one of:
@@ -996,7 +981,10 @@ type EnvironmentStorage {
   persistentStorageClaim: String
 
   """"""
-  bytesUsed: Float
+  bytesUsed: Float @deprecated(reason: "The value of this is kibibytes, use kibUsed instead. This will be removed in a future release.")
+
+  """"""
+  kibUsed: Float
 
   """"""
   updated: String
@@ -1008,7 +996,10 @@ type EnvironmentStorageMonth {
   month: String
 
   """"""
-  bytesUsed: Float
+  bytesUsed: Float @deprecated(reason: "The value of this is kibibytes, use kibUsed instead. This will be removed in a future release.")
+
+  """"""
+  kibUsed: Float
 }
 
 """"""
@@ -1075,6 +1066,24 @@ type Deployment {
 
   """"""
   buildStep: String
+
+  """
+  The username or email address that triggered this deployment.
+  For webhook requests, the username or email address will attempt to be extracted from the webhook payload depending on the source of the webhook
+  """
+  sourceUser: String
+
+  """The source of this task from the available deplyoment trigger types"""
+  sourceType: DeploymentSourceType
+}
+
+""""""
+enum DeploymentSourceType {
+  """"""
+  API
+
+  """"""
+  WEBHOOK
 }
 
 """"""
@@ -1149,7 +1158,7 @@ type Restore {
   restoreLocation: String
 
   """The size of the restored file in bytes"""
-  restoreSize: Int
+  restoreSize: Float
 
   """"""
   created: String
@@ -1204,6 +1213,12 @@ type Task {
 
   """"""
   files: [File]
+
+  """The username or email address that triggered the task."""
+  sourceUser: String
+
+  """The source of this task from the available task trigger types"""
+  sourceType: TaskSourceType
 }
 
 """"""
@@ -1219,6 +1234,12 @@ type File {
 
   """"""
   created: String
+}
+
+""""""
+enum TaskSourceType {
+  """"""
+  API
 }
 
 """"""
@@ -1255,6 +1276,9 @@ type AdvancedTaskDefinitionImage {
 
   """"""
   project: Int
+
+  """"""
+  systemWide: Boolean
 
   """"""
   permission: TaskPermission
@@ -1365,6 +1389,9 @@ type AdvancedTaskDefinitionCommand {
   project: Int
 
   """"""
+  systemWide: Boolean
+
+  """"""
   permission: TaskPermission
 
   """"""
@@ -1397,6 +1424,24 @@ type EnvironmentService {
   """"""
   id: Int
 
+  """"""
+  name: String
+
+  """"""
+  type: String
+
+  """"""
+  containers: [ServiceContainer]
+
+  """"""
+  created: String
+
+  """"""
+  updated: String
+}
+
+""""""
+type ServiceContainer {
   """"""
   name: String
 }
@@ -1827,6 +1872,9 @@ type Organization {
 
   """"""
   notifications(type: NotificationType): [Notification]
+
+  """"""
+  created: String
 }
 
 """
@@ -1960,7 +2008,10 @@ type Mutation {
   deleteAllEnvironments: String
 
   """Add or update Storage Information for Environment"""
-  addOrUpdateEnvironmentStorage(input: AddOrUpdateEnvironmentStorageInput!): EnvironmentStorage
+  addOrUpdateEnvironmentStorage(input: AddOrUpdateEnvironmentStorageInput!): EnvironmentStorage @deprecated(reason: "Use addOrUpdateStorageOnEnvironment instead")
+
+  """"""
+  addOrUpdateStorageOnEnvironment(input: AddOrUpdateStorageOnEnvironmentInput!): EnvironmentStorage
 
   """"""
   addNotificationSlack(input: AddNotificationSlackInput!): NotificationSlack
@@ -2134,7 +2185,7 @@ type Mutation {
   addProblem(input: AddProblemInput!): Problem
 
   """"""
-  addProblemHarborScanMatch(input: AddProblemHarborScanMatchInput!): ProblemHarborScanMatch
+  addProblemHarborScanMatch(input: AddProblemHarborScanMatchInput!): ProblemHarborScanMatch @deprecated(reason: "Harbor-Trivy integration with core removed in Lagoon 2")
 
   """"""
   deleteProblem(input: DeleteProblemInput!): String
@@ -2143,7 +2194,7 @@ type Mutation {
   deleteProblemsFromSource(input: DeleteProblemsFromSourceInput!): String
 
   """"""
-  deleteProblemHarborScanMatch(input: DeleteProblemHarborScanMatchInput!): String
+  deleteProblemHarborScanMatch(input: DeleteProblemHarborScanMatchInput!): String @deprecated(reason: "Harbor-Trivy integration with core removed in Lagoon 2")
 
   """"""
   addFact(input: AddFactInput!): Fact
@@ -2218,25 +2269,25 @@ type Mutation {
   deleteWorkflow(input: DeleteWorkflowInput!): String
 
   """"""
-  taskDrushArchiveDump(environment: Int!): Task
+  taskDrushArchiveDump(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushSqlDump(environment: Int!): Task
+  taskDrushSqlDump(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushCacheClear(environment: Int!): Task
+  taskDrushCacheClear(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushCron(environment: Int!): Task
+  taskDrushCron(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushSqlSync(sourceEnvironment: Int!, destinationEnvironment: Int!): Task
+  taskDrushSqlSync(sourceEnvironment: Int!, destinationEnvironment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushRsyncFiles(sourceEnvironment: Int!, destinationEnvironment: Int!): Task
+  taskDrushRsyncFiles(sourceEnvironment: Int!, destinationEnvironment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
-  taskDrushUserLogin(environment: Int!): Task
+  taskDrushUserLogin(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
 
   """"""
   deleteTask(input: DeleteTaskInput!): String
@@ -2248,7 +2299,7 @@ type Mutation {
   cancelTask(input: CancelTaskInput!): String
 
   """"""
-  setEnvironmentServices(input: SetEnvironmentServicesInput!): [EnvironmentService]
+  setEnvironmentServices(input: SetEnvironmentServicesInput!): [EnvironmentService] @deprecated(reason: "Use addOrUpdateEnvironmentService or deleteEnvironmentService")
 
   """"""
   uploadFilesForTask(input: UploadFilesForTaskInput!): Task
@@ -2358,6 +2409,12 @@ type Mutation {
   This mutation performs a lot of actions, on big project and group imports, if it times out, subsequent runs will perform only the changes necessary
   """
   bulkImportProjectsAndGroupsToOrganization(input: AddProjectToOrganizationInput, detachNotification: Boolean): ProjectGroupsToOrganization
+
+  """"""
+  addOrUpdateEnvironmentService(input: AddEnvironmentServiceInput!): EnvironmentService
+
+  """"""
+  deleteEnvironmentService(input: DeleteEnvironmentServiceInput!): String
 }
 
 """"""
@@ -2502,6 +2559,21 @@ input AddOrUpdateEnvironmentStorageInput {
 
   """"""
   bytesUsed: Int!
+
+  """Date in format 'YYYY-MM-DD'"""
+  updated: String
+}
+
+""""""
+input AddOrUpdateStorageOnEnvironmentInput {
+  """"""
+  environment: Int!
+
+  """"""
+  persistentStorageClaim: String!
+
+  """kibUsed is a float to allow for greater than 32-bit integer inputs"""
+  kibUsed: Float!
 
   """Date in format 'YYYY-MM-DD'"""
   updated: String
@@ -3363,6 +3435,12 @@ input AddDeploymentInput {
 
   """"""
   buildStep: String
+
+  """"""
+  sourceUser: String
+
+  """"""
+  sourceType: DeploymentSourceType
 }
 
 """"""
@@ -3678,6 +3756,9 @@ input DeleteFactsFromSourceInput {
 
   """"""
   source: String!
+
+  """"""
+  service: String
 }
 
 """"""
@@ -3885,6 +3966,12 @@ input TaskInput {
 
   """"""
   execute: Boolean
+
+  """"""
+  sourceUser: String
+
+  """"""
+  sourceType: TaskSourceType
 }
 
 """"""
@@ -3966,6 +4053,9 @@ input AdvancedTaskDefinitionInput {
 
   """"""
   adminOnlyView: Boolean
+
+  """"""
+  systemWide: Boolean
 }
 
 """"""
@@ -4551,6 +4641,39 @@ input RemoveDeployTargetFromOrganizationInput {
 
   """"""
   organization: Int!
+}
+
+""""""
+input AddEnvironmentServiceInput {
+  """"""
+  id: Int
+
+  """"""
+  environment: Int!
+
+  """"""
+  name: String!
+
+  """"""
+  type: String!
+
+  """"""
+  containers: [ServiceContainerInput]
+}
+
+""""""
+input ServiceContainerInput {
+  """"""
+  name: String!
+}
+
+""""""
+input DeleteEnvironmentServiceInput {
+  """"""
+  name: String!
+
+  """"""
+  environment: Int!
 }
 
 """"""
