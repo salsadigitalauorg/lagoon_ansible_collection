@@ -28,6 +28,8 @@ def get_facts(client: GqlClient, environment_id):
         return res["environmentById"]["facts"]
     except KeyError:
         return dict()
+    except:
+        raise
 
 
 def delete_fact(client: GqlClient, environment_id, name):
