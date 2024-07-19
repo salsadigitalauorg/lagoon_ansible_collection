@@ -1,5 +1,6 @@
 import subprocess
 
+import json
 from typing import List, Union
 
 def write_ssh_key(key_content: str, key_path: str):
@@ -25,7 +26,7 @@ def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path
 
     if key_path:
         ssh_command.extend(['-i', key_path])
-    ssh_command.extend([f"lagoon@{ssh_host}", 'token'])
+    ssh_command.extend([f"lagoon@{ssh_host}", 'grant'])
 
     try:
         ssh_res = subprocess.run(ssh_command, capture_output=True, check=True)
@@ -33,4 +34,6 @@ def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path
         print(e.stderr)
         print(e.stdout)
         raise
-    return ssh_res.returncode, ssh_res.stdout.strip(), ssh_res.stderr
+
+    grant_token = json.loads(ssh_res.stdout.strip())
+    return ssh_res.returncode, grant_token, ssh_res.stderr
