@@ -73,7 +73,13 @@ class GqlClient(Display):
             self.vvvv(f"GraphQL TransportQueryError: {e}")
             return {'error': e}
 
-    def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
+    def build_dynamic_query(self,
+                            query: str,
+                            mainType: str,
+                            args: Optional[Dict[str, Any]] = {},
+                            fields: List[str] = [],
+                            subFieldsMap: Optional[Dict[str, List[str]]] = {},
+                            ) -> DSLField:
         """
         Dynamically build a query against the Lagoon API.
 
@@ -131,6 +137,62 @@ class GqlClient(Display):
             queryObj.select(subFieldSelector)
 
         return queryObj
+
+    def build_dynamic_mutation(self,
+                               mutation: str,
+                               inputArgs: Optional[Dict[str, Any]] = {},
+                               selectType: str = '',
+                               subfields: List[str] = [],
+                               ) -> DSLField:
+        """
+        Dynamically build a mutation against the Lagoon API.
+
+        The mutation is built from the mutation name
+        (e.g, deployEnvironmentBranch) and a dict of input arguments
+        (e.g, {project: {name: "test"}, branchName: "master"} ).
+
+        Taking the following graphql mutation as an example:
+        {
+            addFact(
+                input: {
+                    environment: 243307,
+                    name: "test_module",
+                    value: "2.0.0",
+                    source: "ansible_playbook:test-mutation",
+                    description: "The test_module module version",
+                    category: "Drupal Module Version"
+                }
+            ) { id }
+        }
+        mutation = "addFact"
+        inputArgs = {
+            environment: 243307,
+            name: "test_module",
+            value: "2.0.0",
+            source: "ansible_playbook:test-mutation",
+            description: "The test_module module version",
+            category: "Drupal Module Version"
+        }
+        selectType = "Fact" (since addFact returns Fact)
+        subfields = ["id"]
+        """
+
+        if not len(inputArgs):
+            raise AnsibleValidationError("Input arguments are required for mutations.")
+
+        if selectType and not len(subfields):
+            raise AnsibleValidationError("Subfields are required if selectType is set.")
+
+        # Build the main query with top-level fields if any.
+        mutationObj: DSLField = getattr(self.ds.Mutation, mutation)
+        mutationObj.args(input=inputArgs)
+
+        if selectType:
+            selectTypeObj: DSLType = getattr(self.ds, selectType)
+            for f in subfields:
+                mutationObj.select(getattr(selectTypeObj, f))
+
+        return mutationObj
 
     def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.
