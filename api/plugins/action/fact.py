@@ -25,11 +25,11 @@ def get_facts(client: GqlClient, environment_id):
     )
 
     try:
+        if "error" in res:
+            return res
         return res["environmentById"]["facts"]
     except KeyError:
         return dict()
-    except:
-        raise
 
 
 def delete_fact(client: GqlClient, environment_id, name):
@@ -136,6 +136,9 @@ class ActionModule(LagoonActionBase):
         found_fact = False
 
         facts = get_facts(self.client, environment_id)
+        if "error" in facts:
+            raise facts["error"]
+
         for fact in facts:
             if fact["name"] == name:
                 found_fact = fact

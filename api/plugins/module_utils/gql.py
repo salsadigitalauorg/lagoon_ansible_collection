@@ -70,7 +70,8 @@ class GqlClient(Display):
             self.vvvv(f"GraphQL query result: {res}")
             return res
         except TransportQueryError as e:
-            return e
+            self.vvvv(f"GraphQL TransportQueryError: {e}")
+            return {'error': e}
 
     def build_dynamic_query(self, query: str, mainType: str, args: Optional[Dict[str, Any]] = {}, fields: List[str] = [], subFieldsMap: Optional[Dict[str, List[str]]] = {}) -> DSLField:
         """
