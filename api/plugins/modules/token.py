@@ -4,6 +4,12 @@
 DOCUMENTATION = r'''
 module: token
 short_description: Fetches a Lagoon token using ssh
+options:
+  grant:
+    description:
+      - Return the full grant token object, with expiry & refresh token.
+    type: bool
+    default: false
 '''
 
 EXAMPLES = r'''

@@ -1,3 +1,4 @@
+import time
 from ..module_utils import token as LagoonToken
 from ansible.plugins.action import ActionBase
 
@@ -15,6 +16,8 @@ class ActionModule(ActionBase):
         lagoon_ssh_private_key = task_vars.get('lagoon_ssh_private_key')
         lagoon_ssh_private_key_file = task_vars.get('lagoon_ssh_private_key_file')
 
+        grant = self._task.args.get("grant", False)
+
         if lagoon_ssh_private_key:
             self._display.vvvv("writing private key to file")
             if not lagoon_ssh_private_key_file:
@@ -26,9 +29,8 @@ class ActionModule(ActionBase):
                 result['error'] = e
                 return result
 
-        self._display.vvvv(
-            f"lagoon_ssh_private_key_file: {lagoon_ssh_private_key_file}")
-        rc, result['token'], result['error'] = LagoonToken.fetch_token(
+        self._display.vvvv(f"lagoon_ssh_private_key_file: {lagoon_ssh_private_key_file}")
+        rc, grant_token, result['error'] = LagoonToken.fetch_token(
             self._templar.template(task_vars.get('lagoon_ssh_host')),
             self._templar.template(task_vars.get('lagoon_ssh_port')),
             self._task.args.get('ssh_options', ""),
@@ -36,5 +38,10 @@ class ActionModule(ActionBase):
         )
         if rc > 0:
             result['failed'] = True
+        elif grant:
+            grant_token['expiry_time'] = time.time() + grant_token['expires_in']
+            result['token'] = grant_token
+        else:
+            result['token'] = grant_token['access_token']
 
         return result
