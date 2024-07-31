@@ -477,7 +477,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         if rc > 0:
             raise AnsibleError("Failed to fetch Lagoon API token: %s (error code: %s) " % (error, rc))
 
-        return token.decode("utf-8").strip()
+        return token['access_token'].strip()
 
 def intWhenStr(val: Union[str,any]) -> Union[int,any]:
     if isinstance(val, str):
