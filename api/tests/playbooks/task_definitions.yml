@@ -1,0 +1,26 @@
+- name: Manipulate task definitions
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  roles:
+    - lagoon.api.common
+  tasks:
+    - name: Create a token.
+      ansible.builtin.include_role:
+        name: lagoon.api.token
+
+    - name: Delete task definition
+      lagoon.api.task_definition:
+        advancedTaskDefinition: 50
+        state: absent
+
+    - name: Ensure task definitions exist
+      lagoon.api.task_definition:
+        name: "a test task"
+        project: "{{ project_id }}"
+        task_type: COMMAND
+        permission: MAINTAINER
+        description: Run my test task
+        service: cli
+        command: ls -l
