@@ -1,5 +1,5 @@
-from gql.dsl import DSLMutation
 from . import LagoonActionBase
+from gql.dsl import DSLMutation
 
 class ActionModule(LagoonActionBase):
 
@@ -15,12 +15,11 @@ class ActionModule(LagoonActionBase):
 
         mutation = self._task.args.get('mutation')
         input = self._task.args.get('input')
-        selectType = self._task.args.get('select', None)
-        subfields = self._task.args.get('subfields', [])
+        subfields = self._task.args.get('subfields', ['id'])
 
         with self.client:
             mutationObj = self.client.build_dynamic_mutation(
-                mutation, input, selectType, subfields)
+                mutation, input, subfields)
             res = self.client.execute_query_dynamic(DSLMutation(mutationObj))
             result['result'] = res[mutation]
             result['changed'] = True

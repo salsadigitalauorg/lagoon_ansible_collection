@@ -15,16 +15,11 @@ options:
       - Input to pass to the mutation.
     required: true
     type: dict
-  select:
-    description:
-      - The type to select from the mutation result.
-    type: str
-    default: null
   subfields:
     description:
       - The subfields to select from the mutation result.
     type: list
-    default: []
+    default: [id]
 '''
 
 EXAMPLES = r'''
@@ -45,9 +40,6 @@ EXAMPLES = r'''
       value: 2.0.0
       source: ansible_playbook:audit:module_version
       description: The lagoon_logs module version
-    select: Fact
-    subfields:
-      - id
 
 - name: Delete Facts from a source via mutation before creating
   lagoon.api.mutation:
@@ -75,7 +67,4 @@ EXAMPLES = r'''
           value: 4.0.0
           source: ansible_playbook:audit:module_version
           description: The panelizer module version
-    select: Fact
-    subfields:
-      - id
 '''

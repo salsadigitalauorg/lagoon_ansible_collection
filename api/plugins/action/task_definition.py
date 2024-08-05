@@ -1,4 +1,5 @@
-from . import LagoonMutationActionBase
+from . import LagoonMutationActionBase, MutationConfig, MutationActionConfig
+from ..module_utils.gql import ProxyLookup
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlTaskDefinition import TaskDefinition
 from ansible.errors import AnsibleError, AnsibleOptionsError
@@ -6,19 +7,22 @@ from ansible.errors import AnsibleError, AnsibleOptionsError
 
 class ActionModule(LagoonMutationActionBase):
 
-    mutationPluginConfig = dict(
-        add=dict(
-            mutation="addAdvancedTaskDefinition",
-            inputField="AdvancedTaskDefinitionInput",
-            inputFieldArgsAliases=dict(type=['task_type']),
-            returnType="AdvancedTaskDefinition",
+    actionConfig = MutationActionConfig(
+        name='task_definition',
+        add=MutationConfig(
+            field="addAdvancedTaskDefinition",
+            inputFieldAdditionalArgs=dict(project_name=dict(type="str")),
+            inputFieldArgsAliases=dict(type=["task_type"]),
+            proxyLookups=[
+                ProxyLookup(query="advancedTaskDefinitionById"),
+                ProxyLookup(query="advancedTasksForEnvironment"),
+                ProxyLookup(query="projectByName",
+                            inputArgField="project_name",
+                            fields=["environments", "advancedTasks"],
+                ),
+            ]
         ),
-        delete=dict(
-            mutation="deleteAdvancedTaskDefinition",
-            inputField="advancedTaskDefinition",
-            inputFieldArgsAliases=dict(type=['task_type']),
-            returnType="String",
-        ),
+        delete=MutationConfig(field="deleteAdvancedTaskDefinition"),
     )
 
     def old_run(self, tmp=None, task_vars=None):

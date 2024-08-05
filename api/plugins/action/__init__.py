@@ -1,13 +1,13 @@
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
-from ..module_utils.gql import GqlClient
+from ..module_utils.gql import GetClientInstance, ProxyLookup
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
-from gql.dsl import DSLMutation
-from graphql import GraphQLOutputType
-from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
+from ansible.plugins.action import ActionBase
+from gql.dsl import DSLMutation
+from typing import List
 
 
 class LagoonActionBase(ActionBase):
@@ -27,11 +27,12 @@ class LagoonActionBase(ActionBase):
       raise AnsibleError("lagoon_api_endpoint is required")
     if not task_vars.get('lagoon_api_token'):
       raise AnsibleError("lagoon_api_token is required")
-    self.client = GqlClient(
+
+    self.client = GetClientInstance(
       self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
       self._templar.template(task_vars.get('lagoon_api_token')).strip(),
       self._task.args.get('headers', {}),
-      self._display,
+      self._task.check_mode
     )
 
   def sanitiseName(self, name: str) -> str:
@@ -55,6 +56,48 @@ class LagoonActionBase(ActionBase):
     return lagoonEnvironment.environments[0]["id"]
 
 
+class MutationConfig:
+  field: str
+  inputFieldAdditionalArgs: dict
+  inputFieldArgsAliases: dict
+  proxyLookups: List[ProxyLookup]
+
+  def __init__(self, field: str, inputFieldAdditionalArgs: dict = None,
+               inputFieldArgsAliases: dict = None,
+               proxyLookups: List[ProxyLookup] = None) -> None:
+
+    self.field = field
+    self.inputFieldAdditionalArgs = inputFieldAdditionalArgs
+    self.inputFieldArgsAliases = inputFieldArgsAliases
+    self.proxyLookups = proxyLookups
+
+
+class MutationActionConfig:
+  name: str
+  add: MutationConfig
+  delete: MutationConfig
+  hasStateField: bool = False
+
+  def __init__(self, name: str, add: MutationConfig, delete: MutationConfig) -> None:
+    self.name = name
+    self.add = add
+    self.delete = delete
+
+  def validate(self):
+    if self.add is None and self.delete is None:
+      raise AnsibleError("No mutation configuration found")
+
+    if self.add is not None and self.delete is not None:
+      self.hasStateField = True
+
+  def fromState(self, state: str) -> MutationConfig:
+    if state == "add":
+      return self.add
+    if state == "delete":
+      return self.delete
+    raise AnsibleError(f"Unknown state: {state}")
+
+
 class LagoonMutationActionBase(LagoonActionBase):
   """Action plugins base class for Lagoon mutations.
 
@@ -71,11 +114,12 @@ class LagoonMutationActionBase(LagoonActionBase):
   argsAliases() method.
   """
 
-  mutationPluginConfig = dict()
-  hasStateField = False
-  hasInputWrapper = False
-  moduleArgs = dict()
-  action = None
+  actionConfig : MutationActionConfig
+  argSpec : dict = dict()
+  hasInputWrapper : bool = False
+  moduleArgs : dict = dict()
+  action : str = None
+  mutationObj : DSLMutation = None
 
   def run(self, tmp=None, task_vars=None):
     result = super(LagoonMutationActionBase, self).run(tmp, task_vars)
@@ -85,64 +129,68 @@ class LagoonMutationActionBase(LagoonActionBase):
     self.createClient(task_vars)
 
     # Common auth arguments.
-    argSpec = auth_argument_spec()
+    self.argSpec = auth_argument_spec()
 
-    action = 'add'
-    if self.hasStateField:
-      argSpec['state'] = dict(
+    self.determineAction()
+    pluginConfig = self.actionConfig.fromState(self.action)
+
+    with self.client as (_, ds):
+      # Generate the argspec from the schema.
+      genArgSpec = generate_argspec_from_mutation(
+        ds,
+        pluginConfig.field,
+        pluginConfig.inputFieldAdditionalArgs,
+        pluginConfig.inputFieldArgsAliases,
+      )
+      if len(genArgSpec) == 1 and 'input' in genArgSpec:
+        self.hasInputWrapper = True
+        genArgSpec = genArgSpec['input']['options']
+      self.argSpec.update(genArgSpec)
+      self._display.vvv(f"Generated argspec: {self.argSpec}")
+
+      # Validate the arguments.
+      _, moduleArgs = self.validate_argument_spec(self.argSpec)
+
+      # Filter out None arguments.
+      moduleArgs = {k: v for k, v in moduleArgs.items() if v is not None}
+
+      self._display.vvv(f"Validated module args: {moduleArgs}")
+      self.moduleArgs = moduleArgs
+
+      self.buildMutationObj()
+
+      res = self.client.execute_query_dynamic(self.mutationObj)
+      result['result'] = res[pluginConfig.field]
+      result['changed'] = True
+
+    return result
+
+  def validatePluginConfig(self):
+    if (self.actionConfig is None or
+      not isinstance(self.actionConfig, MutationActionConfig)):
+      raise AnsibleError("Invalid mutation plugin configuration")
+
+    self.actionConfig.validate()
+
+  def determineAction(self):
+    self.action = 'add'
+    if self.actionConfig.hasStateField:
+      self.argSpec['state'] = dict(
         type='str',
         default='present',
         choices=['absent', 'present'],
       )
 
       if self._task.args.get('state', 'present') == 'absent':
-        action = 'delete'
-
-    # Generate the argspec from the schema.
-    genArgSpec = generate_argspec_from_mutation(
-      self.client,
-      self.mutationPluginConfig.get(action).get('mutation'),
-      self.mutationPluginConfig.get(action).get('inputFieldAdditionalArgs', {}),
-      self.mutationPluginConfig.get(action).get('inputFieldArgsAliases', {}),
-    )
-    if len(genArgSpec) == 1 and 'input' in genArgSpec:
-      self.hasInputWrapper = True
-      genArgSpec = genArgSpec['input']['elements']
-    argSpec.update(genArgSpec)
-
-    # Validate the arguments.
-    _, moduleArgs = self.validate_argument_spec(argSpec)
-    self.moduleArgs = moduleArgs
-    self.determineAction()
-
-    # if self.action == 'delete':
-    #   mutationObj = self.client.build_dynamic_mutation(
-    #     self.mutationPluginConfig.get(action).get('mutation'),
-    #     moduleArgs, returnType, subfields)
-    #   res = self.client.execute_query_dynamic(DSLMutation(mutationObj))
-
-    return result
-
-  def validatePluginConfig(self):
-    if (self.mutationPluginConfig is None or
-      not isinstance(self.mutationPluginConfig, dict)):
-      raise AnsibleError("Invalid mutation plugin configuration")
-
-    if len(self.mutationPluginConfig.keys()) == 0:
-      raise AnsibleError("No mutation plugin configuration found")
-
-    if self.hasAdd() and self.hasDelete():
-      self.hasStateField = True
-
-  def hasAdd(self):
-    return self.mutationPluginConfig.get('add') is not None
-
-  def hasDelete(self):
-    return self.mutationPluginConfig.get('delete') is not None
-
-  def determineAction(self):
-    if self.hasStateField:
-      if self.moduleArgs.get('state', 'present') == 'present':
-        self.action = 'add'
-      elif self.moduleArgs.get('state', 'present') == 'absent':
         self.action = 'delete'
+
+  def buildMutationObj(self):
+    args = self.moduleArgs
+    if self.hasInputWrapper:
+      args = {'input': args}
+
+    mutationField = self.client.build_dynamic_mutation(
+      self.actionConfig.fromState(self.action).field,
+      args)
+
+    self.mutationObj = DSLMutation(mutationField)
