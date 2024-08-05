@@ -1,11 +1,10 @@
-from .gql import GqlClient
+from .gql import DSLSchema
 from gql.dsl import DSLField
 from graphql import (
   GraphQLEnumType,
   GraphQLInputField,
   GraphQLInputObjectType,
   GraphQLInputType,
-  GraphQLList,
   GraphQLNonNull
 )
 from graphql.type.definition import (
@@ -32,17 +31,20 @@ def auth_argument_spec(spec=None) -> dict:
   return arg_spec
 
 def generate_argspec_from_mutation(
-    client: GqlClient, mutation: str,
+    ds: DSLSchema, mutation: str,
     additionalArgs: dict = {}, aliases: dict = {}) -> dict:
 
-  with client:
-    mutationField: DSLField = getattr(client.ds.Mutation, mutation)
-    argSpec = dict()
-    arg: GraphQLArgument
-    for fieldName, arg in mutationField.field.args.items():
-      argSpec[fieldName] = generate_argspec_for_input_type(arg.type, aliases)
+  mutationField: DSLField = getattr(ds.Mutation, mutation)
+  argSpec = dict()
+  arg: GraphQLArgument
+  for fieldName, arg in mutationField.field.args.items():
+    argSpec[fieldName] = generate_argspec_for_input_type(arg.type, aliases)
+
+  if 'input' in argSpec:
+    argSpec['input']['options'].update(additionalArgs)
+  else:
     argSpec.update(additionalArgs)
-    return argSpec
+  return argSpec
 
 def generate_argspec_from_input_object_type(
     objType: GraphQLInputObjectType, aliases: dict) -> dict:
@@ -73,13 +75,12 @@ def generate_argspec_for_input_type(inputType: GraphQLInputType, aliases: dict) 
     enumType = cast(GraphQLEnumType, inputType)
     return dict(type='str', choices=[enumVal for enumVal in enumType.values.keys()])
   elif is_list_type(inputType):
-    listType = cast(GraphQLList, inputType)
-    return generate_argspec_for_input_type(listType.of_type, aliases)
+    return dict(type='list', elements='dict')
   elif is_input_object_type(inputType):
     objType = cast(GraphQLInputObjectType, inputType)
     return dict(
       type='dict',
-      elements=generate_argspec_from_input_object_type(objType, aliases))
+      options=generate_argspec_from_input_object_type(objType, aliases))
   else:
     print('inputType', inputType.to_kwargs(), "\n")
     raise Exception("Unsupported input type found when generating argspec")

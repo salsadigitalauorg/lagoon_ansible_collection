@@ -1,12 +1,13 @@
 from .display import Display
-
 from ansible.module_utils.errors import AnsibleValidationError
-from gql.transport.requests import RequestsHTTPTransport
-from gql.transport.exceptions import TransportQueryError
 from gql import Client, gql
-from gql.dsl import DSLExecutable, DSLField, DSLSchema, DSLType, dsl_gql
-from graphql import print_ast
-from typing import Any, Dict, List, Optional
+from gql.dsl import DSLExecutable, DSLField, DSLInlineFragment, DSLSchema, DSLType, dsl_gql
+from gql.transport.exceptions import TransportQueryError
+from gql.transport.requests import RequestsHTTPTransport
+from graphql import print_ast, GraphQLList, GraphQLOutputType, GraphQLUnionType
+from graphql.type.definition import (is_list_type, is_object_type, is_scalar_type, is_union_type)
+from random import randint
+from typing import Any, Dict, List, Optional, cast
 
 class GqlClient(Display):
     """ This client aims to facilitate the usage of the gql package, based on
@@ -14,7 +15,10 @@ class GqlClient(Display):
     The goal is to allow developers to run queries and mutations using the awesome
     package while reducing boilerplate code. """
 
-    def __init__(self, endpoint: str, token: str, headers: dict = {}, display: Display = None) -> None:
+    checkMode: bool = False
+
+    def __init__(self, endpoint: str, token: str, headers: dict = {},
+                 display: Display = None, checkMode: bool = False) -> None:
         super().__init__()
 
         if not isinstance(headers, dict):
@@ -39,6 +43,8 @@ class GqlClient(Display):
             transport=transport,
             fetch_schema_from_transport=True
         )
+
+        self.checkMode = checkMode
 
         # This value of display if deprecated - use the Display class instead.
         del display
@@ -65,6 +71,10 @@ class GqlClient(Display):
         query_ast = gql(query)
         self.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
         self.vvvv(f"GraphQL query variables: \n{variables}")
+
+        if self.checkMode:
+            return {'checkMode': True}
+
         try:
             res = self.client.execute(query_ast, variable_values=variables)
             self.vvvv(f"GraphQL query result: {res}")
@@ -72,6 +82,35 @@ class GqlClient(Display):
         except TransportQueryError as e:
             self.vvvv(f"GraphQL TransportQueryError: {e}")
             return {'error': e}
+
+    def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
+        """Executes a dynamic query with the open session.
+
+        See https://gql.readthedocs.io/en/latest/advanced/dsl_module.html for
+        more information on how to execute one and what's available.
+
+        Parameters
+        ----------
+        operations : DSLExecutable, required
+            A tuple of DSLQuery and/or DSLFragment.
+        """
+
+        # Generate the full query.
+        full_query = dsl_gql(*operations)
+        self.vvv(f"GraphQL built query: \n{print_ast(full_query)}")
+
+        if self.checkMode:
+            self.info(f"Check mode enabled, skipping query execution. Query to execute: \n{print_ast(full_query)}")
+            opName = operations[0].selection_set.selections[0].name.value
+            if opName.startswith('delete'):
+                res = {opName: 'success'}
+            else:
+                res = {opName: {'id': -1 * randint(1, 1000)}}
+        else:
+            res = self.client.session.execute(full_query)
+
+        self.vvv(f"GraphQL query result: {res}")
+        return res
 
     def build_dynamic_query(self,
                             query: str,
@@ -141,8 +180,7 @@ class GqlClient(Display):
     def build_dynamic_mutation(self,
                                mutation: str,
                                inputArgs: Optional[Dict[str, Any]] = {},
-                               selectType: str = '',
-                               subfields: List[str] = [],
+                               returnFields: List[str] = ['id'],
                                ) -> DSLField:
         """
         Dynamically build a mutation against the Lagoon API.
@@ -180,35 +218,79 @@ class GqlClient(Display):
         if not len(inputArgs):
             raise AnsibleValidationError("Input arguments are required for mutations.")
 
-        if selectType and not len(subfields):
-            raise AnsibleValidationError("Subfields are required if selectType is set.")
-
         # Build the main query with top-level fields if any.
-        mutationObj: DSLField = getattr(self.ds.Mutation, mutation)
-        mutationObj.args(input=inputArgs)
+        mutationField: DSLField = getattr(self.ds.Mutation, mutation)
+        self.augment_mutation_field(
+            mutationField,
+            mutationField.field.type,
+            inputArgs,
+            returnFields)
 
-        if selectType:
-            selectTypeObj: DSLType = getattr(self.ds, selectType)
-            for f in subfields:
-                mutationObj.select(getattr(selectTypeObj, f))
+        return mutationField
 
-        return mutationObj
+    def augment_mutation_field(self,
+                               mutationField: DSLField,
+                               outputType: GraphQLOutputType,
+                               inputArgs: Optional[Dict[str, Any]] = {},
+                               returnFields: List[str] = ['id']):
 
-    def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
-        """Executes a dynamic query with the open session.
+        if is_scalar_type(outputType):
+            argsIntersect = list(
+                set(mutationField.field.args.keys()) &
+                set(inputArgs.keys()))
+            mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
+        elif is_union_type(outputType):
+            mutationField.args(**inputArgs)
+            unionType = cast(GraphQLUnionType, outputType)
+            for t in unionType.types:
+                inlineFragment = DSLInlineFragment()
+                inlineFragmentType: DSLType = getattr(self.ds, t.name)
+                inlineFragment.on(inlineFragmentType)
+                for f in returnFields:
+                    inlineFragment.select(getattr(inlineFragmentType, f))
 
-        See https://gql.readthedocs.io/en/latest/advanced/dsl_module.html for
-        more information on how to execute one and what's available.
+                mutationField.select(inlineFragment)
+        elif is_list_type(outputType):
+            listObj = cast(GraphQLList, outputType)
+            self.augment_mutation_field(
+                mutationField,
+                listObj.of_type,
+                inputArgs,
+                returnFields)
+        elif is_object_type(outputType):
+            mutationField.args(**inputArgs)
+            selectType: DSLType = getattr(self.ds, outputType.name)
+            for f in returnFields:
+                mutationField.select(getattr(selectType, f))
+        else:
+            self.vvv('to_kwargs', mutationField.field.to_kwargs())
+            self.vvv('type', outputType)
+            self.vvv('fieldType', outputType.to_kwargs(), "\n")
+            raise Exception("Unsupported field type found when generating mutation field")
 
-        Parameters
-        ----------
-        operations : DSLExecutable, required
-            A list of DSLQuery and/or DSLFragment.
-        """
+globalClient: GqlClient = None
+def GetClientInstance(endpoint: str, token: str, headers: dict = {},
+                      checkMode: bool = False) -> GqlClient:
 
-        # Generate the full query.
-        full_query = dsl_gql(*operations)
-        self.vvvv(f"GraphQL built query: \n{print_ast(full_query)}")
-        res = self.client.session.execute(full_query)
-        self.vvvv(f"GraphQL query result: {res}")
-        return res
+    global globalClient
+    if not globalClient:
+        globalClient = GqlClient(endpoint, token, headers, checkMode=checkMode)
+    return globalClient
+
+class ProxyLookup(Display):
+
+    query: str = None
+    fields: List[str] = None
+    inputArgField: str = None
+    client: GqlClient = None
+
+    def __init__(self, query: str, inputArgField: str = None,
+                 fields: List[str] = None):
+
+        super().__init__()
+
+        global globalClient
+        self.client = globalClient
+        self.query = query
+        self.inputArgField = inputArgField
+        self.fields = fields

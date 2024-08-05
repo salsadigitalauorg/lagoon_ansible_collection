@@ -10,11 +10,6 @@
       ansible.builtin.include_role:
         name: lagoon.api.token
 
-    - name: Delete task definition
-      lagoon.api.task_definition:
-        advancedTaskDefinition: 50
-        state: absent
-
     - name: Ensure task definitions exist
       lagoon.api.task_definition:
         name: "a test task"
@@ -24,3 +19,9 @@
         description: Run my test task
         service: cli
         command: ls -l
+      register: task_definition_result
+
+    - name: Delete task definition
+      lagoon.api.task_definition:
+        advancedTaskDefinition: "{{ task_definition_result.result.id }}"
+        state: absent
