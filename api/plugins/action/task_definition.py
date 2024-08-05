@@ -1,12 +1,27 @@
-from . import LagoonActionBase
+from . import LagoonMutationActionBase
 from ..module_utils.gqlProject import Project
 from ..module_utils.gqlTaskDefinition import TaskDefinition
 from ansible.errors import AnsibleError, AnsibleOptionsError
 
 
-class ActionModule(LagoonActionBase):
+class ActionModule(LagoonMutationActionBase):
 
-    def run(self, tmp=None, task_vars=None):
+    mutationPluginConfig = dict(
+        add=dict(
+            mutation="addAdvancedTaskDefinition",
+            inputField="AdvancedTaskDefinitionInput",
+            inputFieldArgsAliases=dict(type=['task_type']),
+            returnType="AdvancedTaskDefinition",
+        ),
+        delete=dict(
+            mutation="deleteAdvancedTaskDefinition",
+            inputField="advancedTaskDefinition",
+            inputFieldArgsAliases=dict(type=['task_type']),
+            returnType="String",
+        ),
+    )
+
+    def old_run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
             task_vars = dict()

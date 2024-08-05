@@ -1,6 +1,6 @@
 __pycache__
 api/tests/output
-.vscode
+.vscode/settings.json
 
 .docker/mock-server/node_modules
 .docker/mock-server/package-lock.json
