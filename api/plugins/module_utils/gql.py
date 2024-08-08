@@ -1,13 +1,25 @@
 from .display import Display
 from ansible.module_utils.errors import AnsibleValidationError
 from gql import Client, gql
-from gql.dsl import DSLExecutable, DSLField, DSLInlineFragment, DSLSchema, DSLType, dsl_gql
+from gql.dsl import (
+  DSLExecutable,
+  DSLField,
+  DSLInlineFragment,
+  DSLMutation, DSLQuery,
+  DSLSchema, DSLType,
+  dsl_gql
+)
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import print_ast, GraphQLList, GraphQLOutputType, GraphQLUnionType
-from graphql.type.definition import (is_list_type, is_object_type, is_scalar_type, is_union_type)
+from graphql.type.definition import (
+    is_list_type,
+    is_object_type,
+    is_scalar_type,
+    is_union_type,
+)
 from random import randint
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 class GqlClient(Display):
     """ This client aims to facilitate the usage of the gql package, based on
@@ -99,7 +111,7 @@ class GqlClient(Display):
         full_query = dsl_gql(*operations)
         self.vvv(f"GraphQL built query: \n{print_ast(full_query)}")
 
-        if self.checkMode:
+        if self.checkMode and isinstance(operations[0], DSLMutation):
             self.info(f"Check mode enabled, skipping query execution. Query to execute: \n{print_ast(full_query)}")
             opName = operations[0].selection_set.selections[0].name.value
             if opName.startswith('delete'):
@@ -211,8 +223,7 @@ class GqlClient(Display):
             description: "The test_module module version",
             category: "Drupal Module Version"
         }
-        selectType = "Fact" (since addFact returns Fact)
-        subfields = ["id"]
+        returnFields = ["id"]
         """
 
         if not len(inputArgs):
@@ -247,6 +258,8 @@ class GqlClient(Display):
                 inlineFragmentType: DSLType = getattr(self.ds, t.name)
                 inlineFragment.on(inlineFragmentType)
                 for f in returnFields:
+                    if not hasattr(inlineFragmentType, f):
+                        continue
                     inlineFragment.select(getattr(inlineFragmentType, f))
 
                 mutationField.select(inlineFragment)
@@ -261,6 +274,8 @@ class GqlClient(Display):
             mutationField.args(**inputArgs)
             selectType: DSLType = getattr(self.ds, outputType.name)
             for f in returnFields:
+                if not hasattr(selectType, f):
+                    continue
                 mutationField.select(getattr(selectType, f))
         else:
             self.vvv('to_kwargs', mutationField.field.to_kwargs())
@@ -280,17 +295,136 @@ def GetClientInstance(endpoint: str, token: str, headers: dict = {},
 class ProxyLookup(Display):
 
     query: str = None
-    fields: List[str] = None
-    inputArgField: str = None
-    client: GqlClient = None
 
-    def __init__(self, query: str, inputArgField: str = None,
-                 fields: List[str] = None):
+    # Use these fields from the input task args
+    # to send as args to the lookup query.
+    inputArgFields: Dict[str, str] = {}
+
+    # Use these fields in the order provided
+    # to select the fields in the query.
+    selectFields: List[str] = None
+
+    qryField: DSLField
+
+    def __init__(self, query: str, inputArgFields: Dict[str, str] = {},
+                 selectFields: List[str] = None):
 
         super().__init__()
-
-        global globalClient
-        self.client = globalClient
         self.query = query
-        self.inputArgField = inputArgField
-        self.fields = fields
+        self.inputArgFields = inputArgFields
+        self.selectFields = selectFields
+
+    def client(self) -> GqlClient:
+        global globalClient
+        return globalClient
+
+    def hasInputArgs(self, inputArgs: dict) -> bool:
+        self.qryField = getattr(self.client().ds.Query, self.query)
+        queryArgKeys = list(self.qryField.field.args.keys())
+        if len(self.inputArgFields):
+            queryArgKeys = self.inputArgFields.keys()
+
+        intersectedArgs = {k: v for k, v in inputArgs.items() if k in queryArgKeys}
+
+        if len(intersectedArgs) != len(queryArgKeys):
+            return False
+
+        for arg in intersectedArgs:
+            if len(self.inputArgFields):
+                self.qryField.args(**{self.inputArgFields[arg]: inputArgs[arg]})
+                continue
+            self.qryField.args(**{arg: inputArgs[arg]})
+
+        return True
+
+    def execute(self, inputArgs: dict,
+                compareFields: List[str]) -> Dict[str, Any]|None:
+        typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
+
+        leafQueryFields = list(inputArgs.keys())
+        if 'id' not in leafQueryFields:
+            leafQueryFields.append('id')
+
+        if len(self.selectFields):
+            self.qryField.select(
+                nested_field_selector(
+                    self.client().ds, typeObj, self.selectFields, leafQueryFields))
+
+        results = self.client().execute_query_dynamic(DSLQuery(self.qryField))
+        results = results[self.query]
+        if not len(self.selectFields):
+            return results
+
+        for f in self.selectFields:
+            if not isinstance(results, list):
+                results = results[f]
+                continue
+
+            newRes = []
+            for r in results:
+                if not isinstance(r[f], list):
+                    newRes.append(r[f])
+                    continue
+
+                for i in r[f]:
+                    newRes.append(i)
+            results = newRes
+
+        matchedRecord = None
+        for r in results:
+            for cf in compareFields:
+                if cf not in r:
+                    continue
+                if r[cf] == inputArgs[cf]:
+                    matchedRecord = r
+                    break
+
+        return matchedRecord
+
+def field_selector(ds: DSLSchema,
+                   selector: DSLField,
+                   selectorType: GraphQLOutputType,
+                   selectFields: List[str]) -> DSLField:
+
+    if is_list_type(selectorType):
+        return field_selector(ds, selector, selectorType.of_type, selectFields)
+    elif is_union_type(selectorType):
+        unionType = cast(GraphQLUnionType, selectorType)
+        for t in unionType.types:
+            inlineFragment = DSLInlineFragment()
+            inlineFragmentType: DSLType = getattr(ds, t.name)
+            inlineFragment.on(inlineFragmentType)
+            for f in selectFields:
+                if not hasattr(inlineFragmentType, f):
+                    continue
+                inlineFragment.select(getattr(inlineFragmentType, f))
+            selector.select(inlineFragment)
+    else:
+        print('selector', selector)
+        print('selectorType', selectorType, selectorType.to_kwargs())
+        print('selectFields', selectFields)
+        raise Exception("Unsupported field type found when generating field selector")
+
+    return selector
+
+def nested_field_selector(
+        ds: DSLSchema,
+        parentType: DSLType,
+        selectFields: List[str],
+        leafFields: List[str]) -> Union[DSLType, DSLField]:
+
+    if len(selectFields) == 1:
+        leafSelector: DSLField = getattr(parentType, selectFields[0])
+        return field_selector(ds, leafSelector, leafSelector.field.type, leafFields)
+
+    selector: DSLField = getattr(parentType, selectFields[0])
+    if is_list_type(selector.field.type):
+        selectorType: DSLType = getattr(ds, selector.field.type.of_type.name)
+    else:
+        selectorType: DSLType = getattr(ds, selector.field.type.name)
+
+    selector.select(
+        nested_field_selector(
+            ds, selectorType, selectFields[1:], leafFields))
+
+    return selector

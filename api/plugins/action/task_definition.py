@@ -11,16 +11,18 @@ class ActionModule(LagoonMutationActionBase):
         name='task_definition',
         add=MutationConfig(
             field="addAdvancedTaskDefinition",
+            updateField="updateAdvancedTaskDefinition",
             inputFieldAdditionalArgs=dict(project_name=dict(type="str")),
             inputFieldArgsAliases=dict(type=["task_type"]),
             proxyLookups=[
                 ProxyLookup(query="advancedTaskDefinitionById"),
                 ProxyLookup(query="advancedTasksForEnvironment"),
                 ProxyLookup(query="projectByName",
-                            inputArgField="project_name",
-                            fields=["environments", "advancedTasks"],
+                            inputArgFields={"project_name": "name"},
+                            selectFields=["environments", "advancedTasks"],
                 ),
-            ]
+            ],
+            compareFields=["name"],
         ),
         delete=MutationConfig(field="deleteAdvancedTaskDefinition"),
     )
