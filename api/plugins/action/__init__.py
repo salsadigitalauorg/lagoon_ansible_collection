@@ -57,25 +57,61 @@ class LagoonActionBase(ActionBase):
 
 
 class MutationConfig:
+
+  # The name of the mutation field, e.g, addAdvancedTaskDefinition.
   field: str
+
+  # The name of the mutation field to update an
+  # existing record, e.g, updateAdvancedTaskDefinition.
+  updateField: str
+
+  # Additional argspec map to process the action plugin input.
+  # E.g: dict(project_name=dict(type="str")) will add a project_name
+  # argument to the action plugin. This could then ben used to query
+  # the GraphQL API for the project ID, for example, in the proxyLookups.
   inputFieldAdditionalArgs: dict
+
+  # Aliases for the input field arguments, e.g, dict(type=["task_type"])
+  # will allow the task_type argument to be passed as type.
   inputFieldArgsAliases: dict
+
+  # Proxy lookups to find existing records. The plugin will use the
+  # input arguments to query the GraphQL API and find an existing record.
+  # The first matching lookup will be used.
   proxyLookups: List[ProxyLookup]
 
-  def __init__(self, field: str, inputFieldAdditionalArgs: dict = None,
+  # Fields to compare when looking for an existing record.
+  compareFields: List[str]
+
+  def __init__(self, field: str, updateField: str = None,
+               inputFieldAdditionalArgs: dict = None,
                inputFieldArgsAliases: dict = None,
-               proxyLookups: List[ProxyLookup] = None) -> None:
+               proxyLookups: List[ProxyLookup] = None,
+               compareFields: List[str] = None) -> None:
 
     self.field = field
+    self.updateField = updateField
     self.inputFieldAdditionalArgs = inputFieldAdditionalArgs
     self.inputFieldArgsAliases = inputFieldArgsAliases
     self.proxyLookups = proxyLookups
+    self.compareFields = compareFields
 
 
 class MutationActionConfig:
+
+  # The name of the action, e.g, task_definition.
+  # Not used anywhere at the moment.
   name: str
+
+  # The configuration for the create mutation.
   add: MutationConfig
+
+  # The configuration for the delete mutation.
   delete: MutationConfig
+
+  # Whether the action plugin should have the common Ansible state field with
+  # 'present' and 'absent' choices. This depends on which of the add or delete
+  # mutation configurations are set.
   hasStateField: bool = False
 
   def __init__(self, name: str, add: MutationConfig, delete: MutationConfig) -> None:
@@ -93,9 +129,26 @@ class MutationActionConfig:
   def fromState(self, state: str) -> MutationConfig:
     if state == "add":
       return self.add
-    if state == "delete":
+    elif state == "delete":
       return self.delete
     raise AnsibleError(f"Unknown state: {state}")
+
+  def findExistingRecord(self, action: str, inputArgs: dict) -> dict|None:
+    pluginConfig = self.fromState(action)
+
+    if not pluginConfig.proxyLookups or not pluginConfig.compareFields:
+      return None
+
+    foundLookup: ProxyLookup = None
+    for lookup in pluginConfig.proxyLookups:
+      if not lookup.hasInputArgs(inputArgs):
+        continue
+      foundLookup = lookup
+
+    if foundLookup == None:
+      return None
+
+    return foundLookup.execute(inputArgs, pluginConfig.compareFields)
 
 
 class LagoonMutationActionBase(LagoonActionBase):
@@ -106,19 +159,38 @@ class LagoonMutationActionBase(LagoonActionBase):
   missing.
 
   All args for the plugin are inferred from the GraphQL schema, and
-  the mutationInputField() method must be implemented to return the
-  name of the input field for the mutation.
-
-  Additional arguments can be provided by implementing the additionalArgs()
-  method, and aliases for arguments can be provided by implementing the
-  argsAliases() method.
+  the actionConfig must be filled with all relevant information.
   """
 
+  # The main config for the plugin, and drives the whole process.
   actionConfig : MutationActionConfig
+
+  # The generated argspec from the GraphQL schema.
   argSpec : dict = dict()
+
+  """Whether the mutation has an 'input' wrapper, as in the following:
+    mutation {
+      addAdvancedTaskDefinition (
+        input: {
+          type: COMMAND,
+          ...
+        }
+      }
+    }
+    The plugin will then remove the 'input' key from the module args and allow
+    the rest of the arguments to be passed as is. Then it will wrap the args
+    in the 'input' key when building the mutation object.
+  """
   hasInputWrapper : bool = False
+
+  # The module args after validation.
   moduleArgs : dict = dict()
+
+  # The action to perform, either 'add' or 'delete'.
   action : str = None
+
+  # The mutation object to execute, after being built from
+  # the schema, MutationConfig's and the module args.
   mutationObj : DSLMutation = None
 
   def run(self, tmp=None, task_vars=None):
@@ -157,10 +229,24 @@ class LagoonMutationActionBase(LagoonActionBase):
       self._display.vvv(f"Validated module args: {moduleArgs}")
       self.moduleArgs = moduleArgs
 
-      self.buildMutationObj()
+      # Find if there's an existing record.
+      record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
+      if record is not None:
+        exactMatch = True
+        for k, v in record.items():
+          if k in moduleArgs and moduleArgs[k] != v:
+            exactMatch = False
+            break
+
+        if exactMatch:
+          result['changed'] = False
+          result['result'] = record
+          return result
+
+      self.buildMutationObj(record)
 
       res = self.client.execute_query_dynamic(self.mutationObj)
-      result['result'] = res[pluginConfig.field]
+      result['result'] = res[pluginConfig.field] if record is None else res[pluginConfig.updateField]
       result['changed'] = True
 
     return result
@@ -184,13 +270,33 @@ class LagoonMutationActionBase(LagoonActionBase):
       if self._task.args.get('state', 'present') == 'absent':
         self.action = 'delete'
 
-  def buildMutationObj(self):
+  def buildMutationObj(self, existingRecord: dict|None):
+    mutationFieldName = self.actionConfig.fromState(self.action).field
     args = self.moduleArgs
-    if self.hasInputWrapper:
+    returnFields = list(self.moduleArgs.keys())
+    if 'id' not in returnFields:
+      returnFields.append('id')
+
+    if (self.action == 'add' and existingRecord is not None and
+        self.actionConfig.fromState(self.action).updateField is not None):
+      mutationFieldName = self.actionConfig.fromState(self.action).updateField
+
+      # Generate the update mutation argspec from the schema.
+      updateArgSpec = generate_argspec_from_mutation(
+        self.client.ds,
+        mutationFieldName)
+
+      if len(updateArgSpec) == 1 and 'input' in updateArgSpec:
+        if ('id' in updateArgSpec['input']['options'] and
+            'patch' in updateArgSpec['input']['options']):
+          args = {'input': {
+            'id': existingRecord['id'],
+            'patch': args}}
+
+    elif self.hasInputWrapper:
       args = {'input': args}
 
     mutationField = self.client.build_dynamic_mutation(
-      self.actionConfig.fromState(self.action).field,
-      args)
+      mutationFieldName, args, returnFields)
 
     self.mutationObj = DSLMutation(mutationField)

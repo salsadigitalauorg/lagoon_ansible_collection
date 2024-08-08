@@ -42,7 +42,7 @@ def generate_argspec_from_mutation(
 
   if 'input' in argSpec:
     argSpec['input']['options'].update(additionalArgs)
-  else:
+  elif additionalArgs:
     argSpec.update(additionalArgs)
   return argSpec
 
