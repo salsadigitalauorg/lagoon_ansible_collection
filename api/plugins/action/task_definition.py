@@ -13,7 +13,10 @@ class ActionModule(LagoonMutationActionBase):
             field="addAdvancedTaskDefinition",
             updateField="updateAdvancedTaskDefinition",
             inputFieldAdditionalArgs=dict(project_name=dict(type="str")),
-            inputFieldArgsAliases=dict(type=["task_type"]),
+            inputFieldArgsAliases=dict(
+                type=["task_type"],
+                advancedTaskDefinitionArguments=["arguments"],
+            ),
             proxyLookups=[
                 ProxyLookup(query="advancedTaskDefinitionById"),
                 ProxyLookup(query="advancedTasksForEnvironment"),
@@ -22,7 +25,15 @@ class ActionModule(LagoonMutationActionBase):
                             selectFields=["environments", "advancedTasks"],
                 ),
             ],
-            compareFields=["name"],
+            lookupCompareFields=["name"],
+            diffCompareFields=[
+                "permission",
+                "description",
+                "service",
+                "advancedTaskDefinitionArguments",
+                "deployTokenInjection",
+                "projectKeyInjection",
+            ],
         ),
         delete=MutationConfig(field="deleteAdvancedTaskDefinition"),
     )

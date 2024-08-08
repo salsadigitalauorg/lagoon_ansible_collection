@@ -13,6 +13,7 @@ from gql.transport.exceptions import TransportQueryError
 from gql.transport.requests import RequestsHTTPTransport
 from graphql import print_ast, GraphQLList, GraphQLOutputType, GraphQLUnionType
 from graphql.type.definition import (
+    is_enum_type,
     is_list_type,
     is_object_type,
     is_scalar_type,
@@ -231,7 +232,9 @@ class GqlClient(Display):
 
         # Build the main query with top-level fields if any.
         mutationField: DSLField = getattr(self.ds.Mutation, mutation)
-        self.augment_mutation_field(
+        mutationField = field_selector(
+            self.ds, mutationField, mutationField.field.type, returnFields)
+        self.mutation_field_add_args(
             mutationField,
             mutationField.field.type,
             inputArgs,
@@ -239,7 +242,7 @@ class GqlClient(Display):
 
         return mutationField
 
-    def augment_mutation_field(self,
+    def mutation_field_add_args(self,
                                mutationField: DSLField,
                                outputType: GraphQLOutputType,
                                inputArgs: Optional[Dict[str, Any]] = {},
@@ -250,37 +253,16 @@ class GqlClient(Display):
                 set(mutationField.field.args.keys()) &
                 set(inputArgs.keys()))
             mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
-        elif is_union_type(outputType):
+        elif is_union_type(outputType) or is_object_type(outputType):
             mutationField.args(**inputArgs)
-            unionType = cast(GraphQLUnionType, outputType)
-            for t in unionType.types:
-                inlineFragment = DSLInlineFragment()
-                inlineFragmentType: DSLType = getattr(self.ds, t.name)
-                inlineFragment.on(inlineFragmentType)
-                for f in returnFields:
-                    if not hasattr(inlineFragmentType, f):
-                        continue
-                    inlineFragment.select(getattr(inlineFragmentType, f))
-
-                mutationField.select(inlineFragment)
         elif is_list_type(outputType):
             listObj = cast(GraphQLList, outputType)
-            self.augment_mutation_field(
+            self.mutation_field_add_args(
                 mutationField,
                 listObj.of_type,
                 inputArgs,
                 returnFields)
-        elif is_object_type(outputType):
-            mutationField.args(**inputArgs)
-            selectType: DSLType = getattr(self.ds, outputType.name)
-            for f in returnFields:
-                if not hasattr(selectType, f):
-                    continue
-                mutationField.select(getattr(selectType, f))
         else:
-            self.vvv('to_kwargs', mutationField.field.to_kwargs())
-            self.vvv('type', outputType)
-            self.vvv('fieldType', outputType.to_kwargs(), "\n")
             raise Exception("Unsupported field type found when generating mutation field")
 
 globalClient: GqlClient = None
@@ -338,12 +320,10 @@ class ProxyLookup(Display):
         return True
 
     def execute(self, inputArgs: dict,
-                compareFields: List[str]) -> Dict[str, Any]|None:
+                lookupCompareFields: List[str]) -> Dict[str, Any]|None:
         typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
 
-        leafQueryFields = list(inputArgs.keys())
-        if 'id' not in leafQueryFields:
-            leafQueryFields.append('id')
+        leafQueryFields = inputArgsToFieldList(inputArgs)
 
         if len(self.selectFields):
             self.qryField.select(
@@ -355,6 +335,7 @@ class ProxyLookup(Display):
         if not len(self.selectFields):
             return results
 
+        # Extract the results from the nested fields.
         for f in self.selectFields:
             if not isinstance(results, list):
                 results = results[f]
@@ -370,9 +351,11 @@ class ProxyLookup(Display):
                     newRes.append(i)
             results = newRes
 
+        # Find the record that matches the input
+        # args based on the lookupCompareFields.
         matchedRecord = None
         for r in results:
-            for cf in compareFields:
+            for cf in lookupCompareFields:
                 if cf not in r:
                     continue
                 if r[cf] == inputArgs[cf]:
@@ -381,13 +364,37 @@ class ProxyLookup(Display):
 
         return matchedRecord
 
+
+def inputArgsToFieldList(inputArgs: dict) -> List[str|dict]:
+    fieldList = []
+    for k, v in inputArgs.items():
+        if isinstance(v, dict):
+            fieldList.append({k: list(v.keys())})
+        elif isinstance(v, list) and len(v) and isinstance(v[0], dict):
+            fieldList.append({k: list(v[0].keys())})
+        else:
+            fieldList.append(k)
+
+    if 'id' not in fieldList:
+        fieldList.append('id')
+
+    return fieldList
+
 def field_selector(ds: DSLSchema,
                    selector: DSLField,
                    selectorType: GraphQLOutputType,
                    selectFields: List[str]) -> DSLField:
 
-    if is_list_type(selectorType):
+    if is_scalar_type(selectorType) or is_enum_type(selectorType):
+        return selector
+    elif is_list_type(selectorType):
         return field_selector(ds, selector, selectorType.of_type, selectFields)
+    elif is_object_type(selectorType):
+        selectType: DSLType = getattr(ds, selectorType.name)
+        for f in selectFields:
+            if not hasattr(selectType, f):
+                continue
+            selector.select(getattr(selectType, f))
     elif is_union_type(selectorType):
         unionType = cast(GraphQLUnionType, selectorType)
         for t in unionType.types:
@@ -395,14 +402,22 @@ def field_selector(ds: DSLSchema,
             inlineFragmentType: DSLType = getattr(ds, t.name)
             inlineFragment.on(inlineFragmentType)
             for f in selectFields:
+                if isinstance(f, dict):
+                    f0 = list(f.keys())[0]
+                    if not hasattr(inlineFragmentType, f0):
+                        continue
+
+                    inlineFragmentField: DSLField = getattr(inlineFragmentType, f0)
+                    inlineFragment.select(field_selector(
+                        ds, inlineFragmentField, inlineFragmentField.field.type, f[f0]))
+                    continue
+
                 if not hasattr(inlineFragmentType, f):
                     continue
+
                 inlineFragment.select(getattr(inlineFragmentType, f))
             selector.select(inlineFragment)
     else:
-        print('selector', selector)
-        print('selectorType', selectorType, selectorType.to_kwargs())
-        print('selectFields', selectFields)
         raise Exception("Unsupported field type found when generating field selector")
 
     return selector

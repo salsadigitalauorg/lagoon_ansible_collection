@@ -28,9 +28,16 @@
         project: "{{ project_id }}"
         task_type: COMMAND
         permission: MAINTAINER
-        description: Run my test task foo
+        description: Run my test task
         service: cli
         command: ls -l
+        advancedTaskDefinitionArguments:
+          - name: MY_CUSTOM_ARG
+            displayName: |-
+              A custom arg to do custom tasks: FULL | HALF-EMPTY -
+              default: FULL
+            defaultValue: FULL
+            type: STRING
       register: task_definition_result
 
     - name: Delete task definition
