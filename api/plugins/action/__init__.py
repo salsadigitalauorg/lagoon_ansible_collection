@@ -1,7 +1,7 @@
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
-from ..module_utils.gql import GetClientInstance, ProxyLookup
+from ..module_utils.gql import GetClientInstance, ProxyLookup, inputArgsToFieldList
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ansible.errors import AnsibleError
@@ -81,20 +81,26 @@ class MutationConfig:
   proxyLookups: List[ProxyLookup]
 
   # Fields to compare when looking for an existing record.
-  compareFields: List[str]
+  lookupCompareFields: List[str]
+
+  # Fields to compare when checking if an existing record is the same as the
+  # desired record. If any of these fields differ, the record will be updated.
+  diffCompareFields: List[str]
 
   def __init__(self, field: str, updateField: str = None,
                inputFieldAdditionalArgs: dict = None,
                inputFieldArgsAliases: dict = None,
                proxyLookups: List[ProxyLookup] = None,
-               compareFields: List[str] = None) -> None:
+               lookupCompareFields: List[str] = None,
+               diffCompareFields: List[str] = None) -> None:
 
     self.field = field
     self.updateField = updateField
     self.inputFieldAdditionalArgs = inputFieldAdditionalArgs
     self.inputFieldArgsAliases = inputFieldArgsAliases
     self.proxyLookups = proxyLookups
-    self.compareFields = compareFields
+    self.lookupCompareFields = lookupCompareFields
+    self.diffCompareFields = diffCompareFields
 
 
 class MutationActionConfig:
@@ -136,7 +142,7 @@ class MutationActionConfig:
   def findExistingRecord(self, action: str, inputArgs: dict) -> dict|None:
     pluginConfig = self.fromState(action)
 
-    if not pluginConfig.proxyLookups or not pluginConfig.compareFields:
+    if not pluginConfig.proxyLookups or not pluginConfig.lookupCompareFields:
       return None
 
     foundLookup: ProxyLookup = None
@@ -148,7 +154,22 @@ class MutationActionConfig:
     if foundLookup == None:
       return None
 
-    return foundLookup.execute(inputArgs, pluginConfig.compareFields)
+    return foundLookup.execute(inputArgs, pluginConfig.lookupCompareFields)
+
+  def diffExistingRecord(self, record: dict, inputArgs: dict) -> bool:
+    pluginConfig = self.fromState('add')
+
+    if not pluginConfig.diffCompareFields:
+      return False
+
+    for field in pluginConfig.diffCompareFields:
+      if field not in record or field not in inputArgs:
+        continue
+
+      if record[field] != inputArgs[field]:
+        return True
+
+    return False
 
 
 class LagoonMutationActionBase(LagoonActionBase):
@@ -232,13 +253,8 @@ class LagoonMutationActionBase(LagoonActionBase):
       # Find if there's an existing record.
       record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
       if record is not None:
-        exactMatch = True
-        for k, v in record.items():
-          if k in moduleArgs and moduleArgs[k] != v:
-            exactMatch = False
-            break
-
-        if exactMatch:
+        changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
+        if not changed:
           result['changed'] = False
           result['result'] = record
           return result
@@ -273,9 +289,8 @@ class LagoonMutationActionBase(LagoonActionBase):
   def buildMutationObj(self, existingRecord: dict|None):
     mutationFieldName = self.actionConfig.fromState(self.action).field
     args = self.moduleArgs
-    returnFields = list(self.moduleArgs.keys())
-    if 'id' not in returnFields:
-      returnFields.append('id')
+
+    returnFields = inputArgsToFieldList(args)
 
     if (self.action == 'add' and existingRecord is not None and
         self.actionConfig.fromState(self.action).updateField is not None):
