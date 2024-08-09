@@ -12,3 +12,21 @@ services:
     command: ["npm", "start"]
     ports:
       - 4000
+
+  lint-docs:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.docs
+      args:
+        - OPERATION=lint
+    volumes:
+      - ./api:/collections/ansible_collections/lagoon/api
+    working_dir: /collections/ansible_collections/lagoon/api
+    command: ["antsibull-docs", "lint-collection-docs", "--plugin-docs", "."]
+
+  docs:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.docs
+    ports:
+      - 9180:8000
