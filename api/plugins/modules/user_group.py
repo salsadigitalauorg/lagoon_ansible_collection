@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: user_group
+description: Manage the groups for a user
 short_description: Manage the groups for a user
 options:
   email:

@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: project_group
+description: Manage the groups for a project
 short_description: Manage the groups for a project
 options:
   project:

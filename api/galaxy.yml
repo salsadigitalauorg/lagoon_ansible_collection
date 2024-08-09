@@ -4,14 +4,15 @@ version: 1.3.0
 readme: README.md
 
 authors:
-  - Yusuf Hasan Miyan <yusuf.hasanmiyan@salsadigital.com.au>
-  - Steve Worley <steven.worley@salsadigital.com.au>
+  - Yusuf Hasan Miyan <yusuf.hasanmiyan@salsa.digital>
+  - Steve Worley <steven.worley@salsa.digital>
 
 description: A collection to interact with the Lagoon API
 
 # Either a single license or a list of licenses for content inside of a collection. Ansible Galaxy currently only
 # accepts L(SPDX,https://spdx.org/licenses/) licenses. This key is mutually exclusive with 'license_file'
-license: GPL-2.0-or-later
+license:
+  - GPL-2.0-or-later
 
 # A list of tags you want to associate with the collection for indexing/searching. A tag name has the same character
 # requirements as 'namespace' and 'name'

@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: query
+description: Run a query against the Lagoon API.
 short_description: Run a query against the Lagoon API.
 options:
   query:

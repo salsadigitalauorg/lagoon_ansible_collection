@@ -28,3 +28,27 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 docker-compose build
 docker-compose run --rm test units -v --requirements
 ```
+
+## Creating the docs
+
+Install antsibull-docs
+```sh
+python3 -m pip install antsibull-docs
+```
+
+Lint the collection docs and fix any issues:
+```sh
+# Ensure the project is cloned into a directory suitable for Ansible
+# collections to be recognised, in the format
+# .../.../ansible_collections/lagoon/api.
+# E.g ~/projects/ansible_collections/lagoon/api
+ANSIBLE_COLLECTIONS_PATH=~/projects antsibull-docs lint-collection-docs --plugin-docs .
+```
+
+Generate the docs:
+```sh
+antsibull-docs sphinx-init --use-current --squash-hierarchy lagoon.api --dest-dir ../built-docs
+cd ../built-docs
+python3 -m pip install -r requirements.txt
+./build.sh
+```

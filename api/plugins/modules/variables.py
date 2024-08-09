@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: variables
+description: Get variables for a project or environment.
 short_description: Get variables for a project or environment.
 options:
   type:
