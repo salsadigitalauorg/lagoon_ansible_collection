@@ -5,7 +5,7 @@ DOCUMENTATION = r'''
 module: environment_update
 short_description: Update a project environment's values
 description:
-    - Updates a project environment's values.
+  - Updates a project environment's values.
 options:
   environment:
     description:
@@ -21,7 +21,7 @@ options:
     description:
       - The environment values.
     type: dict
-    default: None
+    default: {}
 '''
 
 EXAMPLES = r'''

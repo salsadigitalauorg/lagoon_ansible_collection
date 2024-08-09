@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: token
+description: Fetches a Lagoon token using ssh
 short_description: Fetches a Lagoon token using ssh
 options:
   grant:

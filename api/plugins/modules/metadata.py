@@ -25,9 +25,9 @@ options:
     choices: [ absent, present ]
   data:
     description:
-      - The metadata values.
-    type: dict & list of dicts
-    default: None
+      - The metadata values - can be a dict or a list of dicts.
+    type: list
+    default: []
 '''
 
 EXAMPLES = r'''
@@ -38,7 +38,7 @@ EXAMPLES = r'''
       solr-version: 6
     project_id: 7
     project_name: project-pheonix
-    
+
 - name: Add project metadata (list of dicts)
   lagoon.api.metadata:
     state: present

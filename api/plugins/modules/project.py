@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: project
+description: Manage a project
 short_description: Manage a project
 options:
   name:
@@ -12,9 +13,10 @@ options:
     type: str
   git_url:
     description:
-      - Git URL, needs to be SSH Git URL in one of these two formats
-      -   - git@172.17.0.1/project1.git
-      -   - ssh://git@172.17.0.1:2222/project1.git.
+      - |
+        Git URL, needs to be SSH Git URL in one of these two formats
+          - git@172.17.0.1/project1.git
+          - ssh://git@172.17.0.1:2222/project1.git.
     required: true
     type: str
   subfolder:
@@ -23,32 +25,34 @@ options:
       - Useful if you have multiple Lagoon projects per Git Repository.
     type: str
   branches:
-    description:
-      - Which branches should be deployed, can be one of:
-      -   - true - all branches are deployed
-      -   - false - no branches are deployed
-      -   - REGEX - regex of all branches that should be deployed, example: ^(main|staging)$
+    description: |
+      Which branches should be deployed, can be one of:
+        - true - all branches are deployed
+        - false - no branches are deployed
+        - REGEX - regex of all branches that should be deployed, example: ^(main|staging)$
     type: str
   pullrequests:
     description:
-      - Which Pull Requests should be deployed, can be one of:
-      -   - true - all pull requests are deployed
-      -   - false - no pull requests are deployed
-      -   - REGEX - regex of all Pull Request titles that should be deployed, example: [BUILD]
+      - |
+        Which Pull Requests should be deployed, can be one of:
+          - true - all pull requests are deployed
+          - false - no pull requests are deployed
+          - REGEX - regex of all Pull Request titles that should be deployed, example: [BUILD]
     type: str
   production_environment:
-    description:
-      - Which environment(the name) should be marked as the production environment.
-      - Important: If you change this, you need to deploy both environments
-      - (the current and previous one) that are affected in order for the
-      - change to propagate correctly.
+    description: |
+      Which environment(the name) should be marked as the production environment.
+        - Important: If you change this, you need to deploy both environments
+        - (the current and previous one) that are affected in order for the
+        - change to propagate correctly.
     type: str
   standby_production_environment:
-    description:
-      - Which environment(the name) should be marked as the production
-      - standby environment.
-      - Important: This is used to determine which environment should be marked
-      - as the standby production environment
+    description: |
+      Which environment(the name) should be marked as the production standby
+      environment.
+
+      Important: This is used to determine which environment should be marked
+      as the standby production environment.
     type: str
   auto_idle:
     description:

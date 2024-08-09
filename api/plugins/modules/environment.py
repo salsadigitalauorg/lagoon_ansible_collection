@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 DOCUMENTATION = r'''
----
 module: environment
 
 short_description: Manage a project's environments.
@@ -21,7 +20,7 @@ options:
         description: The name of the environment.
         required: true
         type: str
-    definition: (TODO)
+    definition:
         description: Values for the environment creation, as a dict.
         type: dict
         suboptions:
@@ -51,17 +50,17 @@ options:
                     - openshiftProjectName
 
     state:
-        description:
-        - Determines if the environment should be created, updated, or deleted. When set to C(present), the environment will be
-        created, if it does not already exist. If set to C(absent), an existing environment will be deleted. If set to
-        C(present), an existing environment will be updated, if its attributes differ from those specified using
-        I(definition).
+        description: |
+            Determines if the environment should be created, updated, or deleted. When set to C(present), the environment will be
+            created, if it does not already exist. If set to C(absent), an existing environment will be deleted. If set to
+            C(present), an existing environment will be updated, if its attributes differ from those specified using
+            I(definition).
         type: str
         default: present
         choices: [ absent, present ]
 
 extends_documentation_fragment:
-  - lagoon.api.auth_options
+    - lagoon.api.auth_options
 
 author:
     - Yusuf Hasan Miyan (@yusufhm)

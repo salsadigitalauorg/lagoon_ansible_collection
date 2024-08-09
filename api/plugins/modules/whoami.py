@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: whoami
+description: Get information about the current user.
 short_description: Get information about the current user.
 '''
 

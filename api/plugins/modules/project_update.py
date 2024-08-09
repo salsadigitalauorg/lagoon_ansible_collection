@@ -16,7 +16,7 @@ options:
     description:
       - The project values.
     type: dict
-    default: None
+    default: {}
 '''
 
 EXAMPLES = r'''

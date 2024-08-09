@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: mutation
+description: Run a mutation against the Lagoon GraphQL API.
 short_description: Run a mutation against the Lagoon GraphQL API.
 options:
   mutation:

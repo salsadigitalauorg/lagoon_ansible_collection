@@ -4,3 +4,5 @@ api/tests/output
 
 .docker/mock-server/node_modules
 .docker/mock-server/package-lock.json
+
+built-docs

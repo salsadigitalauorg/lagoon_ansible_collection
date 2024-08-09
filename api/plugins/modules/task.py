@@ -3,6 +3,7 @@
 
 DOCUMENTATION = r'''
 module: task
+description: Invoke a task on an environment.
 short_description: Invoke a task on an environment.
 options:
   environment:
