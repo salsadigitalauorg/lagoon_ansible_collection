@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
