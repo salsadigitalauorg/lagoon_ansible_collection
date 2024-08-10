@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .display import Display
 from ansible.module_utils.errors import AnsibleValidationError
 from gql import Client, gql

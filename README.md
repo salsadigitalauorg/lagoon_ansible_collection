@@ -25,6 +25,6 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 
 ## Run unit tests
 ```sh
-docker-compose build
+docker-compose build test
 docker-compose run --rm test units -v --requirements
 ```
