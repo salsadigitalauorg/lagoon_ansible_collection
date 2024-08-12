@@ -18,6 +18,7 @@ from graphql.type.definition import (
     is_enum_type,
     is_list_type,
     is_object_type,
+    is_output_type,
     is_scalar_type,
     is_union_type,
 )
@@ -194,7 +195,7 @@ class GqlClient(Display):
 
     def build_dynamic_mutation(self,
                                mutation: str,
-                               inputArgs: Optional[Dict[str, Any]] = {},
+                               inputArgs: Dict[str, Any],
                                returnFields: List[str] = ['id'],
                                ) -> DSLField:
         """
@@ -229,9 +230,6 @@ class GqlClient(Display):
         returnFields = ["id"]
         """
 
-        if not len(inputArgs):
-            raise AnsibleValidationError("Input arguments are required for mutations.")
-
         # Build the main query with top-level fields if any.
         mutationField: DSLField = getattr(self.ds.Mutation, mutation)
         mutationField = field_selector(
@@ -239,16 +237,27 @@ class GqlClient(Display):
         self.mutation_field_add_args(
             mutationField,
             mutationField.field.type,
-            inputArgs,
-            returnFields)
+            inputArgs)
 
         return mutationField
 
     def mutation_field_add_args(self,
                                mutationField: DSLField,
                                outputType: GraphQLOutputType,
-                               inputArgs: Optional[Dict[str, Any]] = {},
-                               returnFields: List[str] = ['id']):
+                               inputArgs: Dict[str, Any]):
+
+        if not isinstance(mutationField, DSLField):
+            raise TypeError("mutationField must be of type DSLField.")
+
+
+        if not is_output_type(outputType):
+            raise TypeError("outputType must be of type GraphQLOutputType.")
+
+        if not isinstance(inputArgs, dict):
+            raise TypeError("inputArgs must be of type dict.")
+
+        if len(inputArgs) == 0:
+            raise AnsibleValidationError("inputArgs must have at least one key-value pair.")
 
         if is_scalar_type(outputType):
             argsIntersect = list(
@@ -262,10 +271,9 @@ class GqlClient(Display):
             self.mutation_field_add_args(
                 mutationField,
                 listObj.of_type,
-                inputArgs,
-                returnFields)
+                inputArgs)
         else:
-            raise Exception("Unsupported field type found when generating mutation field")
+            raise Exception(f"Unsupported field type {outputType} found when generating mutation field")
 
 globalClient: GqlClient = None
 def GetClientInstance(endpoint: str, token: str, headers: dict = {},

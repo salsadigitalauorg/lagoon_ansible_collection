@@ -1,6 +1,6 @@
 from os.path import dirname, realpath
 from gql.client import SyncClientSession
-from gql.dsl import dsl_gql, DSLExecutable, DSLField, DSLQuery, print_ast
+from gql.dsl import dsl_gql, DSLExecutable, DSLField, DSLMutation, DSLQuery, print_ast
 from graphql import GraphQLSchema, build_ast_schema, parse
 from unittest.mock import MagicMock
 
@@ -17,6 +17,9 @@ def load_schema() -> GraphQLSchema:
 
 def dsl_field_query_to_str(query: DSLField) -> str:
     return print_ast(dsl_gql(DSLQuery(query)))
+
+def dsl_field_mutation_to_str(mutation: DSLField) -> str:
+    return print_ast(dsl_gql(DSLMutation(mutation)))
 
 def dsl_exes_to_str(*exes: DSLExecutable) -> str:
     return print_ast(dsl_gql(*exes))
