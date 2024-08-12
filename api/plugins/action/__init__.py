@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
-from ..module_utils.gql import GetClientInstance, ProxyLookup, inputArgsToFieldList
+from ..module_utils.gql import GetClientInstance, ProxyLookup, input_args_to_field_list
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
 from ansible.errors import AnsibleError
@@ -292,7 +292,7 @@ class LagoonMutationActionBase(LagoonActionBase):
     mutationFieldName = self.actionConfig.fromState(self.action).field
     args = self.moduleArgs
 
-    returnFields = inputArgsToFieldList(args)
+    returnFields = input_args_to_field_list(args)
 
     if (self.action == 'add' and existingRecord is not None and
         self.actionConfig.fromState(self.action).updateField is not None):

@@ -247,14 +247,14 @@ class GqlClient(Display):
                                inputArgs: Dict[str, Any]):
 
         if not isinstance(mutationField, DSLField):
-            raise TypeError("mutationField must be of type DSLField.")
+            raise TypeError(f"mutationField must be of type DSLField, got {type(mutationField)}.")
 
 
         if not is_output_type(outputType):
-            raise TypeError("outputType must be of type GraphQLOutputType.")
+            raise TypeError(f"outputType must be of type GraphQLOutputType, got {type(outputType)}.")
 
         if not isinstance(inputArgs, dict):
-            raise TypeError("inputArgs must be of type dict.")
+            raise TypeError(f"inputArgs must be of type dict, got {type(inputArgs)}.")
 
         if len(inputArgs) == 0:
             raise AnsibleValidationError("inputArgs must have at least one key-value pair.")
@@ -273,7 +273,7 @@ class GqlClient(Display):
                 listObj.of_type,
                 inputArgs)
         else:
-            raise Exception(f"Unsupported field type {outputType} found when generating mutation field")
+            raise Exception(f"Unsupported field type {outputType} ({type(outputType)}) found when generating mutation field")
 
 globalClient: GqlClient = None
 def GetClientInstance(endpoint: str, token: str, headers: dict = {},
@@ -333,7 +333,7 @@ class ProxyLookup(Display):
                 lookupCompareFields: List[str]) -> Dict[str, Any]|None:
         typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
 
-        leafQueryFields = inputArgsToFieldList(inputArgs)
+        leafQueryFields = input_args_to_field_list(inputArgs)
 
         if len(self.selectFields):
             self.qryField.select(
@@ -375,7 +375,7 @@ class ProxyLookup(Display):
         return matchedRecord
 
 
-def inputArgsToFieldList(inputArgs: dict) -> List[str|dict]:
+def input_args_to_field_list(inputArgs: dict) -> List[str|dict]:
     fieldList = []
     for k, v in inputArgs.items():
         if isinstance(v, dict):
@@ -393,7 +393,24 @@ def inputArgsToFieldList(inputArgs: dict) -> List[str|dict]:
 def field_selector(ds: DSLSchema,
                    selector: DSLField,
                    selectorType: GraphQLOutputType,
-                   selectFields: List[str]) -> DSLField:
+                   selectFields: List[str] = []) -> DSLField:
+    """Recursively build a field selector for a given field & type."""
+
+    if not isinstance(ds, DSLSchema):
+        raise TypeError(f"ds must be of type DSLSchema, got {type(ds)}.")
+
+    if not isinstance(selector, DSLField):
+        raise TypeError(f"selector must be of type DSLField, got {type(selector)}.")
+
+    if not is_output_type(selectorType):
+        raise TypeError(f"selectorType must be of type GraphQLOutputType, got {type(selectorType)}.")
+
+    if not isinstance(selectFields, list):
+        raise TypeError(f"selectFields must be of type list, got {type(selectFields)}.")
+
+    if (not is_scalar_type(selectorType) and
+        not is_enum_type(selectorType) and len(selectFields) == 0):
+        raise AnsibleValidationError("selectFields must have at least one field.")
 
     if is_scalar_type(selectorType) or is_enum_type(selectorType):
         return selector
@@ -428,7 +445,7 @@ def field_selector(ds: DSLSchema,
                 inlineFragment.select(getattr(inlineFragmentType, f))
             selector.select(inlineFragment)
     else:
-        raise Exception("Unsupported field type found when generating field selector")
+        raise Exception(f"Unsupported field type {selectorType} ({type(selectorType)}) found when generating field selector")
 
     return selector
 
@@ -437,6 +454,21 @@ def nested_field_selector(
         parentType: DSLType,
         selectFields: List[str],
         leafFields: List[str]) -> Union[DSLType, DSLField]:
+
+    if not isinstance(ds, DSLSchema):
+        raise TypeError(f"ds must be of type DSLSchema, got {type(ds)}.")
+
+    if not isinstance(parentType, DSLType):
+        raise TypeError(f"parentType must be of type DSLType, got {type(parentType)}.")
+
+    if not isinstance(selectFields, list):
+        raise TypeError(f"selectFields must be of type list, got {type(selectFields)}.")
+
+    if not isinstance(leafFields, list):
+        raise TypeError(f"leafFields must be of type list, got {type(leafFields)}.")
+
+    if len(selectFields) == 0:
+        raise AnsibleValidationError("selectFields must have at least one field.")
 
     if len(selectFields) == 1:
         leafSelector: DSLField = getattr(parentType, selectFields[0])
