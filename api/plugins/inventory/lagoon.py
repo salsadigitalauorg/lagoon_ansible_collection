@@ -15,6 +15,8 @@ from typing import Any, Optional, Union
 
 DOCUMENTATION = """
     name: lagoon
+    short_description: Builds an inventory of Lagoon projects and environments.
+    description: Builds an inventory of Lagoon projects and environments.
     plugin_type: inventory
     extends_documentation_fragment:
         - constructed

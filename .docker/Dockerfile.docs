@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+ARG OPERATION=build
+ARG ANSIBLE_COLLECTIONS_PATH=/collections
+ENV ANSIBLE_COLLECTIONS_PATH=${ANSIBLE_COLLECTIONS_PATH}
+
+RUN set -ex; \
+  mkdir -p ${ANSIBLE_COLLECTIONS_PATH}/ansible_collections/lagoon /built-docs; \
+  apt-get update && apt-get install -y rsync; \
+  apt-get clean; \
+  rm -rf /var/lib/apt/lists/*
+
+COPY api ${ANSIBLE_COLLECTIONS_PATH}/ansible_collections/lagoon/api
+
+WORKDIR ${ANSIBLE_COLLECTIONS_PATH}/ansible_collections/lagoon/api
+
+RUN set -ex; \
+  python -m pip install ansible antsibull-docs; \
+  \
+  if [ "${OPERATION}" = "build" ]; then \
+    # Use more lenient linting version - use the stricter one when ready.
+    antsibull-docs lint-collection-docs .; \
+    # antsibull-docs lint-collection-docs --plugin-docs .; \
+    antsibull-docs sphinx-init --use-current \
+      --squash-hierarchy lagoon.api --dest-dir /built-docs; \
+    cd /built-docs; \
+    python -m pip install -r requirements.txt; \
+    ./build.sh; \
+  fi
+
+WORKDIR /built-docs/build/html
+
+EXPOSE 8000
+
+CMD [ "python", "-m", "http.server" ]

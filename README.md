@@ -28,3 +28,19 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 docker-compose build
 docker-compose run --rm test units -v --requirements
 ```
+
+## Creating the docs
+
+Linting the docs
+```sh
+docker compose build lint-docs
+docker compose run --rm lint-docs
+```
+
+Build the docs:
+```sh
+docker compose build docs
+docker compose up -d docs
+```
+
+Docs should be ready to browse at [http://localhost:9180](http://localhost:9180).
