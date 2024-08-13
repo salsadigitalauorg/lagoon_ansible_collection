@@ -285,6 +285,8 @@ def GetClientInstance(endpoint: str, token: str, headers: dict = {},
     return globalClient
 
 class ProxyLookup(Display):
+    """This class aims to facilitate the lookup of records in the Lagoon API
+    by providing a simple interface to build and execute queries."""
 
     query: str = None
 
@@ -325,25 +327,48 @@ class ProxyLookup(Display):
             if len(self.inputArgFields):
                 self.qryField.args(**{self.inputArgFields[arg]: inputArgs[arg]})
                 continue
+
             self.qryField.args(**{arg: inputArgs[arg]})
 
         return True
 
     def execute(self, inputArgs: dict,
                 lookupCompareFields: List[str]) -> Dict[str, Any]|None:
-        typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
+
+        if not isinstance(inputArgs, dict):
+            raise TypeError(
+                f"inputArgs must be of type dict, got {type(inputArgs)}.")
+
+        if not isinstance(lookupCompareFields, list):
+            raise TypeError(
+                f"lookupCompareFields must be of type list, got {type(lookupCompareFields)}.")
+
+        if not len(inputArgs):
+            raise AnsibleValidationError("inputArgs must have at least one key-value pair.")
+
+        if not len(lookupCompareFields):
+            raise AnsibleValidationError("lookupCompareFields must have at least one field.")
 
         leafQueryFields = input_args_to_field_list(inputArgs)
+        leafQueryFields.extend(x for x in lookupCompareFields if x not in leafQueryFields)
 
-        if len(self.selectFields):
+        if self.selectFields and len(self.selectFields):
+            typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
             self.qryField.select(
                 nested_field_selector(
                     self.client().ds, typeObj, self.selectFields, leafQueryFields))
+        else:
+            self.qryField = field_selector(
+                self.client().ds, self.qryField, self.qryField.field.type,
+                leafQueryFields)
 
         results = self.client().execute_query_dynamic(DSLQuery(self.qryField))
         results = results[self.query]
-        if not len(self.selectFields):
+        if not self.selectFields or not len(self.selectFields):
             return results
+
+        if not results:
+            return None
 
         # Extract the results from the nested fields.
         for f in self.selectFields:

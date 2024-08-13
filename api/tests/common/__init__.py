@@ -15,10 +15,10 @@ def load_schema() -> GraphQLSchema:
         schema = build_ast_schema(type_def_ast)
         return schema
 
-def dsl_field_query_to_str(query: DSLField) -> str:
+def dsl_field_query_field_to_str(query: DSLField) -> str:
     return print_ast(dsl_gql(DSLQuery(query)))
 
-def dsl_field_mutation_to_str(mutation: DSLField) -> str:
+def dsl_field_mutation_field_to_str(mutation: DSLField) -> str:
     return print_ast(dsl_gql(DSLMutation(mutation)))
 
 def dsl_exes_to_str(*exes: DSLExecutable) -> str:

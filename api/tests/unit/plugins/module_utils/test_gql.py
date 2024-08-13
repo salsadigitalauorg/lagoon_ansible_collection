@@ -1,12 +1,14 @@
 import unittest
 from ansible.module_utils.errors import AnsibleValidationError
-from ....common import dsl_field_mutation_to_str, dsl_field_query_to_str, load_schema
-from gql.dsl import DSLField, DSLSchema
+from ....common import dsl_exes_to_str, dsl_field_mutation_field_to_str, dsl_field_query_field_to_str, load_schema
+from gql.dsl import DSLField, DSLInlineFragment, DSLQuery, DSLSchema
+from unittest.mock import MagicMock
 
 import sys
 sys.modules['ansible.utils.display'] = unittest.mock.Mock()
 from .....plugins.module_utils.gql import (
-  GqlClient, field_selector, input_args_to_field_list, nested_field_selector
+  GetClientInstance, GqlClient, ProxyLookup, field_selector,
+  input_args_to_field_list, nested_field_selector
 )
 
 
@@ -36,7 +38,7 @@ class GqlClientTester(unittest.TestCase):
         client = GqlClient('foo', 'bar')
         client.ds = DSLSchema(load_schema())
         query = client.build_dynamic_query('projectByName', 'Project', fields=['id', 'name'])
-        query_str = dsl_field_query_to_str(query)
+        query_str = dsl_field_query_field_to_str(query)
         print(f"GraphQL built query: \n{query_str}")
         assert query_str == """{
   projectByName {
@@ -83,7 +85,7 @@ class GqlClientTester(unittest.TestCase):
         # No return fields - should use default ['id'].
         mutation = client.build_dynamic_mutation(
             'addProject', inputArgs={'input': {'name': 'foo'}})
-        mutation_str = dsl_field_mutation_to_str(mutation)
+        mutation_str = dsl_field_mutation_field_to_str(mutation)
         assert mutation_str == """mutation {
   addProject(input: {name: "foo"}) {
     id
@@ -95,7 +97,7 @@ class GqlClientTester(unittest.TestCase):
             'addProject',
             inputArgs={'input': {'name': 'foo', 'bogusArg': 'bar'}},
             returnFields=['name', 'kubernetes'])
-        mutation_str = dsl_field_mutation_to_str(mutation)
+        mutation_str = dsl_field_mutation_field_to_str(mutation)
         assert mutation_str == """mutation {
   addProject(input: {name: "foo"}) {
     name
@@ -358,3 +360,173 @@ class GqlUtilsTester(unittest.TestCase):
   }
 }"""
 
+class GqlProxyLookup(unittest.TestCase):
+
+    def test_constructor(self):
+        with self.assertRaises(TypeError) as e:
+            _ = ProxyLookup()
+
+        assert(str(e.exception) == "__init__() missing 1 required positional argument: 'query'")
+
+    def test_hasInputArgs(self):
+        GetClientInstance('foo', 'bar').ds = DSLSchema(load_schema())
+
+        lookup = ProxyLookup('projectByName')
+        assert lookup.hasInputArgs({}) == False
+
+        lookup = ProxyLookup('projectByName')
+        assert lookup.hasInputArgs({'fooArg': 'bar'}) == False
+
+        lookup = ProxyLookup('projectByName', inputArgFields={'fooArg': 'name'})
+        assert lookup.hasInputArgs({'fooArg': 'bar'}) == True
+
+        lookup = ProxyLookup('projectByName')
+        assert lookup.hasInputArgs({'name': 'foo'}) == True
+
+    def test_execute(self):
+        client = GetClientInstance('foo', 'bar')
+        client.ds = DSLSchema(load_schema())
+
+        lookup = ProxyLookup('projectByName')
+        with self.assertRaises(TypeError) as e:
+            lookup.execute()
+
+        assert(str(e.exception) == "execute() missing 2 required positional arguments: 'inputArgs' and 'lookupCompareFields'")
+
+        # String passed as dict.
+        lookup = ProxyLookup('projectByName')
+        with self.assertRaises(TypeError) as e:
+            lookup.execute('foo', 'bar')
+
+        assert(str(e.exception) == "inputArgs must be of type dict, got <class 'str'>.")
+
+        # String passed as list.
+        lookup = ProxyLookup('projectByName')
+        with self.assertRaises(TypeError) as e:
+            lookup.execute({'name': 'foo'}, 'bar')
+
+        assert(str(e.exception) == "lookupCompareFields must be of type list, got <class 'str'>.")
+
+        # No input args.
+        lookup = ProxyLookup('projectByName')
+        with self.assertRaises(AnsibleValidationError) as e:
+            lookup.execute({}, ['name'])
+
+        assert(str(e.exception) == "inputArgs must have at least one key-value pair.")
+
+        # No lookup compare fields.
+        lookup = ProxyLookup('projectByName')
+        with self.assertRaises(AnsibleValidationError) as e:
+            lookup.execute({'name': 'foo'}, [])
+
+        assert(str(e.exception) == "lookupCompareFields must have at least one field.")
+
+        # No select fields.
+        client.execute_query_dynamic = MagicMock()
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'})
+        lookup.hasInputArgs({'projectName': 'foo'})
+        lookup.execute({'projectName': 'foo'}, ['name'])
+        expectedQry = DSLQuery(
+            client.ds.Query.projectByName(name='foo').select(
+                client.ds.Project.id, # id is automatically selected.
+                client.ds.Project.name, # name is selected because it's in lookupCompareFields.
+            ))
+        query_args = client.execute_query_dynamic.call_args.args
+        actualQry = query_args[0]
+        assert dsl_exes_to_str(expectedQry) == dsl_exes_to_str(actualQry)
+
+        # With select fields.
+        client.execute_query_dynamic = MagicMock()
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'},
+                             selectFields=['environments', 'advancedTasks'])
+        lookup.hasInputArgs({'projectName': 'foo'})
+        lookup.execute({'projectName': 'foo'}, ['name'])
+        expectedQry = DSLQuery(
+            client.ds.Query.projectByName(name='foo').select(
+                client.ds.Project.environments.select(
+                    client.ds.Environment.advancedTasks.select(
+                        DSLInlineFragment().on(client.ds.AdvancedTaskDefinitionImage).select(
+                            client.ds.AdvancedTaskDefinitionImage.id,
+                            client.ds.AdvancedTaskDefinitionImage.name),
+                        DSLInlineFragment().on(client.ds.AdvancedTaskDefinitionCommand).select(
+                            client.ds.AdvancedTaskDefinitionImage.id,
+                            client.ds.AdvancedTaskDefinitionImage.name)))))
+        query_args = client.execute_query_dynamic.call_args.args
+        actualQry = query_args[0]
+        assert dsl_exes_to_str(expectedQry) == dsl_exes_to_str(actualQry)
+
+        # No select fields, with return values: None.
+        client.execute_query_dynamic = MagicMock(
+            return_value={'projectByName': None})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'})
+        lookup.hasInputArgs({'projectName': 'foo'})
+        result = lookup.execute({'projectName': 'foo'}, ['name'])
+        assert result == None
+
+        # No select fields, with return values: Single value.
+        client.execute_query_dynamic = MagicMock(
+            return_value={'projectByName': {'id': 78, 'name': 'foo'}})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'})
+        lookup.hasInputArgs({'projectName': 'foo'})
+        result = lookup.execute({'projectName': 'foo'}, ['name'])
+        assert result == {'id': 78, 'name': 'foo'}
+
+        # No select fields, with return values: Multiple values.
+        client.execute_query_dynamic = MagicMock(
+            return_value={'projectByName': [
+                {'id': 78, 'name': 'foo'}, {'id': 79, 'name': 'bar'}]})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'})
+        lookup.hasInputArgs({'projectName': 'foo'})
+        result = lookup.execute({'projectName': 'foo'}, ['name'])
+        assert result == [{'id': 78, 'name': 'foo'}, {'id': 79, 'name': 'bar'}]
+
+        # With select fields, with return values: None.
+        client.execute_query_dynamic = MagicMock(
+            return_value={'projectByName': None})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'},
+                             selectFields=['environments', 'advancedTasks'])
+        lookup.hasInputArgs({'projectName': 'foo'})
+        result = lookup.execute({'projectName': 'foo'}, ['name'])
+        assert result == None
+
+        # With select fields, with return values: Single value but not found.
+        client.execute_query_dynamic = MagicMock(
+            return_value={
+                'projectByName': {
+                    'environments': [{
+                        'advancedTasks': [
+                            {'id': 12, 'name': 'zoom'},
+                            {'id': 13, 'name': 'zap'},
+                        ]
+                    }],
+                }})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'},
+                             selectFields=['environments', 'advancedTasks'])
+        lookup.hasInputArgs({'projectName': 'foo', 'name': 'poof'})
+        result = lookup.execute({'projectName': 'foo', 'name': 'poof'}, ['name'])
+        assert result == None
+
+        # With select fields, with return values: Single value, found.
+        client.execute_query_dynamic = MagicMock(
+            return_value={
+                'projectByName': {
+                    'environments': [{
+                        'advancedTasks': [
+                            {'id': 12, 'name': 'zoom'},
+                            {'id': 13, 'name': 'zap'},
+                        ]
+                    }],
+                }})
+        lookup = ProxyLookup('projectByName',
+                             inputArgFields={'projectName': 'name'},
+                             selectFields=['environments', 'advancedTasks'])
+        lookup.hasInputArgs({'projectName': 'foo', 'name': 'zap'})
+        result = lookup.execute({'projectName': 'foo', 'name': 'zap'}, ['name'])
+        assert result == {'id': 13, 'name': 'zap'}
