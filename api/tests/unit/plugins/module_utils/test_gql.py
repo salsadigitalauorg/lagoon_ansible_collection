@@ -198,6 +198,26 @@ class GqlUtilsTester(unittest.TestCase):
             ],
         }) == ['id', 'name', {'facts': ['name', 'value']}]
 
+        assert input_args_to_field_list({
+            'id': 10,
+            'name': 'foo',
+            'facts': [
+                {'name': 'foo', 'value': 'bar', 'optional': True},
+                {'name': 'baz', 'value': 'qux'}
+            ],
+        }) == ['id', 'name', {'facts': ['name', 'value', 'optional']}]
+
+        assert input_args_to_field_list(
+            {
+                "id": 10,
+                "name": "foo",
+                "facts": [
+                    {"name": "foo", "value": "bar"},
+                    {"name": "baz", "value": "qux", "optional": True},
+                ],
+            }
+        ) == ["id", "name", {"facts": ["name", "value", "optional"]}]
+
     def test_field_selector(self):
         ds = DSLSchema(load_schema())
 

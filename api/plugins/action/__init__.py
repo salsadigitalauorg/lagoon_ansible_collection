@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
+from ..module_utils.display import Display
 from ..module_utils.gql import GetClientInstance, ProxyLookup, input_args_to_field_list
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
@@ -21,7 +22,7 @@ class LagoonActionBase(ActionBase):
     result = super(LagoonActionBase, self).run(tmp, task_vars)
     del tmp
 
-    self._display.v("Task args: %s" % self._task.args)
+    self._display.v("Task args: %s\n\n" % self._task.args)
     return result
 
   def createClient(self, task_vars):
@@ -164,14 +165,37 @@ class MutationActionConfig:
     if not pluginConfig.diffCompareFields:
       return False
 
+    Display().vvv(f"Diffing existing record: {record} with input keys ({inputArgs.keys()}) and compareFields: {pluginConfig.diffCompareFields}\n\n")
     for field in pluginConfig.diffCompareFields:
       if field not in record or field not in inputArgs:
         continue
 
-      if record[field] != inputArgs[field]:
+      if valueDiffers(record[field], inputArgs[field]):
+        Display().vvv(f"Field {field} differs: {record[field]} != {inputArgs[field]}\n\n")
         return True
 
     return False
+
+def valueDiffers(val1: any, val2: any) -> bool:
+  if isinstance(val1, dict) and isinstance(val2, dict):
+    for key in val1.keys():
+      if key not in val2:
+        continue
+      if valueDiffers(val1[key], val2[key]):
+        Display().vvv(f"Field {key} differs: {val1[key]} != {val2[key]}\n\n")
+        return True
+    return False
+  elif isinstance(val1, list) and isinstance(val2, list):
+    if len(val1) != len(val2):
+      Display().vvv(f"Lists differ: {val1} != {val2}\n\n")
+      return True
+    for i in range(len(val1)):
+      if valueDiffers(val1[i], val2[i]):
+        Display().vvv(f"List item differs: {val1[i]} != {val2[i]}\n\n")
+        return True
+    return False
+  else:
+    return val1 != val2
 
 
 class LagoonMutationActionBase(LagoonActionBase):
@@ -241,7 +265,7 @@ class LagoonMutationActionBase(LagoonActionBase):
         self.hasInputWrapper = True
         genArgSpec = genArgSpec['input']['options']
       self.argSpec.update(genArgSpec)
-      self._display.vvv(f"Generated argspec: {self.argSpec}")
+      self._display.vvv(f"Generated argspec: {self.argSpec}\n\n")
 
       # Validate the arguments.
       _, moduleArgs = self.validate_argument_spec(self.argSpec)
@@ -249,17 +273,21 @@ class LagoonMutationActionBase(LagoonActionBase):
       # Filter out None arguments.
       moduleArgs = {k: v for k, v in moduleArgs.items() if v is not None}
 
-      self._display.vvv(f"Validated module args: {moduleArgs}")
+      self._display.vvv(f"Validated module args: {moduleArgs}\n\n")
       self.moduleArgs = moduleArgs
 
       # Find if there's an existing record.
+      self._display.vvv(f"Finding existing record for action: {self.action}")
       record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
       if record is not None:
+        self._display.vvv(f"Existing record found: {record}\n\n")
         changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
         if not changed:
           result['changed'] = False
           result['result'] = record
           return result
+      else:
+        self._display.vvv("Existing record not found\n")
 
       self.buildMutationObj(record)
 

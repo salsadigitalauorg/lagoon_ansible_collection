@@ -93,10 +93,10 @@ class GqlClient(Display):
 
         try:
             res = self.client.execute(query_ast, variable_values=variables)
-            self.vvvv(f"GraphQL query result: {res}")
+            self.vvvv(f"GraphQL query result: {res}\n\n")
             return res
         except TransportQueryError as e:
-            self.vvvv(f"GraphQL TransportQueryError: {e}")
+            self.vvvv(f"GraphQL TransportQueryError: {e}\n\n")
             return {'error': e}
 
     def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
@@ -125,7 +125,7 @@ class GqlClient(Display):
         else:
             res = self.client.session.execute(full_query)
 
-        self.vvv(f"GraphQL query result: {res}")
+        self.vvv(f"GraphQL query result: {res}\n\n")
         return res
 
     def build_dynamic_query(self,
@@ -406,7 +406,13 @@ def input_args_to_field_list(inputArgs: dict) -> List[str|dict]:
         if isinstance(v, dict):
             fieldList.append({k: list(v.keys())})
         elif isinstance(v, list) and len(v) and isinstance(v[0], dict):
-            fieldList.append({k: list(v[0].keys())})
+            # Get a list of unique keys from the list of dicts.
+            uniqueKeys = []
+            for d in v:
+                for dk in d.keys():
+                    if dk not in uniqueKeys:
+                        uniqueKeys.append(dk)
+            fieldList.append({k: uniqueKeys})
         else:
             fieldList.append(k)
 
