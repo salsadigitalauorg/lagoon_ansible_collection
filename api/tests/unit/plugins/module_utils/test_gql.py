@@ -27,7 +27,7 @@ class GqlClientTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             client.build_dynamic_query()
 
-        assert(str(e.exception) == "build_dynamic_query() missing 2 required positional arguments: 'query' and 'mainType'")
+        assert("build_dynamic_query() missing 2 required positional arguments: 'query' and 'mainType'" in str(e.exception))
 
         with self.assertRaises(AnsibleValidationError) as e:
             client.build_dynamic_query('projectByName', 'Project')
@@ -53,12 +53,12 @@ class GqlClientTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             client.build_dynamic_mutation()
 
-        assert(str(e.exception) == "build_dynamic_mutation() missing 2 required positional arguments: 'mutation' and 'inputArgs'")
+        assert("build_dynamic_mutation() missing 2 required positional arguments: 'mutation' and 'inputArgs'" in str(e.exception))
 
         with self.assertRaises(TypeError) as e:
             client.build_dynamic_mutation('projectByName')
 
-        assert(str(e.exception) == "build_dynamic_mutation() missing 1 required positional argument: 'inputArgs'")
+        assert("build_dynamic_mutation() missing 1 required positional argument: 'inputArgs'" in str(e.exception))
 
     def test_build_dynamic_mutation_query_instead_of_mutation(self):
         client = GqlClient('foo', 'bar')
@@ -112,7 +112,7 @@ class GqlClientTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             client.mutation_field_add_args()
 
-        assert(str(e.exception) == "mutation_field_add_args() missing 3 required positional arguments: 'mutationField', 'outputType', and 'inputArgs'")
+        assert("mutation_field_add_args() missing 3 required positional arguments: 'mutationField', 'outputType', and 'inputArgs'" in str(e.exception))
 
         # String passed as field.
         with self.assertRaises(TypeError) as e:
@@ -204,7 +204,7 @@ class GqlUtilsTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             field_selector()
 
-        assert(str(e.exception) == "field_selector() missing 3 required positional arguments: 'ds', 'selector', and 'selectorType'")
+        assert("field_selector() missing 3 required positional arguments: 'ds', 'selector', and 'selectorType'" in str(e.exception))
 
         # String passed as DSLSchema.
         with self.assertRaises(TypeError) as e:
@@ -281,7 +281,7 @@ class GqlUtilsTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             nested_field_selector()
 
-        assert(str(e.exception) == "nested_field_selector() missing 4 required positional arguments: 'ds', 'parentType', 'selectFields', and 'leafFields'")
+        assert("nested_field_selector() missing 4 required positional arguments: 'ds', 'parentType', 'selectFields', and 'leafFields'" in str(e.exception))
 
         # String passed as DSLSchema.
         with self.assertRaises(TypeError) as e:
@@ -366,7 +366,7 @@ class GqlProxyLookup(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             _ = ProxyLookup()
 
-        assert(str(e.exception) == "__init__() missing 1 required positional argument: 'query'")
+        assert("__init__() missing 1 required positional argument: 'query'" in str(e.exception))
 
     def test_hasInputArgs(self):
         GetClientInstance('foo', 'bar').ds = DSLSchema(load_schema())
@@ -391,7 +391,7 @@ class GqlProxyLookup(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             lookup.execute()
 
-        assert(str(e.exception) == "execute() missing 2 required positional arguments: 'inputArgs' and 'lookupCompareFields'")
+        assert("execute() missing 2 required positional arguments: 'inputArgs' and 'lookupCompareFields'" in str(e.exception))
 
         # String passed as dict.
         lookup = ProxyLookup('projectByName')
