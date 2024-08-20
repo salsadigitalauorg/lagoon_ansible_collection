@@ -40,7 +40,7 @@ def generate_argspec_from_mutation(
   for fieldName, arg in mutationField.field.args.items():
     argSpec[fieldName] = generate_argspec_for_input_type(arg.type, aliases)
 
-  if 'input' in argSpec:
+  if 'input' in argSpec and additionalArgs:
     argSpec['input']['options'].update(additionalArgs)
   elif additionalArgs:
     argSpec.update(additionalArgs)
@@ -54,7 +54,7 @@ def generate_argspec_from_input_object_type(
   field: GraphQLInputField
   for fieldName, field in fields.items():
     argSpec[fieldName] = generate_argspec_for_input_type(field.type, aliases)
-    if fieldName in aliases:
+    if aliases and fieldName in aliases:
       argSpec[fieldName]['aliases'] = aliases[fieldName]
   return argSpec
 
