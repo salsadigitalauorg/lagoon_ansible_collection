@@ -13,9 +13,15 @@ from gql.dsl import (
 )
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.requests import RequestsHTTPTransport
-from graphql import print_ast, GraphQLList, GraphQLOutputType, GraphQLUnionType
+from graphql import (
+    print_ast,
+    GraphQLList,
+    GraphQLOutputType,
+    GraphQLUnionType,
+)
 from graphql.type.definition import (
     is_enum_type,
+    is_interface_type,
     is_list_type,
     is_object_type,
     is_output_type,
@@ -96,6 +102,11 @@ class GqlClient(Display):
             self.vvvv(f"GraphQL query result: {res}\n\n")
             return res
         except TransportQueryError as e:
+            # In some cases (groupByName), an error is returned when not found,
+            # whereas in others it's just an empty result (projectByName).
+            # Let's keep it consistent.
+            if 'not found' in str(e):
+                return e.data
             self.vvvv(f"GraphQL TransportQueryError: {e}\n\n")
             return {'error': e}
 
@@ -115,15 +126,23 @@ class GqlClient(Display):
         full_query = dsl_gql(*operations)
         self.vvv(f"GraphQL built query: \n{print_ast(full_query)}")
 
+        opName = operations[0].selection_set.selections[0].name.value
         if self.checkMode and isinstance(operations[0], DSLMutation):
             self.info(f"Check mode enabled, skipping query execution. Query to execute: \n{print_ast(full_query)}")
-            opName = operations[0].selection_set.selections[0].name.value
             if opName.startswith('delete'):
                 res = {opName: 'success'}
             else:
                 res = {opName: {'id': -1 * randint(1, 1000)}}
         else:
-            res = self.client.session.execute(full_query)
+            try:
+                res = self.client.session.execute(full_query)
+            except TransportQueryError as e:
+                # In some cases (groupByName), an error is returned when
+                # not found, whereas in others it's just an empty result
+                # (projectByName). Let's keep it consistent.
+                if 'not found' in str(e):
+                    return e.data
+                raise e
 
         self.vvv(f"GraphQL query result: {res}\n\n")
         return res
@@ -249,7 +268,6 @@ class GqlClient(Display):
         if not isinstance(mutationField, DSLField):
             raise TypeError(f"mutationField must be of type DSLField, got {type(mutationField)}.")
 
-
         if not is_output_type(outputType):
             raise TypeError(f"outputType must be of type GraphQLOutputType, got {type(outputType)}.")
 
@@ -264,7 +282,7 @@ class GqlClient(Display):
                 set(mutationField.field.args.keys()) &
                 set(inputArgs.keys()))
             mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
-        elif is_union_type(outputType) or is_object_type(outputType):
+        elif is_union_type(outputType) or is_object_type(outputType) or is_interface_type(outputType):
             mutationField.args(**inputArgs)
         elif is_list_type(outputType):
             listObj = cast(GraphQLList, outputType)
@@ -447,7 +465,7 @@ def field_selector(ds: DSLSchema,
         return selector
     elif is_list_type(selectorType):
         return field_selector(ds, selector, selectorType.of_type, selectFields)
-    elif is_object_type(selectorType):
+    elif is_object_type(selectorType) or is_interface_type(selectorType):
         selectType: DSLType = getattr(ds, selectorType.name)
         for f in selectFields:
             if not hasattr(selectType, f):

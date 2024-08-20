@@ -25,21 +25,30 @@ gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
 
 ## Run unit tests
 ```sh
-docker-compose build test
-docker-compose run --rm test units -v --requirements
+docker compose build test
+docker compose run --rm test units -v --requirements
 ```
 
 ## Creating the docs
 
+To view the module docs in the terminal, run
+```sh
+# List modules
+docker compose run --rm --entrypoint="" -T lint-docs bash -c \
+  'ansible-doc -t module lagoon.api -l'
+
+# Specific module (group)
+docker compose run --rm --entrypoint="" -T lint-docs bash -c \
+  'ansible-doc -t module lagoon.api.group'
+```
+
 Linting the docs
 ```sh
-docker compose build lint-docs
 docker compose run --rm lint-docs
 ```
 
-Build the docs:
+Build & serve the docs:
 ```sh
-docker compose build docs
 docker compose up -d docs
 ```
 

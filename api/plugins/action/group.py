@@ -1,58 +1,15 @@
-from ..module_utils.api_client import ApiClient
-from ansible.errors import AnsibleError
-from ansible.module_utils._text import to_native
-from ansible.plugins.action import ActionBase
+from . import LagoonMutationActionBase, MutationConfig, MutationActionConfig
+from ..module_utils.gql import ProxyLookup
 
 
-class ActionModule(ActionBase):
+class ActionModule(LagoonMutationActionBase):
 
-    def run(self, tmp=None, task_vars=None):
-
-        if task_vars is None:
-            task_vars = dict()
-
-        result = super(ActionModule, self).run(tmp, task_vars)
-        del tmp  # tmp no longer has any effect
-
-        self._display.v("Task args: %s" % self._task.args)
-
-        lagoon = ApiClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            {'headers': self._task.args.get('headers', {})}
-        )
-
-        state = self._task.args.get('state')
-        name = self._task.args.get('name')
-        # parent = self._task.args.get('parent')
-
-        if not name:
-            raise AnsibleError("Missing required parameter 'name'.")
-
-        group = lagoon.group(name)
-
-        if (state == "present"):
-            if group['id']:
-                result['changed'] = False
-                result['group'] = group
-            else:
-                try:
-                    result['group'] = lagoon.group_add(name)
-                except AnsibleError as e:
-                    result['failed'] = True
-                    result['msg'] = to_native(e)
-
-        elif (state == "absent"):
-            if not group['id']:
-                result['changed'] = False
-            else:
-                result['changed'] = True
-                try:
-                    result['group'] = lagoon.group_remove(group['id'])
-                except AnsibleError as e:
-                    result['failed'] = True
-                    result['msg'] = to_native(e)
-        else:
-            raise AnsibleError("Invalid state '%s' operation." % (state))
-
-        return result
+  actionConfig = MutationActionConfig(
+    name="group",
+    add=MutationConfig(
+      field="addGroup",
+      proxyLookups=[ProxyLookup(query="groupByName")],
+      lookupCompareFields=["name"],
+    ),
+    delete=MutationConfig(field="deleteGroup"),
+  )
