@@ -10,7 +10,7 @@ from ..module_utils.gqlProject import Project
 from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
 from gql.dsl import DSLMutation
-from typing import List
+from typing import List, Optional
 
 
 class LagoonActionBase(ActionBase):
@@ -116,7 +116,7 @@ class MutationActionConfig:
   add: MutationConfig
 
   # The configuration for the delete mutation.
-  delete: MutationConfig
+  delete: Optional[MutationConfig]
 
   # Whether the action plugin should have the common Ansible state field with
   # 'present' and 'absent' choices. This depends on which of the add or delete
