@@ -14,12 +14,12 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
 
         mutation = self._task.args.get('mutation')
-        input = self._task.args.get('input')
+        mutationArgs = self._task.args.get('arguments')
         subfields = self._task.args.get('subfields', ['id'])
 
         with self.client:
             mutationObj = self.client.build_dynamic_mutation(
-                mutation, input, subfields)
+                mutation, mutationArgs, subfields)
             res = self.client.execute_query_dynamic(DSLMutation(mutationObj))
             result['result'] = res[mutation]
             result['changed'] = True
