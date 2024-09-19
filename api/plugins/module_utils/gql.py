@@ -91,15 +91,15 @@ class GqlClient(Display):
         """Executes a query using the graphql string provided.
         """
         query_ast = gql(query)
-        self.vvvv(f"GraphQL built query: \n{print_ast(query_ast)}")
-        self.vvvv(f"GraphQL query variables: \n{variables}")
+        self.vvv(f"GraphQL built query: \n{print_ast(query_ast)}")
+        self.vvv(f"GraphQL query variables: \n{variables}")
 
         if self.checkMode:
             return {'checkMode': True}
 
         try:
             res = self.client.execute(query_ast, variable_values=variables)
-            self.vvvv(f"GraphQL query result: {res}\n\n")
+            self.vvv(f"GraphQL query result: {res}\n\n")
             return res
         except TransportQueryError as e:
             # In some cases (groupByName), an error is returned when not found,
@@ -107,7 +107,7 @@ class GqlClient(Display):
             # Let's keep it consistent.
             if 'not found' in str(e):
                 return e.data
-            self.vvvv(f"GraphQL TransportQueryError: {e}\n\n")
+            self.vvv(f"GraphQL TransportQueryError: {e}\n\n")
             return {'error': e}
 
     def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
@@ -281,7 +281,8 @@ class GqlClient(Display):
             argsIntersect = list(
                 set(mutationField.field.args.keys()) &
                 set(inputArgs.keys()))
-            mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
+            if len(argsIntersect):
+                mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
         elif is_union_type(outputType) or is_object_type(outputType) or is_interface_type(outputType):
             mutationField.args(**inputArgs)
         elif is_list_type(outputType):
