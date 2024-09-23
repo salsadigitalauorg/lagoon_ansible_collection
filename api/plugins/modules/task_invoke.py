@@ -1,9 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from api.plugins.modules.task_definition import EXAMPLES
-
-
 DOCUMENTATION = r'''
 module: task_invoke
 short_description: Invoke an advanced task.
