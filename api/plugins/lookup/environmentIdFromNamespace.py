@@ -3,7 +3,7 @@ from ansible.errors import AnsibleError
 from gql.dsl import DSLQuery
 
 DOCUMENTATION = """
-  name: environment_id_from_namespace
+  name: environmentIdFromNamespace
   author: Yusuf Hasan Miyan <yusuf@salsa.digital>
   short_description: Get a lagoon environment's id from its namespace.
   description:
@@ -36,7 +36,7 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve an environment id
-  debug: msg="{{ lookup('lagoon.api.environment_id_from_namespace', environment_ns) }}"
+  debug: msg="{{ lookup('lagoon.api.environmentIdFromNamespace', environment_ns) }}"
 """
 
 

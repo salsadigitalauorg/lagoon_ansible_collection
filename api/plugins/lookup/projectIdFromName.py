@@ -3,7 +3,7 @@ from ansible.errors import AnsibleError
 from gql.dsl import DSLQuery
 
 DOCUMENTATION = """
-  name: project_id_from_name
+  name: projectIdFromName
   author: Yusuf Hasan Miyan <yusuf@salsa.digital>
   short_description: Get a lagoon project's id from its name.
   description:
@@ -36,7 +36,7 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: retrieve a project id
-  debug: msg="{{ lookup('lagoon.api.project_id_from_name', project_name) }}"
+  debug: msg="{{ lookup('lagoon.api.projectIdFromName', project_name) }}"
 """
 
 
