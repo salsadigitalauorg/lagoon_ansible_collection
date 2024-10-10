@@ -43,6 +43,12 @@ options:
       - The deployment in which the task is run (cli/php/nginx...).
       - Required when state is present.
     type: str
+  system_wide:
+    description:
+      - The task will appear for all environments, subject to the user's 
+      - permission to invoke it.
+    type: bool
+    default: false
   command:
     description:
       - The command to run.
@@ -98,6 +104,7 @@ EXAMPLES = r'''
     permission: MAINTAINER
     description: Run the shipshape audit
     service: cli
+    system_wide: false
     command: shipshape
 
 - name: Delete task definition.
