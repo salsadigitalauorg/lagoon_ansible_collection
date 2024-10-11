@@ -19,6 +19,7 @@
         permission: MAINTAINER
         description: Run my test task
         service: cli
+        system_wide: false
         command: ls -l
 
     - name: Ensure task definitions exist
@@ -30,6 +31,7 @@
         permission: MAINTAINER
         description: Run my test task
         service: cli
+        system_wide: false
         command: ls -l
         advancedTaskDefinitionArguments:
           - name: MY_CUSTOM_ARG
