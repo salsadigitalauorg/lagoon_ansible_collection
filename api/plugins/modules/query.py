@@ -18,7 +18,8 @@ options:
     default: {}
   mainType:
     description:
-      - The GraphQL type from which to retrieve the top-level fields.
+      - The GraphQL type from which to retrieve the top-level fields - DEPRECATED.
+      - The type is now inferred from the GraphQL schema.
     type: str
   fields:
     description:
@@ -46,7 +47,6 @@ EXAMPLES = r'''
 - name: Query specific fields for all projects.
   lagoon.api.query:
     query: allProjects
-    mainType: Project
     fields:
       - id
       - name
@@ -57,7 +57,6 @@ EXAMPLES = r'''
     query: projectByName
     args:
       name: '{{ project_name }}'
-    mainType: Project
     fields:
       - id
       - name
@@ -76,7 +75,6 @@ EXAMPLES = r'''
     query: projectByName
     args:
       name: '{{ project_name }}'
-    mainType: Project
     subFields:
       envVariables:
         type: EnvKeyValue
