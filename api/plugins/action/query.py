@@ -14,14 +14,16 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
 
         query = self._task.args.get('query')
-        mainType = self._task.args.get('mainType')
         args = self._task.args.get('args', {})
         fields = self._task.args.get('fields', [])
         subFields = self._task.args.get('subFields', {})
 
         with self.client:
             queryObj = self.client.build_dynamic_query(
-                query, mainType, args, fields, subFields)
+                query=query,
+                args=args,
+                fields=fields,
+                subFieldsMap=subFields)
             res = self.client.execute_query_dynamic(DSLQuery(queryObj))
             result['result'] = res[query]
         return result
