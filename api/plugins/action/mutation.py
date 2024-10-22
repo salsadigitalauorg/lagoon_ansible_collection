@@ -29,7 +29,7 @@ class ActionModule(LagoonActionBase):
         wait = self._task.args.get('wait', False)
         waitCondition = self._task.args.get('waitCondition', {
             'field': 'status',
-            'value': 'complete',
+            'value': ['complete', 'failed'],
         })
 
         with self.client:
@@ -69,5 +69,8 @@ class ActionModule(LagoonActionBase):
 
     def evaluateWaitCondition(self, qryName, waitResult, waitCondition) -> bool:
         if waitCondition["field"] in waitResult[qryName]:
-            return waitResult[qryName][waitCondition["field"]] == waitCondition["value"]
+            if isinstance(waitCondition["value"], list):
+                return waitResult[qryName][waitCondition["field"]] in waitCondition["value"]
+            else:
+                return waitResult[qryName][waitCondition["field"]] == waitCondition["value"]
         return False
