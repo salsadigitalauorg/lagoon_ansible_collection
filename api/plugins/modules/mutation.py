@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: mutation
 description: Run a mutation against the Lagoon GraphQL API.
 short_description: Run a mutation against the Lagoon GraphQL API.
@@ -21,9 +21,26 @@ options:
       - The subfields to select from the mutation result.
     type: list
     default: [id]
-'''
+  wait:
+    description:
+      - Whether to wait for the mutation to complete.
+    type: bool
+    default: false
+  waitCondition:
+    description:
+      - The condition to wait for before returning.
+    type: dict
+    default: {field: status, value: complete}
+    suboptions:
+      field:
+        description: The field to use as status.
+        type: str
+      value:
+        description: The value to wait for.
+        type: str
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Delete a Fact via mutation before creating
   lagoon.api.mutation:
     mutation: deleteFact
@@ -68,4 +85,15 @@ EXAMPLES = r'''
           value: 4.0.0
           source: ansible_playbook:audit:module_version
           description: The panelizer module version
-'''
+
+- name: Invoke Lagoon task and wait for completion
+  lagoon.api.mutation:
+    mutation: invokeRegisteredTask
+    arguments:
+      advancedTaskDefinition: -1
+      environment: -1
+      argumentValues:
+        - advancedTaskDefinitionArgumentName: SOME_ARG_NAME
+          value: SOME_ARG_VALUE
+    wait: true
+"""
