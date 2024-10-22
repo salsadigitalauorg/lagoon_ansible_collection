@@ -191,7 +191,11 @@ class GqlClient(Display):
         if len(args):
             queryObj.args(**args)
 
-        mainType: str = queryObj.field.type.name
+        if is_list_type(queryObj.field.type):
+            listObj = cast(GraphQLList, queryObj.field.type)
+            mainType = listObj.of_type.name
+        else:
+            mainType: str = queryObj.field.type.name
         mainTypeObj: DSLType = getattr(self.ds, mainType)
 
         # Top-level fields.
