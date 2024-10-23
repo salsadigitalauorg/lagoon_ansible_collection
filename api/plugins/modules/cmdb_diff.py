@@ -6,7 +6,7 @@ module: lagoon.api.cmdb_diff
 short_description: Compare local and remote Lagoon configuration states
 description:
   - This module compares local configuration states (head) against the remote states tracked in Lagoon (base).
-  - It helps maintain configuration integrity by detecting discrepancies and suggesting necessary updates or removals.
+  - It ensures configuration integrity by displaying discrepancies in the Ansible output, highlighting configurations that will be updated or removed based on the differences detected.
   - The module supports 'strict' and 'key' comparison modes to allow for detailed or general comparisons as needed.
 options:
   head:
