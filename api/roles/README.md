@@ -12,7 +12,7 @@ The following play can be used to fetch a token:
     - lagoon.api.common
   tasks:
     - include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 ```
 
 The token will now be available in the `lagoon_api_token` localhost variable. Default Lagoon variables are also exported from the `lagoon.api.common` role.
@@ -46,7 +46,7 @@ To reuse the token in another play, the following can be done:
     - lagoon.api.common
   tasks:
     - include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 
     - name: Retrieve all projects.
       set_fact:
@@ -64,7 +64,7 @@ To reuse the token in another play, the following can be done:
     - lagoon.api.common
   tasks:
     - include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 
     - name: Retrieve project by name.
       set_fact:

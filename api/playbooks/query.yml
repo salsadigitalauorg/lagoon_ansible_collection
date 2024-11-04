@@ -7,7 +7,7 @@
     - lagoon.api.common
   tasks:
     - include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 
     - name: Query specific fields for all projects.
       lagoon.api.query:

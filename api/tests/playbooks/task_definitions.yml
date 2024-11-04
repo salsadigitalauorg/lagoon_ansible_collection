@@ -8,7 +8,7 @@
   tasks:
     - name: Create a token.
       ansible.builtin.include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 
     - name: Ensure task definitions exist
       lagoon.api.task_definition:
