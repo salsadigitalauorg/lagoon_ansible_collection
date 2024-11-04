@@ -7,7 +7,7 @@
     - lagoon.api.common
   tasks:
     - include_role:
-        name: lagoon.api.token
+        name: lagoon.api.fetch_token
 
     - name: Trigger staggered deployment.
       lagoon.api.deploy:
