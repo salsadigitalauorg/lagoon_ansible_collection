@@ -63,7 +63,7 @@ jobs:
       - name: Set environment variables.
         run: |
           echo "QUANT_CUSTOMER=salsa-digital" >> "$GITHUB_ENV"
-          echo "QUANT_PROJECT=test-ansible-docs" >> "$GITHUB_ENV"
+          echo "QUANT_PROJECT=lagoon-ansible-collection" >> "$GITHUB_ENV"
           echo "QUANT_TOKEN=${{ secrets.QUANT_TOKEN }}" >> "$GITHUB_ENV"
 
       - name: Deploy updates to QuantCDN
