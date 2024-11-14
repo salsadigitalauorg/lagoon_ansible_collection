@@ -75,6 +75,8 @@ class ActionModule(LagoonMutationActionBase):
         "deployTokenInjection",
         "projectKeyInjection",
         "systemWide",
+        "image",
+        "groupName"
       ],
     ),
     # Configuration for deleting a task definition.

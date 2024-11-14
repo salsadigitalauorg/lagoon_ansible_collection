@@ -149,7 +149,7 @@ class GqlClient(Display):
 
     def build_dynamic_query(self,
                             query: str,
-                            mainType: str,
+                            mainType: str = "",
                             args: Optional[Dict[str, Any]] = {},
                             fields: List[str] = [],
                             subFieldsMap: Optional[Dict[str, List[str]]] = {},
@@ -174,7 +174,6 @@ class GqlClient(Display):
         }
         query = "projectByName"
         args = {"name": "test-project"}
-        mainType = "Project" (since projectByName returns Project)
         fields = ["id", "name"]
         subFieldsMap = {
             "kubernetes": {
@@ -192,6 +191,11 @@ class GqlClient(Display):
         if len(args):
             queryObj.args(**args)
 
+        if is_list_type(queryObj.field.type):
+            listObj = cast(GraphQLList, queryObj.field.type)
+            mainType = listObj.of_type.name
+        else:
+            mainType: str = queryObj.field.type.name
         mainTypeObj: DSLType = getattr(self.ds, mainType)
 
         # Top-level fields.

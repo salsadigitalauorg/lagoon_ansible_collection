@@ -1,0 +1,85 @@
+name: Build ansible docs
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build-ansible-docs:
+    name: Build Ansible Docs
+    runs-on: ubuntu-latest
+    environment: "Quant CDN"
+    steps:
+      - name: Variable setup
+        id: vars
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ANSIBLE_COLLECTIONS_PATH', process.env.GITHUB_WORKSPACE.concat("/ansible_collections"))
+
+            core.setOutput('title', 'Lagoon Ansible Collections Documentation')
+            core.setOutput('short-title', 'Lagoon Ansible Collections Documentation')
+            core.setOutput('python', '3.13')
+            core.setOutput('ansible-ref', 'stable-2.18')
+
+            core.setOutput('col-name', 'lagoon.api')
+            core.setOutput('checkout-path', 'ansible_collections/lagoon')
+            core.setOutput('squash-hierarchy', true)
+
+            core.setOutput('init-dir', './docsbuild')
+            core.setOutput('skip-init', false)
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.vars.outputs.python }}
+
+      - name: Install Ansible
+        run: pip install https://github.com/ansible/ansible/archive/${{ steps.vars.outputs.ansible-ref }}.tar.gz --disable-pip-version-check
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: ${{ steps.vars.outputs.checkout-path }}
+
+      - name: Initialize the build environment
+        id: init
+        uses: ansible-community/github-docs-build/actions/ansible-docs-build-init@main
+        with:
+          collections: ${{ steps.vars.outputs.col-name }}
+          dest-dir: ${{ steps.vars.outputs.init-dir }}
+          skip-init: ${{ steps.vars.outputs.skip-init }}
+          title: ${{ steps.vars.outputs.title }}
+          html-short-title: ${{ steps.vars.outputs.short-title }}
+          squash-hierarchy: ${{ steps.vars.outputs.squash-hierarchy }}
+
+      - name: Build
+        id: build
+        uses: ansible-community/github-docs-build/actions/ansible-docs-build-html@main
+        with:
+          build-script: ${{ steps.init.outputs.build-script }}
+          build-html: ${{ steps.init.outputs.build-html }}
+          artifact-upload: 'false'
+
+      - name: Set environment variables.
+        run: |
+          echo "QUANT_CUSTOMER=salsa-digital" >> "$GITHUB_ENV"
+          echo "QUANT_PROJECT=lagoon-ansible-collection" >> "$GITHUB_ENV"
+          echo "QUANT_TOKEN=${{ secrets.QUANT_TOKEN }}" >> "$GITHUB_ENV"
+
+      - name: Deploy updates to QuantCDN
+        uses: quantcdn/deploy-action@v2.1.0
+        with:
+          customer: "${{ env.QUANT_CUSTOMER }}"
+          project: "${{ env.QUANT_PROJECT }}"
+          token: "${{ env.QUANT_TOKEN }}"
+          dir: "${{ steps.init.outputs.build-html }}"
+          chunk-size: 20
+          skip-purge: true
+
+      - name: Purge the QuantCDN cache
+        uses: quantcdn/purge-action@v2.1.0
+        with:
+          customer: "${{ env.QUANT_CUSTOMER }}"
+          project: "${{ env.QUANT_PROJECT }}"
+          token: "${{ env.QUANT_TOKEN }}"
+          url_pattern: "/*"

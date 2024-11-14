@@ -27,7 +27,7 @@ class GqlClientTester(unittest.TestCase):
         with self.assertRaises(TypeError) as e:
             client.build_dynamic_query()
 
-        assert("build_dynamic_query() missing 2 required positional arguments: 'query' and 'mainType'" in str(e.exception))
+        assert("build_dynamic_query() missing 1 required positional argument: 'query'" in str(e.exception))
 
         with self.assertRaises(AnsibleValidationError) as e:
             client.build_dynamic_query('projectByName', 'Project')
