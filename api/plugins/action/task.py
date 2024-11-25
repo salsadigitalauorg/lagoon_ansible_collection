@@ -19,6 +19,7 @@ class ActionModule(LagoonActionBase):
         environment_ns = self._task.args.get("environment")
         environment_id = self._task.args.get("environment_id")
         task_name = self._task.args.get("name")
+        task_arguments = self._task.args.get("arguments")
 
         if not task_name:
             raise AnsibleOptionsError("Task name is required")
@@ -47,5 +48,5 @@ class ActionModule(LagoonActionBase):
 
         # Invoke the task.
         result["changed"] = True
-        result['task_id'] = Task(self.client).invoke(environment_id, task_id)
+        result['task_id'] = Task(self.client).invoke(environment_id, task_id, task_arguments)
         return result
