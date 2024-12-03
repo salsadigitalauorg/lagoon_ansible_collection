@@ -19,6 +19,22 @@ options:
       - Name of the task to invoke.
     type: str
     required: true
+  arguments:
+    description:
+      - The arguments to execute the command with
+    type: list
+    elements: dict
+    suboptions:
+      advancedTaskDefinitionArgumentName:
+        description:
+          - The name of the argument.
+        required: true
+        type: string
+      value:
+        description:
+          - The value of the argument.
+        required: true
+        type: string
 
 '''
 
@@ -27,6 +43,11 @@ EXAMPLES = r'''
   lagoon.api.task:
     environment: test-shipshape-master
     name: AUDIT - Admin shipshape
+    arguments:
+      - advancedTaskDefinitionArgumentName: ARG1
+        value: VALUE1
+      - advancedTaskDefinitionArgumentName: ARG2
+        value: VALUE2
   register: task_result
 - name: Display the task id
   debug: var=task_result.task_id

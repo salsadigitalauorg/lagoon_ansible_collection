@@ -86,21 +86,24 @@ class Task(ResourceBase):
 
         return res
 
-    def invoke(self, env_id: int, task_id: int) -> int:
+    def invoke(self, env_id: int, task_id: int, task_arguments: list) -> int:
         res = self.client.execute_query(
             f"""
             mutation InvokeTask(
                 $env_id: Int!
                 $task_id: Int!
+                $task_arguments: [AdvancedTaskDefinitionArgumentValueInput]
             ) {{
                 invokeRegisteredTask(
                     environment: $env_id,
                     advancedTaskDefinition: $task_id,
+                    argumentValues: $task_arguments,
                 ) {{ id }}
             }}""",
             {
                 "env_id": env_id,
                 "task_id": task_id,
+                "task_arguments": task_arguments,
             }
         )
         return res['invokeRegisteredTask']['id']
