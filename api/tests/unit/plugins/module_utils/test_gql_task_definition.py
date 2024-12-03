@@ -43,6 +43,7 @@ fragment Image on AdvancedTaskDefinitionImage {
   }
   deployTokenInjection
   projectKeyInjection
+  systemWide
   image
 }
 
@@ -66,6 +67,7 @@ fragment Command on AdvancedTaskDefinitionCommand {
   }
   deployTokenInjection
   projectKeyInjection
+  systemWide
   command
 }
 

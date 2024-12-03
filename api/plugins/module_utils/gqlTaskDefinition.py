@@ -19,6 +19,7 @@ TASK_DEFINITION_FIELDS_COMMON = [
     'advancedTaskDefinitionArguments',
     'deployTokenInjection',
     'projectKeyInjection',
+    'systemWide',
 ]
 
 TASK_DEFINITION_FIELDS_COMMAND = [
@@ -113,7 +114,8 @@ class TaskDefinition(ResourceBase):
                              description: str, service: str, image: str,
                              command: str, arguments: list,
                              deploy_token_injection: bool,
-                             project_key_injection: bool):
+                             project_key_injection: bool,
+                             system_wide: bool):
         variables = """
             $type: AdvancedTaskDefinitionTypes
             $permission: TaskPermission
@@ -123,6 +125,7 @@ class TaskDefinition(ResourceBase):
             $arguments: [AdvancedTaskDefinitionArgumentInput]
             $deployTokenInjection: Boolean
             $projectKeyInjection: Boolean
+            $systemWide: Boolean
         """
         variables_input = """
             type: $type
@@ -133,6 +136,7 @@ class TaskDefinition(ResourceBase):
             advancedTaskDefinitionArguments: $arguments
             deployTokenInjection: $deployTokenInjection
             projectKeyInjection: $projectKeyInjection
+            systemWide: $systemWide
         """
         variables_dict = {
             "type": task_type,
@@ -143,6 +147,7 @@ class TaskDefinition(ResourceBase):
             "arguments": arguments,
             "deployTokenInjection": deploy_token_injection,
             "projectKeyInjection": project_key_injection,
+            "systemWide": system_wide,
         }
 
         if project_id:
@@ -169,12 +174,13 @@ class TaskDefinition(ResourceBase):
     def add(self, task_type: str, permission: str, project_id: int,
             environment_id: int, name: str, description: str, service: str,
             image: str, command: str, arguments: list,
-            deploy_token_injection: bool, project_key_injection: bool) -> dict:
+            deploy_token_injection: bool, project_key_injection: bool,
+            system_wide: bool) -> dict:
 
         variables, variables_input, variables_dict = self.add_update_variables(
             task_type, permission, project_id, environment_id, name,
             description, service, image, command, arguments,
-            deploy_token_injection, project_key_injection)
+            deploy_token_injection, project_key_injection, system_wide)
 
         res = self.client.execute_query(
             f"""
@@ -199,12 +205,13 @@ class TaskDefinition(ResourceBase):
     def update(self, id: int, task_type: str, permission: str, project_id: int,
             environment_id: int, name: str, description: str, service: str,
             image: str, command: str, arguments: list,
-            deploy_token_injection: bool, project_key_injection: bool) -> dict:
+            deploy_token_injection: bool, project_key_injection: bool,
+            system_wide: bool) -> dict:
 
         variables, variables_input, variables_dict = self.add_update_variables(
             task_type, permission, project_id, environment_id, name,
             description, service, image, command, arguments,
-            deploy_token_injection, project_key_injection)
+            deploy_token_injection, project_key_injection, system_wide)
 
         res = self.client.execute_query(
             f"""

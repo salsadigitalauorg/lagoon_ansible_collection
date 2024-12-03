@@ -24,6 +24,7 @@ class ActionModule(LagoonMutationActionBase):
         deployTokenInjection=["deploy_token_injection"],
         projectKeyInjection=["project_key_injection"],
         type=["task_type"],
+        systemWide=["system_wide"],
       ),
       # Proxy lookups to be used when looking for existing task
       # definitions. A first pass is done through the lookups in the
@@ -73,6 +74,7 @@ class ActionModule(LagoonMutationActionBase):
         "advancedTaskDefinitionArguments",
         "deployTokenInjection",
         "projectKeyInjection",
+        "systemWide",
         "image",
         "groupName"
       ],
