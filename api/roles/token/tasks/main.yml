@@ -1,7 +1,7 @@
 ### Fetch a Lagoon token.
 
 - name: Fetch token.
-  lagoon.api.token:
+  lagoon.api.fetch_token:
     ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
   register: fetched_token
   when: lagoon_api_token is not defined

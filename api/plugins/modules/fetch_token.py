@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 DOCUMENTATION = r'''
-module: token
+module: fetch_token
 description: Fetches a Lagoon token using ssh
 short_description: Fetches a Lagoon token using ssh
 options:
@@ -15,7 +15,7 @@ options:
 
 EXAMPLES = r'''
 - name: Fetch a Lagoon token.
-  lagoon.api.token:
+  lagoon.api.fetch_token:
     ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
   register: token
   vars:
