@@ -5,3 +5,6 @@ gql
 requests-toolbelt<1,>=0.9.1
 urllib3>=1.26
 requests<3,>=2.26
+
+# Lagoon token validation.
+pyjwt

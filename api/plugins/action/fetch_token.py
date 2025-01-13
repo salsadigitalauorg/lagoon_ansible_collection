@@ -1,5 +1,5 @@
 import time
-from ..module_utils import token as LagoonToken
+from ..module_utils import fetch_token as LagoonToken
 from ansible.plugins.action import ActionBase
 
 

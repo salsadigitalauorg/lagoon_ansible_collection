@@ -6,3 +6,4 @@ api/tests/output
 .docker/mock-server/package-lock.json
 
 built-docs
+docker-compose.override.yml

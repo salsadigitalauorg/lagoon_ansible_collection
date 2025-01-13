@@ -4,9 +4,12 @@
   lagoon.api.fetch_token:
     ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
   register: fetched_token
-  when: lagoon_api_token is not defined
+  when:
+    - lagoon_api_token is not defined
 
 - name: Extract token.
-  set_fact:
+  ansible.builtin.set_fact:
+    lagoon_token: '{{ fetched_token.token }}'
     lagoon_api_token: '{{ fetched_token.token }}'
-  when: lagoon_api_token is not defined
+  when:
+    - lagoon_api_token is not defined

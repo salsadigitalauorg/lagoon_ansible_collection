@@ -6,7 +6,7 @@ from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
 from ansible.utils import py3compat
-from ..module_utils import token as LagoonToken
+from ..module_utils import fetch_token as LagoonToken
 from ..module_utils.gql import GqlClient
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
