@@ -89,7 +89,7 @@ class LookupModule(LagoonLookupBase):
       if environment:
         env_name = term + '-' + environment.replace('/', '-').replace('_', '-').replace('.', '-')
         self._display.v(f"Lagoon variable lookup environment: {env_name}")
-        lagoonEnvironment = Environment(self.client).byNs(env_name, ['id'])
+        lagoonEnvironment = Environment(self.client).byNs(env_name, ['id', 'kubernetesNamespaceName'])
         if not len(lagoonEnvironment.environments):
           raise AnsibleError(
               f"Unable to fetch environment {env_name}; errors: {lagoonEnvironment.errors}")
