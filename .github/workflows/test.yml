@@ -45,7 +45,7 @@ jobs:
           detailed_summary: true
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.python-version }}
           path: ansible_collections/lagoon/api/tests/output/junit/*.xml
