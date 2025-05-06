@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    group:
+      dependency-type: "all"
+      patterns: ["*"]
+
+  - package-ecosystem: "npm"
+    directory: "/.docker/graphql-mock"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    group:
+      dependency-type: "all"
+      patterns: ["*"] 

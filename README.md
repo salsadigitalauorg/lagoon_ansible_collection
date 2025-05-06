@@ -53,3 +53,16 @@ docker compose up -d docs
 ```
 
 Docs should be ready to browse at [http://localhost:9180](http://localhost:9180).
+
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for our security policy.
+
+## Licence
+
+This project is licensed under the MIT Licence. See [LICENSE](LICENSE) for details.
