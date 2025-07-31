@@ -416,18 +416,22 @@ class Environment(ResourceBase):
 
         return res['updateEnvironment']
 
-    def deployBranch(self, project: str, branch: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
+    def deployBranch(self, project: str, branch: str, bulkId: str, bulkName: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
         mutation = """
-        mutation deploy($project: String!, $branch: String!) {
+        mutation deploy($project: String!, $branch: String!, $bulkId: String!, $bulkName: String!) {
             deployEnvironmentBranch (input: {
                 project: { name: $project },
-                branchName: $branch
+                branchName: $branch,
+                bulkId: $bulkId,
+                bulkName: $bulkName,
             })
         }"""
 
         mutation_vars = {
             "project": project,
             "branch": branch,
+            "bulkId": bulkId,
+            "bulkName": bulkName,
         }
 
         res = self.client.execute_query(mutation, mutation_vars)

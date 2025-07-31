@@ -21,6 +21,8 @@ class ActionModule(LagoonActionBase):
         result['deploy_status'] = lagoonEnvironment.deployBranch(
             self._task.args.get('project'),
             self._task.args.get('branch'),
+            self._task.args.get('bulkId'),
+            self._task.args.get('bulkName'),
             self._task.args.get('wait', False),
             self._task.args.get('delay', 60),
             self._task.args.get('retries', 30)
