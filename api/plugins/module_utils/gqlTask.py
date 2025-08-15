@@ -66,7 +66,7 @@ class Task(ResourceBase):
 
     def byId(self, id: int, fields: List[str] = None) -> dict:
         """
-        Get the top-level information for an environment by id.
+        Get the top-level information for a Lagoon task by id.
         """
 
         if not fields:
@@ -83,6 +83,28 @@ class Task(ResourceBase):
         res = self.client.execute_query(query)
         if res['taskById'] != None:
             return res['taskById']
+
+        return res
+
+    def byTaskName(self, task_name: str, fields: List[str] = None) -> dict:
+        """
+        Get the top-level information for a Lagoon task by taskName.
+        """
+
+        if not fields:
+            fields = TASK_FIELDS_COMMON
+
+        joined_fields = "\n        ".join(fields)
+
+        query = f"""query {{
+    taskByTaskName (taskName: "{ task_name }") {{
+        { joined_fields }
+    }}
+}}"""
+
+        res = self.client.execute_query(query)
+        if res['taskByTaskName'] != None:
+            return res['taskByTaskName']
 
         return res
 
