@@ -418,7 +418,7 @@ class Environment(ResourceBase):
 
     def deployBranch(self, project: str, branch: str, bulkId: str, bulkName: str, wait: bool=False, delay: int=60, retries: int=30) -> str:
         mutation = """
-        mutation deploy($project: String!, $branch: String!, $bulkId: String!, $bulkName: String!) {
+        mutation deploy($project: String!, $branch: String!, $bulkId: String, $bulkName: String) {
             deployEnvironmentBranch (input: {
                 project: { name: $project },
                 branchName: $branch,
