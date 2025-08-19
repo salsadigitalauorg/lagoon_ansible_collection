@@ -12,6 +12,7 @@ TASK_FIELDS_COMMON = [
     'taskName',
     'service',
     'status',
+    'created',
     'started',
     'completed',
 ]
