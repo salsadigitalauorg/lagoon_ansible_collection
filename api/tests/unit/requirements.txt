@@ -1,5 +1,5 @@
 ansible-core ; python_version >= '3.8'
-gql ; python_version >= '3.8'
+gql<4,>=3.5.3 ; python_version >= '3.8'
 # Locking requests-toolbet and urllib3 to fix failing tests.
 # See https://stackoverflow.com/questions/76175487
 requests-toolbelt==0.10.1 ; python_version >= '3.8'
