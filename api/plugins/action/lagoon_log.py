@@ -8,6 +8,7 @@ except ImportError:
 import socket
 import traceback
 
+from ansible.errors import AnsibleError
 from ansible.plugins.action import ActionBase
 
 class ActionModule(ActionBase):
@@ -40,23 +41,33 @@ class ActionModule(ActionBase):
             data['level'] = self._task.args.get("level", "info").upper().strip()
             data['host'] = self._task.args.get("host", self.hostname)
 
-            easy_types = (str, bool, float, int, type(None))
+            has_context = False
+            context_data = self._task.args.get("context", None)
+            if context_data and isinstance(context_data, dict):
+                data['context'] = context_data
+                has_context = True
 
-            extra_data = self._task.args.get("extra_data", None)
+            has_extra = False
+            extra_data = self._task.args.get("extra", None)
             if extra_data and isinstance(extra_data, dict):
-                for key, value in extra_data.items():
-                    # Do not override existing keys.
-                    if key not in data:
-                        if isinstance(value, easy_types):
-                            data[key] = value
-                        else:
-                            data[key] = repr(value)
+                data['extra'] = extra_data
+                has_extra = True
+
+            log_type = self._task.args.get("namespace", None)
+            if log_type:
+                if isinstance(log_type, str):
+                    data['type'] = log_type
+                else:
+                    raise AnsibleError("Namespace must be a string")
+            elif has_context or has_extra:
+                raise AnsibleError("Namespace is required when context or extra data is set")
 
             # Lagoon log dispatcher (Fluent) only accepts JSON payload for UDP.
             # See https://github.com/uselagoon/lagoon-charts/blob/main/charts/lagoon-logging/templates/logs-dispatcher.service.yaml#L28
             # See https://github.com/uselagoon/lagoon-charts/blob/main/charts/lagoon-logging/templates/logs-dispatcher.fluent-conf.configmap.yaml#L43
             # To test from CLI:
             # echo '{"message":"Test lagoon_log message"}' | nc -u -v -w3 application-logs.lagoon.svc 5140
+            # echo '{"message":"Test lagoon_log message", "type": "lagoon-logging", "extra": {"project": "testing"}}' > /dev/udp/application-logs.lagoon.svc/5140
             log_message = json.dumps(data)
             self._display.v("Log message: %s" % log_message)
 

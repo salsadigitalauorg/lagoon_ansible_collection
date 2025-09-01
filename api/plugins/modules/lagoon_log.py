@@ -32,11 +32,22 @@ options:
       - The hostname where the log message belongs to.
     type: str
     required: false
-  extra_data:
+  namespace:
+    description:
+      - The valid namespace where the log message belongs to.
+      - Required when context or extra data is provided.
+    type: str
+    required: false
+  context:
+    description:
+      - Context data send along the log message.
+    type: dict
+    required: false
+  extra:
     description:
       - Extra data send along the log message.
     type: dict
-    required: false  
+    required: false
 '''
 
 EXAMPLES = r'''
@@ -48,8 +59,11 @@ EXAMPLES = r'''
   lagoon.api.lagoon_log:
     level: error
     message: 'A test error message'
+    namespace: "{{ project_name }}"
     host: "{{ inventory_hostname }}"
-    extra_data:
+    context: 
+      name: "{{ inventory_hostname }}"
+    extra:
       project: "{{ project_name }}"
       gitlab: "{{ gitlab_id }}"
 '''
