@@ -1,11 +1,11 @@
 import ast
 import json
 import re
+import os
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
-from ansible.utils import py3compat
 from ..module_utils import token as LagoonToken
 from ..module_utils.gql import GqlClient
 from ..module_utils.gqlEnvironment import Environment
@@ -361,7 +361,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         """
 
         safe_name = f"lagoon_{name}"
-        val = py3compat.environ.get(safe_name.upper())
+        val = os.environ.get(safe_name.upper())
         if not val and safe_name in self._vars:
             val = self._vars.get(safe_name)
         elif not val and name in lagoon:
