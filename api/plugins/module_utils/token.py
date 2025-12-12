@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import json
@@ -8,6 +9,8 @@ def write_ssh_key(key_content: str, key_path: str):
     try:
         with open(key_path, 'w') as fh:
             fh.write(key_content)
+        # Set permissions to 0600 (read/write for owner only)
+        os.chmod(key_path, 0o600)
     except IOError as e:
         print('unable to write ssh key to file')
         print(e)
