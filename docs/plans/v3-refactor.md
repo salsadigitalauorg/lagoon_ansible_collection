@@ -1,8 +1,9 @@
 # Lagoon Ansible Collection v3 — Architecture & Implementation Plan
 
 **Date:** 2026-07-27
-**Status:** Approved for implementation
-**Target:** `salsadigital.lagoon` v3.0.0 (replaces `lagoon.api` v1.3.0)
+**Last amended:** 2026-08-25 — Phase 1 story breakdown resolved §12.4 and added D17–D20. See docs/plans/v3-phase1-stories.md
+**Status:** Approved for implementation — Phase 1 broken into stories
+**Target:** `salsadigitalauorg.lagoon` v3.0.0 (replaces `lagoon.api` v1.3.0)
 **Author:** plan agent (QuantCode Gov)
 
 ---
@@ -54,7 +55,7 @@ The shift is *when* they run: runtime → build time.
 | --- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | D1  | Codegen timing   | Build-time, committed to git                                                                                                      |
 | D2  | Schema source    | Vendored SDL, committed, pinned per Lagoon version                                                                                |
-| D3  | HTTP client      | Drop `gql` from runtime; `graphql-core` is a **generator-only dev dependency**. Modules use `ansible.module_utils.urls.fetch_url` |
+| D3  | HTTP client      | Drop `gql` from runtime; `graphql-core` is a **generator-only dev dependency**. `fetch_url` when an `AnsibleModule` is available, `open_url` otherwise — see §7.1 |
 | D4  | Generation scope | Curated allowlist, expanded incrementally                                                                                         |
 | D5  | Module naming    | Resource-oriented, `state: present\|absent`; read-only → `*_info`                                                                 |
 | D6  | Auth             | Controller-side cache + validation via thin action-plugin sidecar                                                                 |
@@ -63,11 +64,15 @@ The shift is *when* they run: runtime → build time.
 | D9  | Lookups          | Explicit per-resource declaration in the allowlist                                                                                |
 | D10 | Lookup caching   | Controller-side, cached alongside the token                                                                                       |
 | D11 | Idempotency      | Generated read-before-write diff; real `check_mode` + `--diff`                                                                    |
-| D12 | Collection name  | `salsadigital.lagoon`                                                                                                             |
+| D12 | Collection name  | `salsadigitalauorg.lagoon` — matches the GitHub org, so Galaxy namespace ownership (§12.2) is straightforward to verify            |
 | D13 | Docs             | Keep `antsibull-docs` → QuantCDN, **plus a CI drift guard**                                                                       |
 | D14 | Long-lived token | Module param + `LAGOON_API_TOKEN` env fallback, `no_log: true`                                                                    |
 | D15 | Seed scope       | Core set: project, environment, variables, deploy, task, group, user, notification                                                |
 | D16 | Bespoke actions  | Hand-written modules alongside generated, sharing `module_utils`                                                                  |
+| D17 | Repo layout      | Collection root **is** the repo root — `galaxy.yml`, `plugins/`, `schema/`, `codegen/` all top-level. Repo moves to `salsadigitalauorg/ansible-lagoon` |
+| D18 | v1 coexistence   | `api/` retained untouched through phases 1–8, excluded via `build_ignore`; deleted in a post-Phase 8 cleanup story                 |
+| D19 | Support matrix    | `requires_ansible: '>=2.16'`; tested Python 3.11 / 3.12 / 3.13. v1's 3.9 / 3.10 floor dropped (both EOL)                          |
+| D20 | Phase 1 CI        | No CI in Phase 1 — verification is local via a containerised `test-v3` compose service. All CI wiring lands in Phase 8            |
 
 ---
 
@@ -88,8 +93,8 @@ Rationale: modules are per-task processes with no shared state. Without a contro
 ## 5. Target layout
 
 ```
-salsadigital/lagoon/
-├── galaxy.yml                        # namespace: salsadigital, name: lagoon, version: 3.0.0
+<repo root>/                          # = ansible_collections/salsadigitalauorg/lagoon (D17)
+├── galaxy.yml                        # namespace: salsadigitalauorg, name: lagoon, version: 3.0.0
 ├── meta/runtime.yml                  # requires_ansible, action_groups
 ├── README.md
 ├── CHANGELOG.rst                     # antsibull-changelog
@@ -98,7 +103,7 @@ salsadigital/lagoon/
 │   ├── adr/0001-graphql-codegen-rest-semantics.md
 │   └── migration-v1-to-v3.md
 ├── schema/
-│   ├── lagoon-2.33.1.graphql           # vendored SDL (pinned)
+│   ├── lagoon-<version>.graphql        # vendored SDL (pinned) — see §12.1
 │   └── VERSION                        # Lagoon version this SDL came from
 ├── codegen/                          # NOT shipped in the built artifact
 │   ├── allowlist.yml                 # ← the single source of truth
@@ -143,7 +148,8 @@ salsadigital/lagoon/
 │   ├── unit/plugins/{modules,module_utils}/
 │   ├── integration/targets/
 │   └── sanity/ignore-*.txt
-└── Makefile                          # generate / verify-generated / test / docs
+├── api/                              # v1 lagoon.api — build_ignore'd, deleted post-Phase 8 (D18)
+└── Makefile                          # fetch-schema / generate / verify-generated / test / docs
 ```
 
 **Generated-file marker.** Every generated file starts with:
@@ -152,7 +158,7 @@ salsadigital/lagoon/
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # GENERATED FILE — DO NOT EDIT.
-# Source: schema/lagoon-2.33.1.graphql + codegen/allowlist.yml
+# Source: schema/lagoon-<version>.graphql + codegen/allowlist.yml
 # Regenerate: make generate
 ```
 
@@ -163,8 +169,9 @@ salsadigital/lagoon/
 `codegen/allowlist.yml` drives everything: argspec, lookups, idempotency, docs.
 
 ```yaml
-lagoon_version: "2.33.1"
-schema: schema/lagoon-2.33.1.graphql
+# Version below is a placeholder until §12.1 is resolved by the P1-S2 SDL fetch.
+lagoon_version: "<version>"
+schema: schema/lagoon-<version>.graphql
 
 # Reusable lookup definitions, referenced by modules below.
 lookups:
@@ -235,14 +242,35 @@ modules:
 
 ### 7.1 `module_utils/client.py`
 
-- `fetch_url` from `ansible.module_utils.urls`. No `gql`, no `requests`.
-- Queries built as **flat strings** with variables:
+- `ansible-core` only. No `gql`, no `requests`, no `urllib3`, no schema introspection.
+- **Dual transport (D3):** `LagoonClient(endpoint, token, module=None, ...)`. With a
+  module → `fetch_url`; without → `open_url`. Both funnel through one private
+  `_request()` so response handling, error translation and retry exist once.
+  Required because the inventory plugin and action shim have no `AnsibleModule`.
+- `validate_certs` defaults to **`True`**. v1's `api_client.py` defaults it to
+  `False` — that is a defect, not a convention to carry forward (ISM-1552).
+- All user data passes via the GraphQL `variables` map. **Never** interpolated into
+  the document. v1's `__patch_dict_to_string()` and
+  `deploy_target_config_delete_mutation()` do the latter — that is GraphQL injection.
+- Queries built by a `build_query()` helper producing flat, deterministic documents:
   ```python
-  QUERY = "query ($name: String!) { projectByName(name: $name) { id name gitUrl } }"
+  "query projectByName($name: String!) { projectByName(name: $name) { id name gitUrl } }"
   ```
-- **Guardrail:** a unit test asserts no generated query string contains a nested selection set (regex for `{` nesting depth > 2). This mechanically enforces the REST-semantics rule (D3) and prevents regression.
-- GraphQL `errors[]` translated to `module.fail_json()` with the API message surfaced.
-- Retry with backoff on 5xx / transport errors only — never on 4xx.
+  Determinism matters: Phase 3 snapshot tests and the Phase 8 drift guard depend on
+  byte-identical output for identical inputs.
+- **Guardrail:** a character scanner computes selection-set depth (max permitted 2)
+  and an AST sweep applies it to every query document under `plugins/`, so modules
+  generated from Phase 3 onward are covered automatically. Implemented as a scanner,
+  **not** the regex originally specified here — brace depth is not a regular
+  language and the check must ignore braces inside string literals and comments.
+- Errors raise the `errors.py` taxonomy; the *module* converts to `fail_json()`,
+  the *action/inventory plugin* converts to `AnsibleError`. `module_utils` never
+  imports `ansible.errors`.
+- HTTP 200 carrying `errors[]` is an application error → `LagoonAPIError` with the
+  payload preserved structurally. Partial success (`data` **and** `errors`) raises.
+- Retry **only** transport failures: 5xx, `URLError`, connection, timeout. Never
+  4xx, never a GraphQL `errors[]` response, never `SSLValidationError`. Retrying
+  either of the first two replays non-idempotent mutations — a correctness bug.
 
 ### 7.2 `module_utils/auth.py`
 
@@ -302,7 +330,7 @@ This is where the real engineering effort sits. `check_mode` and `--diff` correc
 Target `< 200` LOC, down from ~700.
 
 ```yaml
-plugin: salsadigital.lagoon.lagoon
+plugin: salsadigitalauorg.lagoon.lagoon
 endpoint: https://api.lagoon.example.com/graphql
 
 queries:
@@ -332,11 +360,23 @@ cache: true
 Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first.
 
 ### Phase 1 — Foundations
-- [ ] Scaffold `salsadigital.lagoon`, `galaxy.yml`, `meta/runtime.yml`, changelog config.
-- [ ] Vendor SDL to `schema/lagoon-2.33.1.graphql` + `VERSION`.
-- [ ] `module_utils/client.py` with `fetch_url`, flat-query builder, error translation.
-- [ ] Nesting-depth guardrail unit test.
-- [ ] `module_utils/errors.py`.
+
+Broken into five discrete, independently reviewable stories — one commit each,
+reviewed and iterated before the next begins. Full context, acceptance criteria
+and verification commands: **[`docs/plans/v3-phase1-stories.md`](./v3-phase1-stories.md)**.
+
+- [ ] **P1-S1** Scaffold the collection at repo root — `galaxy.yml`, `meta/runtime.yml`,
+      changelog config, `build_ignore` excluding `api/`, `test-v3` compose service, Makefile.
+- [ ] **P1-S2** Vendor the SDL to `schema/lagoon-<version>.graphql` + `VERSION`, plus
+      `make fetch-schema`. **Blocked on the maintainer fetching from a live Lagoon.**
+      Must verify the SDL carries `"""` descriptions — the generator sources option
+      help from them (§6.1.5), so a description-less SDL wastes Phase 3.
+- [ ] **P1-S3** `module_utils/errors.py` — stdlib-only `LagoonError` taxonomy.
+- [ ] **P1-S4** `module_utils/client.py` — `LagoonClient` per §7.1.
+- [ ] **P1-S5** Flat-query nesting-depth guardrail (scanner + AST sweep).
+
+Order is S1 → S3 → S4 → S5, with S2 inserted whenever the schema lands; S3/S4/S5
+have no dependency on S2.
 
 ### Phase 2 — Auth
 - [ ] `module_utils/auth.py`: param → env → validated cache → SSH grant.
@@ -384,7 +424,7 @@ Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first
 
 ## 10. Migration mapping (to complete in Phase 8)
 
-| v1 `lagoon.api` action                                    | v3 `salsadigital.lagoon` module | Notes                                |
+| v1 `lagoon.api` action                                    | v3 `salsadigitalauorg.lagoon` module | Notes                                |
 | --------------------------------------------------------- | ------------------------------- | ------------------------------------ |
 | `project`, `project_update`                               | `project`                       | Collapsed under `state`              |
 | `environment`, `environment_update`, `environment_delete` | `environment`                   | Collapsed under `state`              |
@@ -400,7 +440,7 @@ Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first
 | `fetch_token` + `token` role                              | *removed*                       | Automatic in every module            |
 | `mutation` (generic)                                      | *removed*                       | Use typed modules                    |
 
-**Breaking changes to call out prominently:** FQCN change (`lagoon.api.*` → `salsadigital.lagoon.*`); nested field selection no longer supported; inventory batching options removed; `token` role removed.
+**Breaking changes to call out prominently:** FQCN change (`lagoon.api.*` → `salsadigitalauorg.lagoon.*`); nested field selection no longer supported; inventory batching options removed; `token` role removed.
 
 ---
 
@@ -414,12 +454,26 @@ Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first
 | Action-plugin sidecar reintroduces controller-side complexity                  | **Warning**  | Strict boundary in §4, enforced in review. Modules must pass their unit tests with no sidecar involved.                                                        |
 | Clean break strands GovCMS                                                     | **Warning**  | Side-by-side install is possible (new namespace), so v1 and v3 can coexist during migration. Coordinate the cutover with the GovCMS team before tagging 3.0.0. |
 | SSH key written to predictable `/tmp` path (inherited from v1)                 | **Critical** | Fixed in Phase 2 — `mkdtemp` + `O_EXCL`/`0600` + `finally` cleanup. Must not be carried forward.                                                               |
+| `validate_certs` defaults to `False` in v1 `api_client.py` — TLS verification off | **Critical** | Fixed in P1-S4: defaults to `True`, opt-out explicit and documented (ISM-1552). Explicit review-focus item on that story.                                       |
+| GraphQL injection via `%s`/`%d` interpolation into query text (v1)              | **Critical** | Fixed in P1-S4: all user data via the `variables` map; `build_query` rejects field names containing braces, whitespace or parens.                               |
+| Guardrail sweep passes vacuously if it matches zero documents                   | **Warning**  | P1-S5 acceptance criterion: the sweep must fail on zero candidates once `plugins/modules/` is populated. Highest-leverage check in Phase 1.                     |
+| `ansible-test sanity` at the repo root will also scan `api/` (D17 + D18)        | **Info**     | Units are unaffected. Sequence the `api/` deletion before sanity lands in Phase 8, in preference to `ignore-*.txt` entries.                                     |
 
 ---
 
 ## 12. Open items for the implementer
 
-1. Confirm the exact Lagoon version to pin the SDL against (assumed 2.33.1 — verify against the GovCMS target).
-2. Confirm Galaxy namespace ownership for `salsadigital` before Phase 1 completes.
-3. Decide whether `*_info` modules need the action shim at all (read-only, but still need a token — probably yes).
-4. Confirm the supported `ansible-core` / Python matrix for `meta/runtime.yml` and sanity tests.
+1. **In progress (P1-S2).** Confirm the exact Lagoon version to pin the SDL against.
+   The `2.33.1` assumption is unverified. Procedure — query `lagoonVersion` for the
+   real value, then `gql-cli --print-schema` — is in P1-S2; maintainer runs it
+   against the GovCMS target. The fetched value supersedes every `2.33.1` reference
+   in this document.
+2. **Still open.** Confirm Galaxy namespace ownership for `salsadigitalauorg`.
+   Rescoped: not a Phase 1 blocker (nothing publishes until Phase 8), but must be
+   settled before tagging `3.0.0`.
+3. **Still open — Phase 3.** Whether `*_info` modules need the action shim.
+4. ~~Support matrix~~ — **Resolved (D19):** `requires_ansible: '>=2.16'`, tested
+   Python 3.11 / 3.12 / 3.13.
+5. **New, post-Phase 8.** Cleanup story: delete `api/`, the v1 compose services and
+   `api/tests/common/schema.graphql`; repoint `.docker/Dockerfile.graphql-mock`
+   (Phase 5) and `.docker/Dockerfile.docs` (Phase 8) away from `lagoon/api`.
