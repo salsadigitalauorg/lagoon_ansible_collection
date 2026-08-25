@@ -1,0 +1,3279 @@
+"""The `Upload` scalar type represents a file upload."""
+scalar Upload
+
+scalar Date
+
+scalar JSON
+
+enum SshKeyType {
+  SSH_RSA
+  SSH_ED25519
+  ECDSA_SHA2_NISTP256
+  ECDSA_SHA2_NISTP384
+  ECDSA_SHA2_NISTP521
+}
+
+enum DeployType {
+  BRANCH
+  PULLREQUEST
+  PROMOTE
+}
+
+enum EnvType {
+  PRODUCTION
+  DEVELOPMENT
+}
+
+enum NotificationType {
+  SLACK
+  ROCKETCHAT
+  MICROSOFTTEAMS
+  EMAIL
+  WEBHOOK
+}
+
+enum NotificationContentType {
+  DEPLOYMENT
+  PROBLEM
+}
+
+enum DeploymentStatusType {
+  NEW
+  PENDING
+  RUNNING
+  CANCELLED
+  ERROR
+  FAILED
+  COMPLETE
+  QUEUED
+}
+
+enum EnvVariableType {
+  PROJECT
+  ENVIRONMENT
+}
+
+enum EnvVariableScope {
+  BUILD
+  RUNTIME
+  GLOBAL
+  CONTAINER_REGISTRY
+  INTERNAL_CONTAINER_REGISTRY
+}
+
+enum TaskStatusType {
+  NEW
+  PENDING
+  RUNNING
+  CANCELLED
+  ERROR
+  FAILED
+  COMPLETE
+  QUEUED
+  ACTIVE
+  SUCCEEDED
+}
+
+enum RestoreStatusType {
+  PENDING
+  SUCCESSFUL
+  FAILED
+}
+
+enum EnvOrderType {
+  NAME
+  UPDATED
+}
+
+enum ProjectOrderType {
+  NAME
+  CREATED
+}
+
+enum ProjectAvailability {
+  STANDARD
+  HIGH
+  POLYSITE
+}
+
+enum GroupRole {
+  GUEST
+  REPORTER
+  DEVELOPER
+  MAINTAINER
+  OWNER
+}
+
+enum OrganizationRole {
+  VIEWER
+  ADMIN
+  OWNER
+}
+
+enum ProblemSeverityRating {
+  NONE
+  UNKNOWN
+  NEGLIGIBLE
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FactType {
+  TEXT
+  URL
+  SEMVER
+}
+
+enum TaskPermission {
+  MAINTAINER
+  DEVELOPER
+  GUEST
+}
+
+enum DeploymentSourceType {
+  API
+  WEBHOOK
+  CLONE
+}
+
+enum TaskSourceType {
+  API
+}
+
+enum DeploymentBuildType {
+  BUILD
+  VARIABLES
+}
+
+enum EnvironmentServiceAction {
+  STOP
+  START
+  RESTART
+}
+
+"""Severity score is a numeric measure (0-1) of a problems severity"""
+scalar SeverityScore
+
+type AdvancedTaskDefinitionArgument {
+  id: Int
+  name: String
+  displayName: String
+  type: String
+  defaultValue: String
+  optional: Boolean
+  range: [String]
+  advancedTaskDefinition: AdvancedTaskDefinition
+}
+
+type AdvancedTaskDefinitionImage {
+  id: Int
+  name: String
+  description: String
+  confirmationText: String
+  type: AdvancedTaskDefinitionTypes
+  image: String
+  service: String
+  groupName: String
+  environment: Int
+  project: Int
+  systemWide: Boolean
+  permission: TaskPermission
+  deployTokenInjection: Boolean
+  projectKeyInjection: Boolean
+  adminOnlyView: Boolean
+  showUi: Boolean @deprecated(reason: "Use adminOnlyView instead")
+  adminTask: Boolean @deprecated(reason: "Use deployTokenInjection and projectKeyInjection instead")
+  advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgument]
+  created: String
+  deleted: String
+}
+
+type AdvancedTaskDefinitionCommand {
+  id: Int
+  name: String
+  description: String
+  confirmationText: String
+  type: AdvancedTaskDefinitionTypes
+  service: String
+  command: String
+  groupName: String
+  environment: Int
+  project: Int
+  systemWide: Boolean
+  permission: TaskPermission
+  deployTokenInjection: Boolean
+  projectKeyInjection: Boolean
+  adminOnlyView: Boolean
+  showUi: Boolean @deprecated(reason: "Use adminOnlyView instead")
+  adminTask: Boolean @deprecated(reason: "Use deployTokenInjection and projectKeyInjection instead")
+  advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgument]
+  created: String
+  deleted: String
+}
+
+union AdvancedTaskDefinition = AdvancedTaskDefinitionImage | AdvancedTaskDefinitionCommand
+
+type TaskRegistration {
+  id: Int
+  type: String
+  name: String
+  description: String
+  groupName: String
+  environment: Int
+  project: Int
+  command: String
+  service: String
+  permission: TaskPermission
+  created: String
+  deleted: String
+}
+
+type Problem {
+  id: Int
+  environment: Environment
+  severity: ProblemSeverityRating
+  severityScore: SeverityScore
+  identifier: String
+  service: String
+  source: String
+  associatedPackage: String
+  description: String
+  links: String
+  version: String
+  fixedVersion: String
+  data: String
+  created: String
+  deleted: String
+}
+
+input AddProblemInput {
+  id: Int
+  environment: Int!
+  severity: ProblemSeverityRating
+  severityScore: SeverityScore
+  identifier: String!
+  service: String
+  source: String!
+  associatedPackage: String
+  description: String
+  links: String
+  version: String
+  fixedVersion: String
+  data: String!
+  created: String
+}
+
+input BulkProblem {
+  severity: ProblemSeverityRating
+  severityScore: SeverityScore
+  identifier: String
+  data: String
+}
+
+input DeleteProblemInput {
+  environment: Int!
+  identifier: String!
+  service: String
+}
+
+input DeleteProblemsFromSourceInput {
+  environment: Int!
+  source: String!
+  service: String!
+}
+
+type Fact {
+  id: Int
+  environment: Environment
+  name: String
+  value: String
+  source: String
+  description: String
+  keyFact: Boolean
+  type: FactType
+  category: String
+  references: [FactReference]
+  service: String
+}
+
+input AddFactInput {
+  id: Int
+  environment: Int
+  name: String!
+  value: String!
+  source: String!
+  description: String!
+  keyFact: Boolean
+  type: FactType
+  category: String
+  service: String
+}
+
+input AddFactsInput {
+  facts: [AddFactInput]!
+}
+
+input AddFactsByNameInput {
+  project: String
+  environment: String
+  facts: [AddFactInput]!
+}
+
+input UpdateFactInputValue {
+  environment: Int!
+  name: String!
+  value: String!
+  source: String!
+  description: String
+  keyFact: Boolean
+  type: FactType
+  category: String
+  service: String
+}
+
+input UpdateFactInput {
+  environment: Int!
+  patch: UpdateFactInputValue!
+}
+
+input DeleteFactInput {
+  environment: Int!
+  name: String!
+}
+
+input DeleteFactsFromSourceInput {
+  environment: Int!
+  source: String!
+  service: String
+}
+
+type FactReference {
+  id: Int
+  fid: Int
+  name: String
+}
+
+input AddFactReferenceInput {
+  fid: Int!
+  name: String!
+}
+
+input UpdateFactReferenceInputValue {
+  fid: Int!
+  name: String
+}
+
+input UpdateFactReferenceInput {
+  fid: Int!
+  patch: UpdateFactReferenceInputValue!
+}
+
+input DeleteFactReferenceInput {
+  factName: String!
+  referenceName: String!
+  eid: Int!
+}
+
+input DeleteFactReferencesByFactIdInput {
+  fid: Int!
+}
+
+enum FactFilterConnective {
+  OR
+  AND
+}
+
+enum FactFilterLHSTarget {
+  FACT
+  ENVIRONMENT
+  PROJECT
+}
+
+input FactFilterAtom {
+  lhsTarget: FactFilterLHSTarget
+  name: String!
+  contains: String!
+}
+
+input FactFilterInput {
+  filterConnective: FactFilterConnective
+  filters: [FactFilterAtom]
+  skip: Int
+  take: Int
+  orderBy: String
+}
+
+type File {
+  id: Int
+  filename: String
+  download: String
+  created: String
+}
+
+type TaskFileUploadForm {
+  postUrl: String
+  formFields: JSON
+}
+
+type SshKey {
+  id: Int
+  name: String
+  keyValue: String
+  keyType: String
+  keyFingerprint: String
+  created: String
+  lastUsed: String
+}
+
+type UserEmailNotification {
+  organizationRoleChanges: Boolean
+  sshKeyChanges: Boolean
+  groupRoleChanges: Boolean
+}
+
+type User {
+  id: String
+  email: String
+  firstName: String
+  lastName: String
+  comment: String
+  gitlabId: Int
+  sshKeys: [SshKey]
+  groups: [GroupInterface]
+  groupRoles: [GroupRoleInterface]
+  platformRoles: [PlatformRole]
+  created: String
+  lastAccessed: String
+  emailNotifications: UserEmailNotification
+  has2faEnabled: Boolean
+  isFederatedUser: Boolean
+}
+
+enum PlatformRole {
+  VIEWER
+  OWNER
+  ORGANIZATION_OWNER
+}
+
+type GroupMembership {
+  user: User
+  role: GroupRole
+}
+
+type GroupRoleInterface {
+  id: String
+  name: String
+  role: GroupRole
+  groupType: String
+  organization: Int
+}
+
+interface GroupInterface {
+  id: String
+  name: String
+  type: String
+  groups: [GroupInterface]
+  members: [GroupMembership]
+  memberCount: Int
+  projects: [Project]
+  organization: Int
+}
+
+type Group implements GroupInterface {
+  id: String
+  name: String
+  type: String
+  groups: [GroupInterface]
+  members: [GroupMembership]
+  memberCount: Int
+  projects: [Project]
+  organization: Int
+}
+
+interface OrgGroupInterface {
+  id: String
+  name: String
+  type: String
+  groups: [OrgGroupInterface]
+  members: [GroupMembership]
+  memberCount: Int
+  projects: [OrgProject]
+  organization: Int
+}
+
+type OrgGroup implements OrgGroupInterface {
+  id: String
+  name: String
+  type: String
+  groups: [OrgGroupInterface]
+  members: [GroupMembership]
+  memberCount: Int
+  projects: [OrgProject]
+  organization: Int
+}
+
+type Openshift {
+  id: Int
+  name: String
+  consoleUrl: String
+  token: String
+  routerPattern: String
+  projectUser: String @deprecated(reason: "Not used with RBAC permissions")
+  sshHost: String
+  sshPort: String
+  created: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+type Kubernetes {
+  id: Int
+  name: String
+  consoleUrl: String
+  token: String
+  routerPattern: String
+  projectUser: String @deprecated(reason: "Not used with RBAC permissions")
+  sshHost: String
+  sshPort: String
+  created: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+type NotificationMicrosoftTeams {
+  id: Int
+  name: String
+  webhook: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+  organization: Int
+}
+
+type NotificationRocketChat {
+  id: Int
+  name: String
+  webhook: String
+  channel: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+  organization: Int
+}
+
+type NotificationSlack {
+  id: Int
+  name: String
+  webhook: String
+  channel: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+  organization: Int
+}
+
+type NotificationEmail {
+  id: Int
+  name: String
+  emailAddress: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+  organization: Int
+}
+
+type NotificationWebhook {
+  id: Int
+  name: String
+  webhook: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+  organization: Int
+}
+
+type UnassignedNotification {
+  id: Int
+  name: String
+  type: String
+  contentType: String
+  notificationSeverityThreshold: ProblemSeverityRating
+}
+
+union Notification = NotificationRocketChat | NotificationSlack | NotificationMicrosoftTeams | NotificationEmail | NotificationWebhook
+
+enum Restriction {
+  NO_PROJECT_VARIABLES
+  NO_ENVIRONMENT_VARIABLES
+  NO_TASKS
+  NO_DEPLOYMENTS
+  NO_WEBHOOK_DEPLOYMENTS
+}
+
+enum CloneStatus {
+  PENDING
+  INCOMPATIBLE_REQUIREMENTS
+  SOURCE_FILES_UPLOADED
+  FIRST_DEPLOYMENT_COMPLETE
+  SOURCE_FILES_APPLIED
+  CANCELLED
+  FAILED
+  COMPLETE
+}
+
+type ProjectClone {
+  id: Int
+  sourceProject: ProjectCloneSource
+  destinationProject: ProjectCloneDestination
+  status: CloneStatus
+  created: String
+  updated: String
+  files: [File]
+}
+
+type ProjectCloneSource {
+  name: String
+  tasks: [Task]
+}
+
+type ProjectCloneDestination {
+  name: String
+  tasks: [Task]
+  deployments: [Deployment]
+}
+
+"""Lagoon Project (like a git repository)"""
+type Project {
+  """ID of project"""
+  id: Int
+
+  """Name of project"""
+  name: String
+
+  """ID of organization"""
+  organization: Int
+
+  """Details of an organization"""
+  organizationDetails: Organization
+
+  """
+  Git URL, needs to be SSH Git URL in one of these two formats
+  - git@172.17.0.1/project1.git
+  - ssh://git@172.17.0.1:2222/project1.git
+  """
+  gitUrl: String
+
+  """Project Availability STANDARD|HIGH"""
+  availability: ProjectAvailability
+
+  """
+      SSH Private Key for Project
+      Will be used to authenticate against the Git Repo of the Project
+      Needs to be in single string separated by `
+  `, example:
+      ```
+      -----BEGIN RSA PRIVATE KEY-----
+  MIIJKQIBAAKCAgEA+o[...]P0yoL8BoQQG2jCvYfWh6vyglQdrDYx/o6/8ecTwXokKKh6fg1q
+  -----END RSA PRIVATE KEY-----
+      ```
+  """
+  privateKey: String
+
+  """
+  SSH Public Key for Project, can be added to git repositories to allow Lagoon read access.
+  """
+  publicKey: String
+
+  """
+  Set if the .lagoon.yml should be found in a subfolder
+  Usefull if you have multiple Lagoon projects per Git Repository
+  """
+  subfolder: String
+
+  """
+  Set if the project should use a routerPattern that is different from the deploy target default
+  """
+  routerPattern: String
+
+  """Notifications that should be sent for this project"""
+  notifications(type: NotificationType, contentType: NotificationContentType, notificationSeverityThreshold: ProblemSeverityRating): [Notification]
+  activeSystemsDeploy: String @deprecated(reason: "No longer in use")
+  activeSystemsPromote: String @deprecated(reason: "No longer in use")
+  activeSystemsRemove: String @deprecated(reason: "No longer in use")
+  activeSystemsTask: String @deprecated(reason: "No longer in use")
+  activeSystemsMisc: String @deprecated(reason: "No longer in use")
+
+  """
+  Which branches should be deployed, can be one of:
+  - `true` - all branches are deployed
+  - `false` - no branches are deployed
+  - REGEX - regex of all branches that should be deployed, example: `^(main|staging)$`
+  """
+  branches: String
+
+  """
+  Which Pull Requests should be deployed, can be one of:
+  - `true` - all pull requests are deployed
+  - `false` - no pull requests are deployed
+  - REGEX - regex of all Pull Request titles that should be deployed, example: `[BUILD]`
+  """
+  pullrequests: String
+
+  """
+  Which environment(the name) should be marked as the production environment.
+  *Important:* If you change this, you need to deploy both environments (the current and previous one) that are affected in order for the change to propagate correctly
+  """
+  productionEnvironment: String
+
+  """Routes that are attached to the active environment"""
+  productionRoutes: String
+
+  """
+  The drush alias to use for the active production environment
+  *Important:* This is mainly used for drupal, but could be used for other services potentially
+  """
+  productionAlias: String
+
+  """
+  Which environment(the name) should be marked as the production standby environment.
+  *Important:* This is used to determine which environment should be marked as the standby production environment
+  """
+  standbyProductionEnvironment: String
+
+  """Routes that are attached to the standby environment"""
+  standbyRoutes: String
+
+  """
+  The drush alias to use for the standby production environment
+  *Important:* This is mainly used for drupal, but could be used for other services potentially
+  """
+  standbyAlias: String
+
+  """
+  What the production environment build priority should be (`0 through 10`)
+  """
+  productionBuildPriority: Int
+
+  """
+  What the development environment build priority should be (`0 through 10`)
+  """
+  developmentBuildPriority: Int
+
+  """Should this project have auto idling enabled (`1` or `0`)"""
+  autoIdle: Int
+
+  """Should storage for this environment be calculated (`1` or `0`)"""
+  storageCalc: Int
+
+  """Should the Problems UI be available for this Project (`1` or `0`)"""
+  problemsUi: Int
+
+  """Should the Facts UI be available for this Project (`1` or `0`)"""
+  factsUi: Int
+
+  """
+  Should the ability to deploy environments be disabled for this Project (`1` or `0`)
+  """
+  deploymentsDisabled: Int @deprecated(reason: "Use restrictions instead")
+
+  """Reference to OpenShift Object this Project should be deployed to"""
+  openshift: Openshift
+
+  """
+  Pattern of OpenShift Project/Namespace that should be generated, default: `${project}-${environmentname}`
+  """
+  openshiftProjectPattern: String @deprecated(reason: "No longer in use")
+
+  """Reference to Kubernetes Object this Project should be deployed to"""
+  kubernetes: Kubernetes
+
+  """
+  Pattern of Kubernetes Namespace that should be generated, default: `${project}-${environmentname}`
+  """
+  kubernetesNamespacePattern: String @deprecated(reason: "No longer in use")
+
+  """How many environments can be deployed at one timeout"""
+  developmentEnvironmentsLimit: Int
+
+  """Name of the OpenShift Project/Namespace"""
+  openshiftProjectName: String
+
+  """Deployed Environments for this Project"""
+  environments(
+    """Filter by Environment Type"""
+    type: EnvType
+
+    """
+    Include deleted Environments (by default deleted environment are hidden)
+    """
+    includeDeleted: Boolean
+
+    """Filter environments by fact matching"""
+    factFilter: FactFilterInput
+  ): [Environment]
+
+  """Creation Timestamp of Project"""
+  created: String
+
+  """Environment variables available during build-time and run-time"""
+  envVariables: [EnvKeyValue]
+
+  """Which groups are directly linked to project"""
+  groups: [GroupInterface]
+
+  """Metadata key/values stored against a project"""
+  metadata: JSON
+
+  """
+  DeployTargetConfigs are a way to define which deploy targets are used for a project
+  """
+  deployTargetConfigs: [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """Build image this project will use if set"""
+  buildImage: String
+  sharedBaasBucket: Boolean
+
+  """
+  retentionPolicies are the available retention policies to a project, this will also include inherited policies from an organization
+  if the project is associated to an organization, and the organization has any retention policies
+  """
+  retentionPolicies(type: RetentionPolicyType): [RetentionPolicy]
+  apiRoutes(name: String): [Route]
+  autogeneratedRouteConfig: AutogeneratedRouteConfig
+  featureApiRoutes: Boolean @deprecated(reason: "Beta API routes feature flag, will be generally available in a future release and this feature gate will be removed")
+  clone: ProjectClone
+  restrictions: [Restriction]
+}
+
+"""
+Lagoon Environment (for each branch, pullrequest there is an individual environment)
+"""
+type Environment {
+  """Internal ID of this Environment"""
+  id: Int
+
+  """Name of this Environment"""
+  name: String
+
+  """Reference to the Project Object"""
+  project: Project
+
+  """
+  Which Deployment Type this environment is, can be `branch`, `pullrequest`, `promote`
+  """
+  deployType: String
+
+  """
+  The version control base ref for deployments (e.g., branch name, tag, or commit id)
+  """
+  deployBaseRef: String
+
+  """
+  The version control head ref for deployments (e.g., branch name, tag, or commit id)
+  """
+  deployHeadRef: String
+
+  """The title of the last deployment (PR title)"""
+  deployTitle: String
+
+  """Should this environment have auto idling enabled (`1` or `0`)"""
+  autoIdle: Int
+
+  """
+  Which Environment Type this environment is, can be `production`, `development`
+  """
+  environmentType: String
+
+  """
+  Name of the OpenShift Project/Namespace this environment is deployed into
+  """
+  openshiftProjectName: String
+
+  """Name of the Kubernetes Namespace this environment is deployed into"""
+  kubernetesNamespaceName: String
+
+  """Unix Timestamp of the last time this environment has been updated"""
+  updated: String
+
+  """Unix Timestamp if the creation time"""
+  created: String
+
+  """Unix Timestamp of when this project has been deleted"""
+  deleted: String
+
+  """
+  Reference to EnvironmentHoursMonth API Object, which returns how many hours this environment ran in a specific month
+  """
+  hoursMonth(month: Date): EnvironmentHoursMonth
+
+  """
+  Reference to EnvironmentStorage API Object, which shows the Storage consumption of this environment per day
+  """
+  storages(startDate: Date, endDate: Date, lastDays: Int, claim: String): [EnvironmentStorage]
+
+  """
+  Reference to EnvironmentStorageMonth API Object, which returns how many storage per day this environment used in a specific month
+  """
+  storageMonth(month: Date): EnvironmentStorageMonth
+
+  """
+  Reference to EnvironmentHitsMonth API Object, which returns how many hits this environment generated in a specific month
+  """
+  hitsMonth(month: Date): EnvironmentHitsMonth
+
+  """Environment variables available during build-time and run-time"""
+  envVariables: [EnvKeyValue]
+  route: String
+  routes: String
+  monitoringUrls: String @deprecated(reason: "No longer in use")
+  deployments(name: String, limit: Int): [Deployment]
+  insights(type: String, limit: Int): [Insight]
+  backups(includeDeleted: Boolean, limit: Int): [Backup]
+  tasks(id: Int, taskName: String, limit: Int): [Task]
+  advancedTasks: [AdvancedTaskDefinition]
+  services: [EnvironmentService]
+  problems(severity: [ProblemSeverityRating], source: [String]): [Problem]
+  facts(keyFacts: Boolean, limit: Int, summary: Boolean): [Fact]
+  openshift: Openshift
+  openshiftProjectPattern: String @deprecated(reason: "No longer in use")
+  kubernetes: Kubernetes
+  kubernetesNamespacePattern: String @deprecated(reason: "No longer in use")
+
+  """Pending changes tell us if we need to redeploy an environment"""
+  pendingChanges: [EnvironmentPendingChanges]
+  apiRoutes(domain: String, source: RouteSource): [Route]
+  autogeneratedRouteConfig: AutogeneratedRouteConfig
+  autogeneratedRoutes: Boolean
+  autogeneratedPathRoutes: [AutogeneratedPathRoute]
+  disableRequestVerification: Boolean
+
+  """The idle state of the environment"""
+  idleState: IdleState
+}
+
+type EnvironmentPendingChanges {
+  type: EnvironmentPendingChangeType
+  details: String
+  date: String
+}
+
+enum EnvironmentPendingChangeType {
+  ENVVAR
+}
+
+type EnvironmentHitsMonth {
+  total: Int
+}
+
+type EnvironmentStorage {
+  id: Int
+  environment: Environment
+  persistentStorageClaim: String
+  bytesUsed: Float @deprecated(reason: "The value of this is kibibytes, use kibUsed instead. This will be removed in a future release.")
+  kibUsed: Float
+  updated: String
+}
+
+type EnvironmentStorageMonth {
+  month: String
+  bytesUsed: Float @deprecated(reason: "The value of this is kibibytes, use kibUsed instead. This will be removed in a future release.")
+  kibUsed: Float
+}
+
+type EnvironmentHoursMonth {
+  month: String
+  hours: Int
+}
+
+type EnvironmentService {
+  id: Int
+  name: String
+  type: String
+  containers: [ServiceContainer]
+  replicas: Int
+  created: String
+  updated: String
+}
+
+type ServiceContainer {
+  name: String
+}
+
+type Backup {
+  id: Int
+  environment: Environment
+  source: String
+  backupId: String
+  created: String
+  deleted: String @deprecated(reason: "This will be removed in a future release.")
+  restore: Restore
+}
+
+type Restore {
+  id: Int
+  backupId: String
+  status: String
+  restoreLocation: String
+
+  """The size of the restored file in bytes"""
+  restoreSize: Float
+  created: String
+}
+
+type Deployment {
+  id: Int
+  name: String
+  status: String
+  created: String
+  started: String
+  completed: String
+  environment: Environment
+  remoteId: String
+  buildLog: String
+
+  """The Lagoon URL"""
+  uiLink: String
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildStep: String
+
+  """
+  The username or email address that triggered this deployment.
+  For webhook requests, the username or email address will attempt to be extracted from the webhook payload depending on the source of the webhook
+  """
+  sourceUser: String
+
+  """The source of this task from the available deplyoment trigger types"""
+  sourceType: DeploymentSourceType
+  buildType: DeploymentBuildType
+}
+
+type Insight {
+  id: Int
+  type: String
+  service: String
+  created: String
+  fileId: String
+  data: String
+  file: String!
+  size: String
+  environment: Environment!
+  downloadUrl: String
+}
+
+type EnvKeyValue {
+  id: Int
+  scope: String
+  name: String
+  value: String
+  updated: String
+}
+
+type Task {
+  id: Int
+  name: String
+  taskName: String
+  status: String
+  created: String
+  started: String
+  completed: String
+  environment: Environment
+  service: String
+  command: String
+  deployTokenInjection: Boolean
+  projectKeyInjection: Boolean
+  adminOnlyView: Boolean
+  remoteId: String
+  logs: String
+  files: [File]
+
+  """The username or email address that triggered the task."""
+  sourceUser: String
+
+  """The source of this task from the available task trigger types"""
+  sourceType: TaskSourceType
+}
+
+type AdvancedTask {
+  id: Int
+  name: String
+  taskName: String
+  status: String
+  created: String
+  started: String
+  completed: String
+  environment: Environment
+  service: String
+  advancedTask: String
+  remoteId: String
+  logs: String
+  files: [File]
+}
+
+type ProjectFactSearchResults {
+  count: Int
+  projects: [Project]
+}
+
+type EnvironmentFactSearchResults {
+  count: Int
+  environments: [Environment]
+}
+
+enum RouteSource {
+  API
+  YAML
+  AUTOGENERATED
+}
+
+enum RouteType {
+  STANDARD
+  ACTIVE
+  STANDBY
+}
+
+enum RouteInsecure {
+  Allow
+  Redirect
+  None
+}
+
+type Route {
+  id: Int
+  project: Project
+  environment: Environment
+  domain: String
+  service: String
+  updated: String
+  created: String
+
+  """
+  Used to set automatic certificate generation using the default certificate provisioning system.
+  Typically this will be LetsEncrypt.
+  """
+  tlsAcme: Boolean
+
+  """Will handle automatic redirect from http to https on this route."""
+  insecure: RouteInsecure
+  annotations: [RouteAnnotation]
+  pathRoutes: [PathRoute]
+
+  """
+  Is used to indicate if this route is the primary route when attached to an environment.
+  """
+  primary: Boolean
+
+  """Alternate domains are typically subdomains of the main domain."""
+  alternativeNames: [AlternativeName]
+
+  """Whether the route is defined in the API or the Lagoon YAML file."""
+  source: RouteSource
+
+  """
+  Route type determines if this is a standard route, or should be considered as an active or standby route.
+  Active or Standby routes will transfer between environments that are listed under the projects productionEnvironment and standbyProductionEnvironment.
+  """
+  type: RouteType
+
+  """
+  If this route is on an environment that idles, request validation could prevent the environment from unidling when not accessed via a browser.
+  Disabling request verification will allow the environment to unidle from any non-browser requests.
+  """
+  disableRequestVerification: Boolean
+  hstsEnabled: Boolean
+  hstsPreload: Boolean
+  hstsIncludeSubdomains: Boolean
+  hstsMaxAge: Int
+}
+
+type AutogeneratedRouteConfig {
+  updated: String
+  enabled: Boolean
+  allowPullRequests: Boolean
+  prefixes: [String]
+  pathRoutes: [AutogeneratedPathRoute]
+  disableRequestVerification: Boolean
+  insecure: RouteInsecure
+
+  """
+  Used to set automatic certificate generation using the default certificate provisioning system.
+  Typically this will be LetsEncrypt.
+  """
+  tlsAcme: Boolean
+}
+
+input UpdateProjectAutogeneratedRouteConfigInput {
+  project: String!
+  patch: AutogeneratedRouteConfigPatchInput!
+}
+
+input UpdateEnvironmentAutogeneratedRouteConfigInput {
+  project: String!
+  environment: String!
+  patch: AutogeneratedRouteConfigPatchInput!
+}
+
+input AutogeneratedRouteConfigPatchInput {
+  enabled: Boolean
+  allowPullRequests: Boolean
+  prefixes: [String]
+  pathRoutes: [AutogeneratedPathRouteInput]
+  disableRequestVerification: Boolean
+  insecure: RouteInsecure
+
+  """
+  Used to set automatic certificate generation using the default certificate provisioning system.
+  Typically this will be LetsEncrypt.
+  """
+  tlsAcme: Boolean
+}
+
+type PathRoute {
+  id: Int
+  toService: String
+  path: String
+}
+
+type AutogeneratedPathRoute {
+  fromService: String
+  toService: String
+  path: String
+}
+
+input AutogeneratedPathRouteInput {
+  fromService: String
+  toService: String
+  path: String
+}
+
+type AlternativeName {
+  id: Int
+  domain: String
+}
+
+type RouteAnnotation {
+  key: String
+  value: String
+}
+
+input AddRouteToProjectInput {
+  id: Int
+  project: String!
+  domain: String!
+  environment: String
+  service: String
+  primary: Boolean
+  type: RouteType
+  alternativeNames: [String]
+  annotations: [AddRouteAnnotationInput]
+  pathRoutes: [PathRouteInput]
+  source: RouteSource
+  tlsAcme: Boolean
+  insecure: RouteInsecure
+  hstsEnabled: Boolean
+  hstsPreload: Boolean
+  hstsIncludeSubdomains: Boolean
+  hstsMaxAge: Int
+  monitoringPath: String
+
+  """
+  If this route is on an environment that idles, request validation could prevent the environment from unidling when not accessed via a browser.
+  Disabling request verification will allow the environment to unidle from any non-browser requests.
+  """
+  disableRequestVerification: Boolean
+}
+
+input UpdateRouteInput {
+  domain: String!
+  project: String!
+  patch: UpdateRoutePatchInput!
+}
+
+input UpdateRoutePatchInput {
+  tlsAcme: Boolean
+  insecure: RouteInsecure
+  hstsEnabled: Boolean
+  hstsPreload: Boolean
+  hstsIncludeSubdomains: Boolean
+  hstsMaxAge: Int
+  monitoringPath: String
+
+  """
+  If this route is on an environment that idles, request validation could prevent the environment from unidling when not accessed via a browser.
+  Disabling request verification will allow the environment to unidle from any non-browser requests.
+  """
+  disableRequestVerification: Boolean
+  source: RouteSource
+}
+
+input AddOrUpdateEnvironmentRouteInput {
+  domain: String!
+  project: String!
+  environment: String!
+  service: String!
+  primary: Boolean
+  type: RouteType
+}
+
+input ActiveStandbyRouteMoveInput {
+  domain: String!
+  project: String!
+  environment: String!
+}
+
+input RemoveRouteFromEnvironmentInput {
+  domain: String!
+  project: String!
+  environment: String!
+}
+
+input AddRouteAlternativeDomainInput {
+  id: Int!
+  alternativeNames: [String]!
+}
+
+input RemoveRouteAlternativeDomainInput {
+  id: Int!
+  domain: String!
+}
+
+input AddRouteAnnotationInput {
+  key: String!
+  value: String!
+}
+
+input AddRouteAnnotationsInput {
+  id: Int!
+  annotations: [AddRouteAnnotationInput]!
+}
+
+input RemoveRouteAnnotationInput {
+  id: Int!
+  key: String!
+}
+
+input AddPathRoutesInput {
+  id: Int!
+  pathRoutes: [PathRouteInput]!
+}
+
+input RemovePathRoutesInput {
+  id: Int!
+  toService: String!
+  path: String!
+}
+
+input PathRouteInput {
+  toService: String!
+  path: String!
+}
+
+input DeleteRouteInput {
+  id: Int!
+}
+
+input IdleEnvironmentInput {
+  project: String!
+  environment: String!
+  idle: Boolean!
+  disableAutomaticUnidling: Boolean
+}
+
+input EnvironmentServiceActionInput {
+  project: String!
+  environment: String!
+  serviceName: String!
+  state: EnvironmentServiceAction!
+}
+
+type OrgUser {
+  id: String
+  email: String
+  firstName: String
+  lastName: String
+  admin: Boolean @deprecated(reason: "use organizationRole")
+  owner: Boolean @deprecated(reason: "use organizationRole")
+  comment: String
+  has2faEnabled: Boolean
+  isFederatedUser: Boolean
+  groupRoles: [GroupRoleInterface]
+  organizationRole: OrganizationRole
+}
+
+type OrganizationKey {
+  id: Int
+  name: String
+  publicKey: String
+  privateKey: String @deprecated(reason: "Direct private key retrieval will may be removed in a future release. Currently admin only")
+  projects: [OrgProject]
+  comment: String
+  created: String
+}
+
+input AddOrganizationKeyInput {
+  organization: String!
+  name: String!
+  comment: String
+}
+
+input UpdateOrganizationKeyInput {
+  id: Int!
+  comment: String!
+}
+
+type Organization {
+  id: Int
+  name: String
+  friendlyName: String
+  description: String
+  quotaProject: Int
+  quotaGroup: Int
+  quotaNotification: Int
+  quotaEnvironment: Int
+  quotaRoute: Int
+  deployTargets: [Openshift]
+  projects: [OrgProject]
+  environments: [OrgEnvironment]
+  groups: [OrgGroupInterface]
+  owners: [OrgUser]
+  notifications(type: NotificationType): [Notification]
+  created: String
+  envVariables: [EnvKeyValue]
+
+  """
+  retentionPolicies are the available retention policies to an organization
+  """
+  retentionPolicies(type: RetentionPolicyType): [RetentionPolicy]
+  keys: [OrganizationKey]
+  featureApiRoutes: Boolean @deprecated(reason: "Beta API routes feature flag, will be generally available in a future release and this feature gate will be removed")
+  featureProjectClone: Boolean @deprecated(reason: "Beta project clone feature flag, will be generally available in a future release and this feature gate will be removed")
+}
+
+input AddOrganizationInput {
+  id: Int
+  name: String!
+  friendlyName: String
+  description: String
+  quotaProject: Int
+  quotaGroup: Int
+  quotaNotification: Int
+  quotaEnvironment: Int
+  quotaRoute: Int
+
+  """
+  @deprecated(reason: "Beta API routes feature flag, will be generally available in a future release and this feature gate will be removed")
+  """
+  featureApiRoutes: Boolean
+
+  """
+  @deprecated(reason: "Beta project clone feature flag, will be generally available in a future release and this feature gate will be removed")
+  """
+  featureProjectClone: Boolean
+}
+
+input DeleteOrganizationInput {
+  id: Int!
+}
+
+input UpdateOrganizationPatchInput {
+  name: String
+  friendlyName: String
+  description: String
+  quotaProject: Int
+  quotaGroup: Int
+  quotaNotification: Int
+  quotaEnvironment: Int
+  quotaRoute: Int
+
+  """
+  @deprecated(reason: "Beta API routes feature flag, will be generally available in a future release and this feature gate will be removed")
+  """
+  featureApiRoutes: Boolean
+
+  """
+  @deprecated(reason: "Beta project clone feature flag, will be generally available in a future release and this feature gate will be removed")
+  """
+  featureProjectClone: Boolean
+}
+
+input UpdateOrganizationInput {
+  id: Int!
+  patch: UpdateOrganizationPatchInput!
+}
+
+"""
+OrgProject is a small selection of fields for organization owners to view
+"""
+type OrgProject {
+  id: Int
+  name: String
+  organization: Int
+  gitUrl: String
+  groups: [OrgGroupInterface]
+  groupCount: Int
+  notifications: [OrganizationNotification]
+
+  """
+  retentionPolicies are the available retention policies to a project, this will also include inherited policies from an organization
+  if the project is associated to an organization, and the organization has any retention policies
+  """
+  retentionPolicies(type: RetentionPolicyType): [RetentionPolicy]
+  metadata: JSON
+  clone: ProjectClone
+  restrictions: [Restriction]
+  environments(
+    """Filter by Environment Type"""
+    type: EnvType
+
+    """
+    Include deleted Environments (by default deleted environment are hidden)
+    """
+    includeDeleted: Boolean
+
+    """Filter environments by fact matching"""
+    factFilter: FactFilterInput
+  ): [OrgEnvironment]
+}
+
+"""
+OrgEnvironment is a small selection of fields for organization owners to view
+"""
+type OrgEnvironment {
+  id: Int
+  name: String
+  project: OrgProject
+  deployType: String
+  deployHeadRef: String
+  deployTitle: String
+  autoIdle: Int
+  environmentType: String
+  openshiftProjectName: String
+  kubernetesNamespaceName: String
+  updated: String
+  created: String
+  deleted: String
+  route: String
+  routes: String
+  services: [EnvironmentService]
+  openshift: Openshift
+  kubernetes: Kubernetes
+}
+
+type OrganizationNotification {
+  name: String
+  type: NotificationType
+}
+
+type DeployTargetConfig {
+  id: Int
+  project: Project
+  weight: Int
+  branches: String
+  pullrequests: String
+  deployTarget: Openshift
+  deployTargetProjectPattern: String @deprecated(reason: "No longer in use")
+}
+
+type AuditLog {
+  id: Int
+  usid: String
+  emailAddress: String
+  resourceId: String
+  resourceType: AuditType
+  resourceDetails: String
+  linkedResourceId: String
+  linkedResourceType: AuditType
+  linkedResourceDetails: String
+  auditEvent: String
+  impersonatorId: String
+  impersonatorUsername: String
+  ipAddress: String
+  source: AuditSource
+  created: String
+  organizationId: Int
+}
+
+enum AuditSource {
+  API
+  CLI
+  UI
+}
+
+enum AuditType {
+  BACKUP
+  BULKDEPLOYMENT
+  DEPLOYMENT
+  DEPLOYTARGET
+  DEPLOYTARGETCONFIG
+  ENVIRONMENT
+  GROUP
+  NOTIFICATION
+  ORGANIZATION
+  PROJECT
+  SSHKEY
+  TASK
+  USER
+  VARIABLE
+  FILE
+  DEPLOYKEY
+}
+
+input AuditLogInput {
+  startDate: String
+  endDate: String
+  userId: String
+  emailAddress: String
+  impersonatorId: String
+  impersonatorUsername: String
+  resourceType: AuditType
+  resourceDetails: String
+  resourceId: String
+  linkedResourceType: AuditType
+  linkedResourceId: String
+  linkedResourceDetails: String
+  auditEvent: String
+  ipAddress: String
+  source: AuditSource
+
+  """
+  Limit number of events returned. Defaults to 100 unless start and end date are defined
+  """
+  limit: Int
+  organizationId: Int
+}
+
+input AddDeployTargetConfigInput {
+  id: Int
+  project: Int!
+  weight: Int
+  branches: String!
+  pullrequests: String!
+  deployTarget: Int!
+  deployTargetProjectPattern: String
+}
+
+input UpdateDeployTargetConfigPatchInput {
+  weight: Int
+  branches: String
+  pullrequests: String
+  deployTarget: Int
+  deployTargetProjectPattern: String
+}
+
+input UpdateDeployTargetConfigInput {
+  id: Int!
+  patch: UpdateDeployTargetConfigPatchInput
+}
+
+input DeleteDeployTargetConfigInput {
+  id: Int!
+  project: Int!
+  execute: Boolean
+}
+
+input DeleteEnvironmentInput {
+  name: String!
+  project: String!
+  execute: Boolean
+}
+
+input MetadataKeyValue {
+  key: String!
+  value: String
+}
+
+input UpdateMetadataInput {
+  id: Int!
+  patch: MetadataKeyValue!
+}
+
+input RemoveMetadataInput {
+  id: Int!
+  key: String!
+}
+
+input ProjectOrgGroupsInput {
+  project: Int!
+  organization: Int!
+}
+
+input EnvVariableByProjectEnvironmentNameInput {
+  environment: String
+  project: String!
+}
+
+input KubernetesInput {
+  id: Int
+  name: String
+}
+
+input DeploymentByNameInput {
+  """The environment name"""
+  environment: String
+
+  """The project name"""
+  project: String
+
+  """The deployment name (eg, lagoon-build-abc)"""
+  name: String
+}
+
+input GetTaskFileUploadFormInput {
+  task: Int!
+  filename: String!
+}
+
+input GetProjectCloneFileUploadFormInput {
+  cloneId: Int!
+  filename: String!
+}
+
+type Query {
+  """Returns the current user"""
+  me: User
+
+  """Returns User Object by a given sshKey"""
+  userBySshKey(sshKey: String!): User
+
+  """Returns User Object by a given sshKey Fingerprint"""
+  userBySshFingerprint(fingerprint: String!): User
+
+  """Returns User Object by a given email address"""
+  userByEmail(email: String!): User
+
+  """Returns Project Object by a given name"""
+  projectByName(name: String!): Project
+  orgProjectByName(name: String!): OrgProject
+
+  """
+  Returns all Environment Objects for a specified Kubernetes matching given filter (all if no filter defined)
+  """
+  environmentsByKubernetes(kubernetes: KubernetesInput!, order: EnvOrderType, createdAfter: String, type: EnvType): [Environment]
+
+  """Returns Group Object by a given name"""
+  groupByName(name: String!): GroupInterface
+  groupByNameAndOrganization(name: String!, organization: Int!): OrgGroupInterface
+
+  """
+  Retrieves all users that have been added to groups within an organization.
+  """
+  usersByOrganization(organization: Int!): [OrgUser]
+
+  """
+  Retrieve information about a specific user within groups within an organization.
+  This will only return group information if this user is in any groups within this organization
+  """
+  userByEmailAndOrganization(email: String!, organization: Int!): OrgUser
+
+  """
+  Returns Project Object by a given gitUrl (only the first one if there are multiple)
+  """
+  projectByGitUrl(gitUrl: String!): Project
+  environmentByName(name: String!, project: Int!, includeDeleted: Boolean): Environment
+  environmentById(id: Int!): Environment
+
+  """Returns Environment Object by a given openshiftProjectName"""
+  environmentByOpenshiftProjectName(openshiftProjectName: String!): Environment
+
+  """Returns Environment Object by a given kubernetesNamespaceName"""
+  environmentByKubernetesNamespaceName(kubernetesNamespaceName: String!): Environment
+
+  """Return projects from a fact-based search"""
+  projectsByFactSearch(input: FactFilterInput): ProjectFactSearchResults
+
+  """Return environments from a fact-based search"""
+  environmentsByFactSearch(input: FactFilterInput): EnvironmentFactSearchResults
+  userCanSshToEnvironment(openshiftProjectName: String, kubernetesNamespaceName: String): Environment
+  deploymentByRemoteId(id: String): Deployment
+  deploymentByName(input: DeploymentByNameInput): Deployment
+  deploymentsByBulkId(bulkId: String): [Deployment]
+  deploymentsByFilter(openshifts: [Int], deploymentStatus: [DeploymentStatusType], environmentType: EnvType, startDate: Date, endDate: Date, includeDeleted: Boolean, limitPerEnvironment: Int, limit: Int): [Deployment]
+  taskByTaskName(taskName: String): Task
+  taskByRemoteId(id: String): Task
+  taskById(id: Int): Task
+
+  """
+  Returns all Project Objects matching given filters (all if no filter defined)
+  """
+  allProjects(createdAfter: String, gitUrl: String, order: ProjectOrderType, buildImage: Boolean): [Project]
+
+  """Returns all Project Objects matching metadata filters"""
+  projectsByMetadata(metadata: [MetadataKeyValue]): [Project]
+
+  """Returns all OpenShift Objects"""
+  allOpenshifts(disabled: Boolean, buildImage: Boolean): [Openshift]
+
+  """Returns all Kubernetes Objects"""
+  allKubernetes(disabled: Boolean, buildImage: Boolean): [Kubernetes]
+
+  """
+  Returns all Environments matching given filter (all if no filter defined)
+  """
+  allEnvironments(createdAfter: String, type: EnvType, order: EnvOrderType): [Environment]
+
+  """Returns all Problems matching given filter (all if no filter defined)"""
+  allProblems(source: [String], project: Int, environment: Int, envType: [EnvType], identifier: String, severity: [ProblemSeverityRating]): [Problem]
+  problemSources: [String]
+
+  """Returns all Users"""
+  allUsers(id: String, email: String, gitlabId: Int): [User]
+
+  """Returns all Groups matching given filter (all if no filter defined)"""
+  allGroups(name: String, type: String): [GroupInterface]
+
+  """Returns all projects in a given group"""
+  allProjectsInGroup(input: GroupInput): [Project]
+
+  """Returns LAGOON_VERSION"""
+  lagoonVersion: JSON
+
+  """Returns all AdvancedTaskDefinitions"""
+  allAdvancedTaskDefinitions: [AdvancedTaskDefinition]
+
+  """Returns a single AdvancedTaskDefinition given an id"""
+  advancedTaskDefinitionById(id: Int!): AdvancedTaskDefinition
+
+  """Returns a AdvancedTaskDefinitions applicable for an environment"""
+  advancedTasksForEnvironment(environment: Int!): [AdvancedTaskDefinition]
+
+  """Returns a AdvancedTaskDefinitionArgument by Id"""
+  advancedTaskDefinitionArgumentById(id: Int!): [AdvancedTaskDefinitionArgument]
+
+  """Returns the DeployTargetConfig by a deployTargetConfig Id"""
+  deployTargetConfigById(id: Int!): DeployTargetConfig @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """Returns all DeployTargetConfig by a project Id"""
+  deployTargetConfigsByProjectId(project: Int!): [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """
+  Returns all DeployTargetConfig by a deployTarget Id (aka: Openshift Id)
+  """
+  deployTargetConfigsByDeployTarget(deployTarget: Int!): [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+  allDeployTargetConfigs: [DeployTargetConfig] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """List all notifications"""
+  allNotifications: [Notification]
+
+  """List all organizations"""
+  allOrganizations: [Organization] @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+
+  """Get an organization by its ID"""
+  organizationById(id: Int!): Organization
+  organizationByName(name: String!): Organization
+  getGroupProjectOrganizationAssociation(input: AddGroupToOrganizationInput!): String @deprecated(reason: "Use checkBulkImportProjectsAndGroupsToOrganization instead")
+  getProjectGroupOrganizationAssociation(input: ProjectOrgGroupsInput!): String @deprecated(reason: "Use checkBulkImportProjectsAndGroupsToOrganization instead")
+  getEnvVariablesByProjectEnvironmentName(input: EnvVariableByProjectEnvironmentNameInput!): [EnvKeyValue]
+  checkBulkImportProjectsAndGroupsToOrganization(input: AddProjectToOrganizationInput!): ProjectGroupsToOrganization
+  allPlatformUsers(id: String, email: String, gitlabId: Int, role: PlatformRole): [User]
+  getAuditLogs(input: AuditLogInput): [AuditLog]
+  listAllRetentionPolicies(name: String, type: RetentionPolicyType): [RetentionPolicy]
+  getBackupDownloadLinkByBackupId(backupId: String!): String
+  getDownloadLinkByTaskFileId(taskId: Int!, fileId: Int!): String
+  getTaskFileUploadForm(input: GetTaskFileUploadFormInput!): TaskFileUploadForm
+  getDownloadLinkByProjectCloneFileId(cloneId: Int!, fileId: Int!): String
+  getProjectCloneFileUploadForm(input: GetProjectCloneFileUploadFormInput!): TaskFileUploadForm
+  getOrganizationKeyByProjectName(project: String!): OrganizationKey
+}
+
+type ProjectGroupsToOrganization {
+  projects: [Project]
+  groups: [GroupInterface]
+  otherOrgProjects: [Project]
+  otherOrgGroups: [GroupInterface]
+}
+
+input ProjectInput {
+  id: Int
+  name: String
+}
+
+input EnvironmentInput {
+  id: Int
+  name: String
+  project: ProjectInput
+}
+
+input DeploymentInput {
+  id: Int
+  name: String
+  environment: EnvironmentInput
+}
+
+input OrganizationInput {
+  id: Int
+  name: String
+}
+
+input AddSshKeyInput {
+  id: Int
+  name: String!
+  keyValue: String!
+  keyType: SshKeyType!
+  user: UserInput!
+}
+
+input DeleteSshKeyInput {
+  name: String!
+}
+
+input DeleteSshKeyByIdInput {
+  id: Int!
+}
+
+input AddUserSSHPublicKeyInput {
+  id: Int
+  name: String!
+  publicKey: String!
+  user: UserInput!
+}
+
+input DeleteUserSSHPublicKeyByIdInput {
+  id: Int!
+}
+
+input AddProjectInput {
+  id: Int
+  name: String!
+  gitUrl: String!
+  subfolder: String
+  routerPattern: String
+  openshift: Int
+  openshiftProjectPattern: String
+  kubernetes: Int
+  kubernetesNamespacePattern: String
+  activeSystemsDeploy: String
+  activeSystemsPromote: String
+  activeSystemsRemove: String
+  activeSystemsTask: String
+  activeSystemsMisc: String
+  branches: String
+  pullrequests: String
+  productionEnvironment: String!
+  productionRoutes: String
+  productionAlias: String
+  standbyProductionEnvironment: String
+  standbyRoutes: String
+  standbyAlias: String
+  availability: ProjectAvailability
+  autoIdle: Int
+  storageCalc: Int
+  developmentEnvironmentsLimit: Int
+  privateKey: String
+  problemsUi: Int
+  factsUi: Int
+  productionBuildPriority: Int
+  developmentBuildPriority: Int
+  deploymentsDisabled: Int
+  organization: Int
+  addOrgOwner: Boolean
+  buildImage: String
+  sharedBaasBucket: Boolean
+}
+
+input AddEnvironmentInput {
+  id: Int
+  name: String!
+  project: Int!
+  deployType: DeployType!
+  deployBaseRef: String!
+  deployHeadRef: String
+  deployTitle: String
+  environmentType: EnvType!
+  openshiftProjectName: String
+  kubernetesNamespaceName: String
+  openshift: Int
+  openshiftProjectPattern: String
+  kubernetes: Int
+  kubernetesNamespacePattern: String
+}
+
+input AddEnvironmentServiceInput {
+  id: Int
+  environment: Int!
+  name: String!
+  type: String!
+  containers: [ServiceContainerInput]
+  replicas: Int
+}
+
+input ServiceContainerInput {
+  name: String!
+}
+
+input DeleteEnvironmentServiceInput {
+  name: String!
+  environment: Int!
+}
+
+input AddOrUpdateEnvironmentStorageInput {
+  environment: Int!
+  persistentStorageClaim: String!
+  bytesUsed: Int!
+
+  """Date in format 'YYYY-MM-DD'"""
+  updated: String
+}
+
+input AddOrUpdateStorageOnEnvironmentInput {
+  environment: Int!
+  persistentStorageClaim: String!
+
+  """kibUsed is a float to allow for greater than 32-bit integer inputs"""
+  kibUsed: Float!
+
+  """Date in format 'YYYY-MM-DD'"""
+  updated: String
+}
+
+input AddBackupInput {
+  id: Int
+  environment: Int!
+  source: String!
+  backupId: String!
+  created: String!
+}
+
+input DeleteBackupInput {
+  backupId: String!
+}
+
+input AddRestoreInput {
+  id: Int
+  status: RestoreStatusType
+  restoreLocation: String
+  created: String
+  execute: Boolean
+  backupId: String!
+}
+
+input UpdateRestoreInput {
+  backupId: String!
+  patch: UpdateRestorePatchInput!
+}
+
+input DeleteRestoreInput {
+  backupId: String!
+}
+
+input UpdateRestorePatchInput {
+  status: RestoreStatusType
+  created: String
+  restoreLocation: String
+}
+
+input AddDeploymentInput {
+  id: Int
+  name: String!
+  status: DeploymentStatusType!
+  created: String!
+  started: String
+  completed: String
+  environment: Int!
+  remoteId: String
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildStep: String
+  sourceUser: String
+  sourceType: DeploymentSourceType
+  buildType: DeploymentBuildType
+}
+
+input DeleteDeploymentInput {
+  id: Int!
+}
+
+input UpdateDeploymentPatchInput {
+  name: String
+  status: DeploymentStatusType
+  created: String
+  started: String
+  completed: String
+  environment: Int
+  remoteId: String
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildStep: String
+}
+
+input UpdateDeploymentInput {
+  id: Int!
+  patch: UpdateDeploymentPatchInput!
+}
+
+input CancelDeploymentInput {
+  deployment: DeploymentInput!
+}
+
+input TaskInput {
+  id: Int
+  name: String!
+  status: TaskStatusType
+  created: String
+  started: String
+  completed: String
+  environment: Int!
+  service: String
+  command: String
+  remoteId: String
+  execute: Boolean
+  sourceUser: String
+  sourceType: TaskSourceType
+}
+
+input AdvancedTaskArgumentInput {
+  name: String
+  value: String
+}
+
+enum AdvancedTaskDefinitionArgumentTypes {
+  NUMERIC
+  STRING
+  ENVIRONMENT_SOURCE_NAME
+  ENVIRONMENT_SOURCE_NAME_EXCLUDE_SELF
+}
+
+input AdvancedTaskDefinitionArgumentInput {
+  name: String
+  type: AdvancedTaskDefinitionArgumentTypes
+  displayName: String
+  defaultValue: String
+  optional: Boolean
+}
+
+input AdvancedTaskDefinitionArgumentValueInput {
+  advancedTaskDefinitionArgumentName: String
+  value: String
+}
+
+enum AdvancedTaskDefinitionTypes {
+  COMMAND
+  IMAGE
+}
+
+input AdvancedTaskDefinitionInput {
+  name: String
+  description: String
+  image: String
+  type: AdvancedTaskDefinitionTypes
+  service: String
+  command: String
+  environment: Int
+  project: Int
+  groupName: String
+  permission: TaskPermission
+  advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgumentInput]
+  confirmationText: String
+  deployTokenInjection: Boolean
+  projectKeyInjection: Boolean
+  adminOnlyView: Boolean
+  systemWide: Boolean
+}
+
+input UpdateAdvancedTaskDefinitionInput {
+  id: Int!
+  patch: UpdateAdvancedTaskDefinitionPatchInput!
+}
+
+input UpdateAdvancedTaskDefinitionPatchInput {
+  name: String
+  description: String
+  image: String
+  type: AdvancedTaskDefinitionTypes
+  service: String
+  command: String
+  environment: Int
+  project: Int
+  groupName: String
+  permission: TaskPermission
+  advancedTaskDefinitionArguments: [AdvancedTaskDefinitionArgumentInput]
+  confirmationText: String
+  deployTokenInjection: Boolean
+  projectKeyInjection: Boolean
+  adminOnlyView: Boolean
+}
+
+input DeleteTaskInput {
+  id: Int!
+}
+
+input UpdateTaskPatchInput {
+  name: String
+  taskName: String
+  status: TaskStatusType
+  created: String
+  started: String
+  completed: String
+  environment: Int
+  service: String
+  command: String
+  remoteId: String
+}
+
+input UpdateTaskInput {
+  id: Int!
+  patch: UpdateTaskPatchInput!
+}
+
+input CancelTaskNameInput {
+  id: Int
+  taskName: String
+  environment: EnvironmentInput
+}
+
+input CancelTaskInput {
+  task: CancelTaskNameInput!
+}
+
+input AddOpenshiftInput {
+  id: Int
+  name: String!
+  consoleUrl: String!
+  token: String
+  routerPattern: String
+
+  """@deprecated(reason: "Not used with RBAC permissions")"""
+  projectUser: String
+  sshHost: String
+  sshPort: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+input AddKubernetesInput {
+  id: Int
+  name: String!
+  consoleUrl: String!
+  token: String
+  routerPattern: String
+
+  """@deprecated(reason: "Not used with RBAC permissions")"""
+  projectUser: String
+  sshHost: String
+  sshPort: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+input DeleteOpenshiftInput {
+  name: String!
+}
+
+input DeleteKubernetesInput {
+  name: String!
+}
+
+input AddNotificationMicrosoftTeamsInput {
+  name: String!
+  webhook: String!
+  organization: Int
+}
+
+input AddNotificationEmailInput {
+  name: String!
+  emailAddress: String!
+  organization: Int
+}
+
+input AddNotificationRocketChatInput {
+  name: String!
+  webhook: String!
+  channel: String!
+  organization: Int
+}
+
+input AddNotificationWebhookInput {
+  name: String!
+  webhook: String!
+  organization: Int
+}
+
+input AddNotificationSlackInput {
+  name: String!
+  webhook: String!
+  channel: String!
+  organization: Int
+}
+
+input DeleteNotificationMicrosoftTeamsInput {
+  name: String!
+}
+
+input DeleteNotificationEmailInput {
+  name: String!
+}
+
+input DeleteNotificationRocketChatInput {
+  name: String!
+}
+
+input DeleteNotificationSlackInput {
+  name: String!
+}
+
+input DeleteNotificationWebhookInput {
+  name: String!
+}
+
+input AddNotificationToProjectInput {
+  project: String!
+  notificationType: NotificationType!
+  notificationName: String!
+  contentType: NotificationContentType
+  notificationSeverityThreshold: ProblemSeverityRating
+}
+
+input RemoveNotificationFromProjectInput {
+  project: String!
+  notificationType: NotificationType!
+  notificationName: String!
+}
+
+input UserEmailOptionInput {
+  organizationRoleChanges: Boolean
+  sshKeyChanges: Boolean
+  groupRoleChanges: Boolean
+}
+
+input AddUserInput {
+  email: String!
+  firstName: String
+  lastName: String
+  comment: String
+  gitlabId: Int
+  resetPassword: Boolean
+  emailNotifications: UserEmailOptionInput
+}
+
+input UpdateUserPatchInput {
+  email: String
+  firstName: String
+  lastName: String
+  comment: String
+  gitlabId: Int
+  emailNotifications: UserEmailOptionInput
+}
+
+input UpdateUserInput {
+  user: UserInput!
+  patch: UpdateUserPatchInput!
+}
+
+input DeleteUserInput {
+  user: UserInput!
+}
+
+input addUserToOrganizationInput {
+  user: UserInput!
+  organization: Int!
+  admin: Boolean
+  owner: Boolean
+}
+
+input AddAdminToOrganizationInput {
+  user: UserInput!
+  organization: OrganizationInput!
+  role: OrganizationRole!
+}
+
+input RemoveAdminFromOrganizationInput {
+  user: UserInput!
+  organization: OrganizationInput!
+}
+
+input ResetUserPasswordInput {
+  user: UserInput!
+}
+
+input DeleteProjectInput {
+  project: String!
+}
+
+input UpdateProjectPatchInput {
+  name: String
+  gitUrl: String
+  availability: ProjectAvailability
+  privateKey: String
+  subfolder: String
+  routerPattern: String
+  activeSystemsDeploy: String
+  activeSystemsRemove: String
+  activeSystemsTask: String
+  activeSystemsMisc: String
+  activeSystemsPromote: String
+  branches: String
+  productionEnvironment: String
+  productionRoutes: String
+  productionAlias: String
+  standbyProductionEnvironment: String
+  standbyRoutes: String
+  standbyAlias: String
+  autoIdle: Int
+  storageCalc: Int
+  pullrequests: String
+  openshift: Int
+  openshiftProjectPattern: String
+  kubernetes: Int
+  kubernetesNamespacePattern: String
+  developmentEnvironmentsLimit: Int
+  problemsUi: Int
+  factsUi: Int
+  productionBuildPriority: Int
+  developmentBuildPriority: Int
+  deploymentsDisabled: Int
+  buildImage: String
+  sharedBaasBucket: Boolean
+  autogeneratedRoutes: Boolean
+  autogeneratedRoutesPullrequests: Boolean
+  autogeneratedRoutePrefixes: [String]
+  autogeneratedPathRoutes: [AutogeneratedPathRouteInput]
+  disableRequestVerification: Boolean
+  restrictions: [Restriction]
+}
+
+input UpdateProjectInput {
+  id: Int!
+  patch: UpdateProjectPatchInput!
+}
+
+input AddProjectToOrganizationInput {
+  project: Int!
+  organization: Int!
+}
+
+input RemoveProjectFromOrganizationInput {
+  project: Int!
+  organization: Int!
+}
+
+input AddDeployTargetToOrganizationInput {
+  deployTarget: Int!
+  organization: Int!
+}
+
+input RemoveDeployTargetFromOrganizationInput {
+  deployTarget: Int!
+  organization: Int!
+}
+
+input UpdateOpenshiftPatchInput {
+  name: String
+  consoleUrl: String
+  token: String
+  routerPattern: String
+
+  """@deprecated(reason: "Not used with RBAC permissions")"""
+  projectUser: String
+  sshHost: String
+  sshPort: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+input UpdateOpenshiftInput {
+  id: Int!
+  patch: UpdateOpenshiftPatchInput!
+}
+
+input UpdateKubernetesPatchInput {
+  name: String
+  consoleUrl: String
+  token: String
+  routerPattern: String
+
+  """@deprecated(reason: "Not used with RBAC permissions")"""
+  projectUser: String
+  sshHost: String
+  sshPort: String
+  monitoringConfig: JSON
+  friendlyName: String
+  cloudProvider: String
+  cloudRegion: String
+  buildImage: String
+  sharedBaasBucketName: String
+  disabled: Boolean
+}
+
+input UpdateKubernetesInput {
+  id: Int!
+  patch: UpdateKubernetesPatchInput!
+}
+
+input UpdateNotificationMicrosoftTeamsPatchInput {
+  name: String
+  webhook: String
+}
+
+input UpdateNotificationEmailPatchInput {
+  name: String
+  emailAddress: String
+}
+
+input UpdateNotificationRocketChatPatchInput {
+  name: String
+  webhook: String
+  channel: String
+}
+
+input UpdateNotificationSlackPatchInput {
+  name: String
+  webhook: String
+  channel: String
+}
+
+input UpdateNotificationWebhookPatchInput {
+  name: String
+  webhook: String
+}
+
+input UpdateNotificationMicrosoftTeamsInput {
+  name: String!
+  patch: UpdateNotificationMicrosoftTeamsPatchInput
+}
+
+input UpdateNotificationEmailInput {
+  name: String!
+  patch: UpdateNotificationEmailPatchInput
+}
+
+input UpdateNotificationRocketChatInput {
+  name: String!
+  patch: UpdateNotificationRocketChatPatchInput
+}
+
+input UpdateNotificationSlackInput {
+  name: String!
+  patch: UpdateNotificationSlackPatchInput
+}
+
+input UpdateNotificationWebhookInput {
+  name: String!
+  patch: UpdateNotificationWebhookPatchInput
+}
+
+input UpdateSshKeyPatchInput {
+  name: String
+  keyValue: String
+  keyType: SshKeyType
+}
+
+input UpdateSshKeyInput {
+  id: Int!
+  patch: UpdateSshKeyPatchInput!
+}
+
+input UpdateUserSSHPublicKeyPatchInput {
+  name: String
+  publicKey: String
+}
+
+input UpdateUserSSHPublicKeyInput {
+  id: Int!
+  patch: UpdateUserSSHPublicKeyPatchInput!
+}
+
+input UpdateEnvironmentPatchInput {
+  project: Int
+  deployType: DeployType
+  deployBaseRef: String
+  deployHeadRef: String
+  deployTitle: String
+  environmentType: EnvType
+  openshiftProjectName: String
+  kubernetesNamespaceName: String
+  route: String
+  routes: String
+  monitoringUrls: String
+  autoIdle: Int
+  openshift: Int
+  openshiftProjectPattern: String
+  kubernetes: Int
+  kubernetesNamespacePattern: String
+
+  """Timestamp in format 'YYYY-MM-DD hh:mm:ss'"""
+  created: String
+  autogeneratedRoutes: Boolean
+  autogeneratedPathRoutes: [AutogeneratedPathRouteInput]
+  disableRequestVerification: Boolean
+  idleState: IdleState
+}
+
+input UpdateEnvironmentInput {
+  id: Int!
+  patch: UpdateEnvironmentPatchInput
+}
+
+enum IdleState {
+  ACTIVE
+  IDLED
+  SCALED
+}
+
+input EnvVariableInput {
+  id: Int
+  type: EnvVariableType
+  typeId: Int!
+  scope: EnvVariableScope
+  name: String!
+  value: String!
+}
+
+input DeleteEnvVariableInput {
+  id: Int!
+}
+
+input DeleteEnvVariableByNameInput {
+  name: String!
+  organization: String
+  project: String
+  environment: String
+}
+
+input EnvVariableByNameInput {
+  name: String!
+  value: String!
+  scope: EnvVariableScope
+  organization: String
+  project: String
+  environment: String
+}
+
+input SetEnvironmentServicesInput {
+  environment: Int!
+  services: [String]!
+}
+
+input UploadFilesForTaskInput {
+  task: Int!
+  files: [Upload]!
+}
+
+input DeleteFilesForTaskInput {
+  id: Int!
+}
+
+input DeleteFilesForProjectCloneInput {
+  id: Int!
+}
+
+input EnvKeyValueInput {
+  name: String
+  value: String
+}
+
+input DeployEnvironmentLatestInput {
+  environment: EnvironmentInput!
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildVariables: [EnvKeyValueInput]
+  returnData: Boolean
+}
+
+input DeployEnvironmentBranchInput {
+  project: ProjectInput!
+  branchName: String!
+  branchRef: String
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildVariables: [EnvKeyValueInput]
+  returnData: Boolean
+}
+
+input DeployEnvironmentPullrequestInput {
+  project: ProjectInput!
+  number: Int!
+  title: String!
+  baseBranchName: String!
+  baseBranchRef: String!
+  headBranchName: String!
+  headBranchRef: String!
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildVariables: [EnvKeyValueInput]
+  returnData: Boolean
+}
+
+input DeployEnvironmentPromoteInput {
+  sourceEnvironment: EnvironmentInput!
+  project: ProjectInput!
+  destinationEnvironment: String!
+  priority: Int
+  bulkId: String
+  bulkName: String
+  buildVariables: [EnvKeyValueInput]
+  returnData: Boolean
+}
+
+input switchActiveStandbyInput {
+  project: ProjectInput!
+}
+
+input GroupInput {
+  id: String
+  name: String
+}
+
+input AddGroupInput {
+  name: String!
+  parentGroup: GroupInput
+}
+
+input AddGroupToOrganizationInput {
+  name: String!
+  organization: Int!
+  parentGroup: GroupInput
+  addOrgOwner: Boolean
+}
+
+input UpdateGroupPatchInput {
+  name: String
+}
+
+input UpdateGroupInput {
+  group: GroupInput!
+  patch: UpdateGroupPatchInput!
+}
+
+input DeleteGroupInput {
+  group: GroupInput!
+}
+
+input UserInput {
+  id: String
+  email: String
+}
+
+input UserGroupInput {
+  user: UserInput!
+  group: GroupInput!
+}
+
+input UserGroupRoleInput {
+  user: UserInput!
+  group: GroupInput!
+  role: GroupRole!
+  inviteUser: Boolean
+}
+
+input ProjectGroupsInput {
+  project: ProjectInput!
+  groups: [GroupInput!]!
+}
+
+input UserOrganizationInput {
+  user: UserInput!
+  organization: Int!
+}
+
+input BulkDeploymentLatestInput {
+  buildVariables: [EnvKeyValueInput]
+  environments: [DeployEnvironmentLatestInput!]!
+  name: String
+}
+
+input CloneProjectInput {
+  projectName: String!
+  sourceProject: CloneProjectSourceInput
+  sourceEnvironment: CloneProjectSourceEnvironmentInput
+}
+
+input CloneProjectSourceInput {
+  name: String!
+  metadata: Boolean
+  projectVariables: Boolean
+  notifications: Boolean
+  groups: Boolean
+}
+
+input CloneProjectSourceEnvironmentInput {
+  name: String
+  environmentVariables: Boolean
+  copyData: Boolean
+  disablePreRollout: Boolean
+  disablePostRollout: Boolean
+}
+
+input UpdateProjectCloneInput {
+  id: Int!
+  status: CloneStatus
+}
+
+input ExecuteCloneRestoreTaskInput {
+  cloneId: Int!
+}
+
+input ExecuteCloneDeploymentInput {
+  cloneId: Int!
+}
+
+input CancelProjectCloneInput {
+  cloneId: Int!
+  deleteResources: Boolean
+}
+
+"""
+HarborRetentionPolicyConfiguration is the type for harbor retention policies configuration
+"""
+type HarborRetentionPolicyConfiguration {
+  enabled: Boolean
+  rules: [HarborRetentionRule]
+  schedule: String
+}
+
+type HarborRetentionRule {
+  name: String
+
+  """
+  Pattern is based on doublestar path pattern matching and globbing (harbor uses this)
+  Example, '[^pr\-]*/*' to exclude pullrequests in a pattern, and 'pr-*' to only match pullrequest environments
+  https://github.com/bmatcuk/doublestar#patterns
+  """
+  pattern: String
+  latestPulled: Int
+  latestPushed: Int
+}
+
+"""
+HistoryRetentionPolicyConfiguration is the type for history retention policies configuration
+"""
+type HistoryRetentionPolicyConfiguration {
+  enabled: Boolean
+  deploymentHistory: Int
+
+  """
+  HistoryRetentionType to use
+  COUNT to retain up to X number items of history
+  DAYS to retain up to X number of days of history
+  MONTHS to retain up to X number of months of history
+  """
+  deploymentType: HistoryRetentionType
+  taskHistory: Int
+
+  """
+  HistoryRetentionType to use
+  COUNT to retain up to X number items of history
+  DAYS to retain up to X number of days of history
+  MONTHS to retain up to X number of months of history
+  """
+  taskType: HistoryRetentionType
+}
+
+"""
+HistoryRetentionType is the types of retention policies supported in Lagoon
+"""
+enum HistoryRetentionType {
+  COUNT
+  DAYS
+  MONTHS
+}
+
+"""
+HarborRetentionPolicy is the return type for harbor retention policies in Lagoon
+"""
+type HarborRetentionPolicy {
+  id: Int
+  name: String
+  configuration: HarborRetentionPolicyConfiguration
+  created: String
+  updated: String
+
+  """
+  source is where the retention policy source is coming from, this field is only populated when a project or organization
+  lists the available retention polices, and is used to indicate if a project is consuiming a retention policy from the project directly
+  or from an organization itself
+  """
+  source: String
+}
+
+"""
+HistoryRetentionPolicy is the return type for history retention policies in Lagoon
+"""
+type HistoryRetentionPolicy {
+  id: Int
+  name: String
+  configuration: HistoryRetentionPolicyConfiguration
+  created: String
+  updated: String
+
+  """
+  source is where the retention policy source is coming from, this field is only populated when a project or organization
+  lists the available retention polices, and is used to indicate if a project is consuiming a retention policy from the project directly
+  or from an organization itself
+  """
+  source: String
+}
+
+union RetentionPolicy = HarborRetentionPolicy | HistoryRetentionPolicy
+
+enum RetentionPolicyType {
+  HARBOR
+  HISTORY
+}
+
+"""
+AddHarborRetentionPolicyInput is used as the input for creating a harbor retention policy
+"""
+input AddHarborRetentionPolicyInput {
+  id: Int
+  name: String!
+  enabled: Boolean!
+  rules: [HarborRetentionRuleInput!]
+  schedule: String!
+}
+
+input HarborRetentionRuleInput {
+  name: String!
+  pattern: String!
+  latestPulled: Int!
+  latestPushed: Int
+}
+
+"""
+AddHistoryRetentionPolicyInput is used as the input for creating a history retention policy
+"""
+input AddHistoryRetentionPolicyInput {
+  id: Int
+  name: String!
+  enabled: Boolean!
+  deploymentHistory: Int!
+  deploymentType: HistoryRetentionType!
+  taskHistory: Int!
+  taskType: HistoryRetentionType!
+}
+
+"""
+UpdateHarborRetentionPolicyInput is used as the input for updating a harbor retention policy
+"""
+input UpdateHarborRetentionPolicyInput {
+  name: String!
+  patch: UpdateHarborRetentionPolicyPatchInput
+}
+
+"""
+UpdateHarborRetentionPolicyPatchInput is used as the patch for updating a harbor retention policy
+"""
+input UpdateHarborRetentionPolicyPatchInput {
+  name: String
+  enabled: Boolean!
+  rules: [HarborRetentionRuleInput!]
+  schedule: String!
+}
+
+"""
+UpdateHistoryRetentionPolicyInput is used as the input for updating a history retention policy
+"""
+input UpdateHistoryRetentionPolicyInput {
+  name: String!
+  patch: UpdateHistoryRetentionPolicyPatchInput
+}
+
+"""
+UpdateHistoryRetentionPolicyPatchInput is used as the patch for updating a history retention policy
+"""
+input UpdateHistoryRetentionPolicyPatchInput {
+  name: String
+  enabled: Boolean!
+  deploymentHistory: Int!
+  deploymentType: HistoryRetentionType!
+  taskHistory: Int!
+  taskType: HistoryRetentionType!
+}
+
+"""
+AddRetentionPolicyLinkInput is used as the input for associating a retention policy with a scope
+"""
+input AddRetentionPolicyLinkInput {
+  name: String!
+  scope: RetentionPolicyScope!
+  scopeName: String
+}
+
+"""
+RemoveRetentionPolicyLinkInput is used as the input for removing a harbor retention policy with a scope
+"""
+input RemoveRetentionPolicyLinkInput {
+  name: String!
+  scope: RetentionPolicyScope!
+  scopeName: String
+}
+
+"""
+RetentionPolicyScope is the types of retention policies scopes in Lagoon
+"""
+enum RetentionPolicyScope {
+  GLOBAL
+  ORGANIZATION
+  PROJECT
+}
+
+type Mutation {
+  """Add Environment or update if it is already existing"""
+  addOrUpdateEnvironment(input: AddEnvironmentInput!): Environment
+  updateEnvironment(input: UpdateEnvironmentInput!): Environment
+  deleteEnvironment(input: DeleteEnvironmentInput!): String
+
+  """Add or update Storage Information for Environment"""
+  addOrUpdateEnvironmentStorage(input: AddOrUpdateEnvironmentStorageInput!): EnvironmentStorage @deprecated(reason: "Use addOrUpdateStorageOnEnvironment instead")
+  addOrUpdateStorageOnEnvironment(input: AddOrUpdateStorageOnEnvironmentInput!): EnvironmentStorage
+  addNotificationSlack(input: AddNotificationSlackInput!): NotificationSlack
+  updateNotificationSlack(input: UpdateNotificationSlackInput!): NotificationSlack
+  deleteNotificationSlack(input: DeleteNotificationSlackInput!): String
+  addNotificationRocketChat(input: AddNotificationRocketChatInput!): NotificationRocketChat
+  updateNotificationRocketChat(input: UpdateNotificationRocketChatInput!): NotificationRocketChat
+  deleteNotificationRocketChat(input: DeleteNotificationRocketChatInput!): String
+  addNotificationMicrosoftTeams(input: AddNotificationMicrosoftTeamsInput!): NotificationMicrosoftTeams
+  updateNotificationMicrosoftTeams(input: UpdateNotificationMicrosoftTeamsInput!): NotificationMicrosoftTeams
+  deleteNotificationMicrosoftTeams(input: DeleteNotificationMicrosoftTeamsInput!): String
+  addNotificationWebhook(input: AddNotificationWebhookInput!): NotificationWebhook
+  updateNotificationWebhook(input: UpdateNotificationWebhookInput!): NotificationWebhook
+  deleteNotificationWebhook(input: DeleteNotificationWebhookInput!): String
+  addNotificationEmail(input: AddNotificationEmailInput!): NotificationEmail
+  updateNotificationEmail(input: UpdateNotificationEmailInput!): NotificationEmail
+  deleteNotificationEmail(input: DeleteNotificationEmailInput!): String
+
+  """Connect previous created Notification to a Project"""
+  addNotificationToProject(input: AddNotificationToProjectInput!): Project
+  removeNotificationFromProject(input: RemoveNotificationFromProjectInput!): Project
+  addOpenshift(input: AddOpenshiftInput!): Openshift
+  updateOpenshift(input: UpdateOpenshiftInput!): Openshift
+  deleteOpenshift(input: DeleteOpenshiftInput!): String
+  addKubernetes(input: AddKubernetesInput!): Kubernetes
+  updateKubernetes(input: UpdateKubernetesInput!): Kubernetes
+  deleteKubernetes(input: DeleteKubernetesInput!): String
+  addProject(input: AddProjectInput!): Project
+  updateProject(input: UpdateProjectInput!): Project
+  deleteProject(input: DeleteProjectInput!): String
+  deleteAllProjects: String
+  addSshKey(input: AddSshKeyInput!): SshKey @deprecated(reason: "Use addUserSSHPublicKey instead")
+  updateSshKey(input: UpdateSshKeyInput!): SshKey @deprecated(reason: "Use updateUserSSHPublicKey instead")
+  deleteSshKey(input: DeleteSshKeyInput!): String @deprecated(reason: "Use deleteUserSSHPublicKey instead")
+  deleteSshKeyById(input: DeleteSshKeyByIdInput!): String @deprecated(reason: "Use deleteUserSSHPublicKey instead")
+  addUserSSHPublicKey(input: AddUserSSHPublicKeyInput!): SshKey
+  updateUserSSHPublicKey(input: UpdateUserSSHPublicKeyInput!): SshKey
+  deleteUserSSHPublicKey(input: DeleteUserSSHPublicKeyByIdInput!): String
+  addUser(input: AddUserInput!): User
+  updateUser(input: UpdateUserInput!): User
+
+  """
+  Add a user to an organization as a viewer or owner of the organization.
+  This allows the user to view or manage the organizations groups, projects, and notifications
+  """
+  addAdminToOrganization(input: AddAdminToOrganizationInput!): Organization
+  addUserToOrganization(input: addUserToOrganizationInput!): Organization @deprecated(reason: "Use addAdminToOrganization instead")
+
+  """
+  Remove a viewer or owner from an organization.
+  This removes the users ability to view or manage the organizations groups, projects, and notifications
+  """
+  removeAdminFromOrganization(input: RemoveAdminFromOrganizationInput!): Organization
+  removeUserFromOrganization(input: addUserToOrganizationInput!): Organization @deprecated(reason: "Use removeAdminFromOrganization instead")
+  resetUserPassword(input: ResetUserPasswordInput!): String
+  deleteUser(input: DeleteUserInput!): String
+  addDeployment(input: AddDeploymentInput!): Deployment
+  bulkDeployEnvironmentLatest(input: BulkDeploymentLatestInput!): String
+  deleteDeployment(input: DeleteDeploymentInput!): String
+  updateDeployment(input: UpdateDeploymentInput): Deployment
+  cancelDeployment(input: CancelDeploymentInput!): String
+  addBackup(input: AddBackupInput!): Backup
+  addProblem(input: AddProblemInput!): Problem
+  deleteProblem(input: DeleteProblemInput!): String
+  deleteProblemsFromSource(input: DeleteProblemsFromSourceInput!): String
+  addFact(input: AddFactInput!): Fact
+  addFacts(input: AddFactsInput!): [Fact] @deprecated(reason: "Use addFactsByName instead")
+  addFactsByName(input: AddFactsByNameInput!): [Fact]
+  deleteFact(input: DeleteFactInput!): String
+  deleteFactsFromSource(input: DeleteFactsFromSourceInput!): String
+  addFactReference(input: AddFactReferenceInput!): FactReference
+  deleteFactReference(input: DeleteFactReferenceInput!): String
+  deleteAllFactReferencesByFactId(input: DeleteFactReferencesByFactIdInput!): String
+  deleteBackup(input: DeleteBackupInput!): String
+  addRestore(input: AddRestoreInput!): Restore
+  updateRestore(input: UpdateRestoreInput!): Restore
+  deleteRestore(input: DeleteRestoreInput!): Backup
+  addEnvVariable(input: EnvVariableInput!): EnvKeyValue @deprecated(reason: "Use addOrUpdateEnvVariableByName instead")
+  deleteEnvVariable(input: DeleteEnvVariableInput!): String @deprecated(reason: "Use deleteEnvVariableByName instead")
+  addOrUpdateEnvVariableByName(input: EnvVariableByNameInput!): EnvKeyValue
+  deleteEnvVariableByName(input: DeleteEnvVariableByNameInput!): String
+  addTask(input: TaskInput!): Task
+  addAdvancedTaskDefinition(input: AdvancedTaskDefinitionInput!): AdvancedTaskDefinition
+  updateAdvancedTaskDefinition(input: UpdateAdvancedTaskDefinitionInput!): AdvancedTaskDefinition
+  invokeRegisteredTask(advancedTaskDefinition: Int!, environment: Int!, argumentValues: [AdvancedTaskDefinitionArgumentValueInput]): Task
+  deleteAdvancedTaskDefinition(advancedTaskDefinition: Int!): String
+  taskDrushArchiveDump(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushSqlDump(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushCacheClear(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushCron(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushSqlSync(sourceEnvironment: Int!, destinationEnvironment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushRsyncFiles(sourceEnvironment: Int!, destinationEnvironment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  taskDrushUserLogin(environment: Int!): Task @deprecated(reason: "This task will be removed in a future release. See https://github.com/uselagoon/lagoon/blob/main/DEPRECATIONS.md for alternatives if you use it")
+  deleteTask(input: DeleteTaskInput!): String
+  updateTask(input: UpdateTaskInput): Task
+  cancelTask(input: CancelTaskInput!): String
+  setEnvironmentServices(input: SetEnvironmentServicesInput!): [EnvironmentService] @deprecated(reason: "Use addOrUpdateEnvironmentService or deleteEnvironmentService")
+  uploadFilesForTask(input: UploadFilesForTaskInput!): Task @deprecated(reason: "Use getTaskFileUploadForm instead")
+  deleteFilesForTask(input: DeleteFilesForTaskInput!): String
+  deleteFilesForProjectClone(input: DeleteFilesForProjectCloneInput!): String
+  deployEnvironmentLatest(input: DeployEnvironmentLatestInput!): String
+  deployEnvironmentBranch(input: DeployEnvironmentBranchInput!): String
+  deployEnvironmentPullrequest(input: DeployEnvironmentPullrequestInput!): String
+  deployEnvironmentPromote(input: DeployEnvironmentPromoteInput!): String
+  switchActiveStandby(input: switchActiveStandbyInput!): Task
+  addGroup(input: AddGroupInput!): GroupInterface
+  updateGroup(input: UpdateGroupInput!): GroupInterface
+  deleteGroup(input: DeleteGroupInput!): String
+  addUserToGroup(input: UserGroupRoleInput!): GroupInterface
+  removeUserFromGroup(input: UserGroupInput!): GroupInterface
+  addGroupsToProject(input: ProjectGroupsInput): Project
+  removeGroupsFromProject(input: ProjectGroupsInput!): Project
+
+  """
+  This is a way to quickly remove a user from all groups within an organization.
+  Effectively removing all access to any projects that are assigned to those groups.
+  """
+  removeUserFromOrganizationGroups(input: UserOrganizationInput): Organization
+  updateProjectMetadata(input: UpdateMetadataInput!): Project
+  removeProjectMetadataByKey(input: RemoveMetadataInput!): Project
+  addDeployTargetConfig(input: AddDeployTargetConfigInput!): DeployTargetConfig @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+  updateDeployTargetConfig(input: UpdateDeployTargetConfigInput!): DeployTargetConfig @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+  deleteDeployTargetConfig(input: DeleteDeployTargetConfigInput!): String @deprecated(reason: "Unstable API, subject to breaking changes in any release. Use at your own risk")
+  updateEnvironmentDeployTarget(environment: Int!, deployTarget: Int!): Environment
+
+  """Add an organization"""
+  addOrganization(input: AddOrganizationInput!): Organization
+
+  """Update an organization"""
+  updateOrganization(input: UpdateOrganizationInput!): Organization
+
+  """Delete an organization"""
+  deleteOrganization(input: DeleteOrganizationInput!): String
+
+  """Add a group to an organization"""
+  addGroupToOrganization(input: AddGroupToOrganizationInput!): OrgGroupInterface @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """Add an existing group to an organization"""
+  addExistingGroupToOrganization(input: AddGroupToOrganizationInput!): OrgGroupInterface @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """Add an existing project to an organization"""
+  addExistingProjectToOrganization(input: AddProjectToOrganizationInput): Project @deprecated(reason: "Use bulkImportProjectsAndGroupsToOrganization instead")
+
+  """
+  Remove a project from an organization, this will return the project to a state where it has no groups or notifications associated to it
+  """
+  removeProjectFromOrganization(input: RemoveProjectFromOrganizationInput): Project
+
+  """Add a deploytarget to an organization"""
+  addDeployTargetToOrganization(input: AddDeployTargetToOrganizationInput): Organization
+
+  """Remove a deploytarget from an organization"""
+  removeDeployTargetFromOrganization(input: RemoveDeployTargetFromOrganizationInput): Organization
+
+  """
+  Run the query checkBulkImportProjectsAndGroupsToOrganization first to see the changes that would be made before executing this, as it may contain undesirable changes
+  Add an existing project to an organization, this will include all the groups and all the projects that those groups contain
+  Optionally detach any notifications attached to the projects, they will be need to be recreated within the organization afterwards
+  This mutation performs a lot of actions, on big project and group imports, if it times out, subsequent runs will perform only the changes necessary
+  """
+  bulkImportProjectsAndGroupsToOrganization(input: AddProjectToOrganizationInput, detachNotification: Boolean): ProjectGroupsToOrganization
+  addOrUpdateEnvironmentService(input: AddEnvironmentServiceInput!): EnvironmentService
+  deleteEnvironmentService(input: DeleteEnvironmentServiceInput!): String
+  addPlatformRoleToUser(user: UserInput!, role: PlatformRole!): User
+  removePlatformRoleFromUser(user: UserInput!, role: PlatformRole!): User
+
+  """Create a harbor retention policy"""
+  createHarborRetentionPolicy(input: AddHarborRetentionPolicyInput!): HarborRetentionPolicy
+
+  """Update a harbor retention policy"""
+  updateHarborRetentionPolicy(input: UpdateHarborRetentionPolicyInput!): HarborRetentionPolicy
+
+  """Delete a harbor retention policy"""
+  deleteHarborRetentionPolicy(name: String!): String
+
+  """Add an existing harbor retention policy to a resource type"""
+  addHarborRetentionPolicyLink(input: AddRetentionPolicyLinkInput!): HarborRetentionPolicy
+
+  """Remove an existing harbor retention policy from a resource type"""
+  removeHarborRetentionPolicyLink(input: RemoveRetentionPolicyLinkInput!): String
+
+  """Create an environment history retention policy"""
+  createHistoryRetentionPolicy(input: AddHistoryRetentionPolicyInput!): HistoryRetentionPolicy
+
+  """Update an environment history retention policy"""
+  updateHistoryRetentionPolicy(input: UpdateHistoryRetentionPolicyInput!): HistoryRetentionPolicy
+
+  """Delete an environment history retention policy"""
+  deleteHistoryRetentionPolicy(name: String!): String
+
+  """Add an existing retention policy to a resource type"""
+  addHistoryRetentionPolicyLink(input: AddRetentionPolicyLinkInput!): HistoryRetentionPolicy
+
+  """Remove an existing history retention policy from a resource type"""
+  removeHistoryRetentionPolicyLink(input: RemoveRetentionPolicyLinkInput!): String
+  addRouteToProject(input: AddRouteToProjectInput!): Route
+  updateRouteOnProject(input: UpdateRouteInput!): Route
+  addRouteAlternativeDomains(input: AddRouteAlternativeDomainInput!): Route
+  removeRouteAlternativeDomain(input: RemoveRouteAlternativeDomainInput!): Route
+  addRouteAnnotation(input: AddRouteAnnotationsInput!): Route
+  removeRouteAnnotation(input: RemoveRouteAnnotationInput!): Route
+  addPathRoutesToRoute(input: AddPathRoutesInput!): Route
+  removePathRouteFromRoute(input: RemovePathRoutesInput!): Route
+  addOrUpdateRouteOnEnvironment(input: AddOrUpdateEnvironmentRouteInput!): Route
+  activeStandbyRouteMove(input: ActiveStandbyRouteMoveInput): Route
+  removeRouteFromEnvironment(input: RemoveRouteFromEnvironmentInput!): Route
+  deleteRoute(input: DeleteRouteInput!): String
+  updateAutogeneratedRouteConfigOnProject(input: UpdateProjectAutogeneratedRouteConfigInput!): AutogeneratedRouteConfig
+  updateAutogeneratedRouteConfigOnEnvironment(input: UpdateEnvironmentAutogeneratedRouteConfigInput!): AutogeneratedRouteConfig
+  removeAutogeneratedRouteConfigFromProject(project: String!): String
+  removeAutogeneratedRouteConfigFromEnvironment(project: String!, environment: String!): String
+  idleOrUnidleEnvironment(input: IdleEnvironmentInput!): String
+  stopOrStartEnvironmentService(input: EnvironmentServiceActionInput!): String
+  cloneProject(input: CloneProjectInput!): Project
+  updateProjectClone(input: UpdateProjectCloneInput): ProjectClone
+  executeCloneRestoreTask(input: ExecuteCloneRestoreTaskInput!): Task
+  executeCloneDeployment(input: ExecuteCloneDeploymentInput!): String
+  cancelProjectClone(input: CancelProjectCloneInput!): String
+  copyProjectGroups(sourceProject: String!, destinationProject: String!): String
+  copyProjectNotifications(sourceProject: String!, destinationProject: String!): String
+  copyProjectMetadata(sourceProject: String!, destinationProject: String!): String
+  copyProjectVariables(sourceProject: String!, destinationProject: String!): String
+  copyEnvironmentVariables(sourceProject: String!, sourceEnvironment: String!, destinationProject: String!, destinationEnvironment: String!): String
+  addOrganizationKey(input: AddOrganizationKeyInput!): OrganizationKey
+  updateOrganizationKey(id: Int!, comment: String!): OrganizationKey
+  deleteOrganizationKey(id: Int!): String
+  addOrganizationKeyToProject(id: Int!, project: String!): OrganizationKey
+  removeOrganizationKeyFromProject(id: Int!, project: String!): OrganizationKey
+}
+
+type Subscription {
+  backupChanged(environment: Int!): Backup
+  deploymentChanged(environment: Int!): Deployment
+  taskChanged(environment: Int!): Task
+  projectCloneChanged(project: String!): ProjectClone
+  organizationProjectChanged(organization: String!): OrgProject
+}
