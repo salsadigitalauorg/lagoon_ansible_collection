@@ -30,3 +30,25 @@ services:
       dockerfile: .docker/Dockerfile.docs
     ports:
       - 9180:8000
+
+  test-v3:
+    image: ghcr.io/salsadigitalauorg/ansible-test:latest
+    volumes:
+      - .:/usr/share/ansible/collections/ansible_collections/salsadigitalauorg/lagoon
+      # Mask the live .codegraph daemon socket -- it is a local dev artefact,
+      # not part of the collection, and its UNIX socket file breaks tools
+      # (e.g. antsibull-docs) that recursively copy the collection tree.
+      - /usr/share/ansible/collections/ansible_collections/salsadigitalauorg/lagoon/.codegraph
+    working_dir: /usr/share/ansible/collections/ansible_collections/salsadigitalauorg/lagoon
+
+  lint-docs-v3:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.docs
+      args:
+        - OPERATION=lint
+    volumes:
+      - .:/collections/ansible_collections/salsadigitalauorg/lagoon
+      - /collections/ansible_collections/salsadigitalauorg/lagoon/.codegraph
+    working_dir: /collections/ansible_collections/salsadigitalauorg/lagoon
+    command: ["antsibull-docs", "lint-collection-docs", "--plugin-docs", "."]

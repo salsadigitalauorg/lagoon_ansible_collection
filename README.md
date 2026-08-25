@@ -1,59 +1,43 @@
-# Ansible Collection - lagoon
+# Ansible Collection - salsadigitalauorg.lagoon
 [![tests](https://github.com/salsadigitalauorg/lagoon_ansible_collection/actions/workflows/test.yml/badge.svg)](https://github.com/salsadigitalauorg/lagoon_ansible_collection/actions/workflows/test.yml)
 
-This repository contains collections related to the [Lagoon](https://github.com/uselagoon/lagoon) application delivery platform.
+An Ansible collection for interacting with the [Lagoon](https://github.com/uselagoon/lagoon)
+application delivery platform GraphQL API.
 
-The following collections are available:
+This is the v3 collection (`salsadigitalauorg.lagoon`), a ground-up rewrite of
+the v1 `lagoon.api` collection. It targets `ansible-core>=2.16`, has zero
+runtime dependencies beyond `ansible-core`, and uses flat, single-level
+GraphQL queries throughout. See
+[`docs/plans/v3-refactor.md`](docs/plans/v3-refactor.md) for the design and
+rationale.
 
-* [api](/api)
+> **v1 users:** the previous `lagoon.api` collection is still available at
+> [`api/`](api) and continues to work unchanged during the v3 migration. See
+> [`api/README.md`](api/README.md) for its documentation. It will be removed
+> after the v3 migration completes.
 
-## Update graphql schema
-This uses the Lagoon CLI to acquire an updated token, then uses the `gql-cli` to download the schema.
+## Requirements
 
-```sh
-# Install requirements.
-python3 -m pip install -r api/requirements.txt
-
-# Ensure a fresh token is available.
-lagoon -l amazeeio whoami
-export LAGOON_TOKEN=$(yq -r '.lagoons.amazeeio.token' ~/.lagoon.yml)
-
-# Download the schema.
-gql-cli https://api.lagoon.amazeeio.cloud/graphql --print-schema \
-    --header Authorization:"Bearer $LAGOON_TOKEN" > api/tests/common/schema.graphql
-```
+* `ansible-core>=2.16`
+* Python 3.11, 3.12, or 3.13
 
 ## Run unit tests
+
 ```sh
-docker compose build test
-docker compose run --rm test units -v --requirements
+docker compose run --rm test-v3 units -v --requirements
 ```
 
-## Creating the docs
+## Linting the docs
 
-To view the module docs in the terminal, run
 ```sh
-# List modules
-docker compose run --rm --entrypoint="" -T lint-docs bash -c \
-  'ansible-doc -t module lagoon.api -l'
-
-# Specific module (group)
-docker compose run --rm --entrypoint="" -T lint-docs bash -c \
-  'ansible-doc -t module lagoon.api.group'
+docker compose run --rm lint-docs-v3
 ```
 
-Linting the docs
+## Building the collection
+
 ```sh
-docker compose run --rm lint-docs
+ansible-galaxy collection build --force --output-path ./dist
 ```
-
-Build & serve the docs:
-```sh
-docker compose up -d docs
-```
-
-Docs should be ready to browse at [http://localhost:9180](http://localhost:9180).
-
 
 ## Contributing
 

@@ -52,9 +52,14 @@ coverage.xml
 .DS_Store
 
 api/tests/output
+tests/output
 .vscode/settings.json
 
 .docker/mock-server/node_modules
 .docker/mock-server/package-lock.json
 
 built-docs
+
+# Built collection artifacts
+dist/
+*.tar.gz
