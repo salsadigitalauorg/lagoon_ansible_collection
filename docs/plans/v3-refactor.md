@@ -98,7 +98,7 @@ salsadigital/lagoon/
 │   ├── adr/0001-graphql-codegen-rest-semantics.md
 │   └── migration-v1-to-v3.md
 ├── schema/
-│   ├── lagoon-2.19.graphql           # vendored SDL (pinned)
+│   ├── lagoon-2.33.1.graphql           # vendored SDL (pinned)
 │   └── VERSION                        # Lagoon version this SDL came from
 ├── codegen/                          # NOT shipped in the built artifact
 │   ├── allowlist.yml                 # ← the single source of truth
@@ -152,7 +152,7 @@ salsadigital/lagoon/
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # GENERATED FILE — DO NOT EDIT.
-# Source: schema/lagoon-2.19.graphql + codegen/allowlist.yml
+# Source: schema/lagoon-2.33.1.graphql + codegen/allowlist.yml
 # Regenerate: make generate
 ```
 
@@ -163,8 +163,8 @@ salsadigital/lagoon/
 `codegen/allowlist.yml` drives everything: argspec, lookups, idempotency, docs.
 
 ```yaml
-lagoon_version: "2.19"
-schema: schema/lagoon-2.19.graphql
+lagoon_version: "2.33.1"
+schema: schema/lagoon-2.33.1.graphql
 
 # Reusable lookup definitions, referenced by modules below.
 lookups:
@@ -333,7 +333,7 @@ Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first
 
 ### Phase 1 — Foundations
 - [ ] Scaffold `salsadigital.lagoon`, `galaxy.yml`, `meta/runtime.yml`, changelog config.
-- [ ] Vendor SDL to `schema/lagoon-2.19.graphql` + `VERSION`.
+- [ ] Vendor SDL to `schema/lagoon-2.33.1.graphql` + `VERSION`.
 - [ ] `module_utils/client.py` with `fetch_url`, flat-query builder, error translation.
 - [ ] Nesting-depth guardrail unit test.
 - [ ] `module_utils/errors.py`.
@@ -419,7 +419,7 @@ Each phase should be a reviewable PR. Phases 1–3 are the risk; land them first
 
 ## 12. Open items for the implementer
 
-1. Confirm the exact Lagoon version to pin the SDL against (assumed 2.19 — verify against the GovCMS target).
+1. Confirm the exact Lagoon version to pin the SDL against (assumed 2.33.1 — verify against the GovCMS target).
 2. Confirm Galaxy namespace ownership for `salsadigital` before Phase 1 completes.
 3. Decide whether `*_info` modules need the action shim at all (read-only, but still need a token — probably yes).
 4. Confirm the supported `ansible-core` / Python matrix for `meta/runtime.yml` and sanity tests.
