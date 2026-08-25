@@ -39,6 +39,11 @@ build_ignore:
   - .codegraph
   - docs
   - codegen
+  # Test-time only: unit tests and the flat-query guardrail helper
+  # (tests/unit/plugins/module_utils/query_depth.py) are development
+  # artifacts, not shipped runtime code. Local `ansible-test units` runs
+  # from the source checkout and is unaffected by build_ignore.
+  - tests
   - docker-compose.yml
   - docker-compose.local.override.yml
   - Makefile
