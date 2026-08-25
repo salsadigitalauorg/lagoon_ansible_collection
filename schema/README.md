@@ -37,7 +37,7 @@ curl -sS "$LAGOON_GRAPHQL" \
 # -> {"data":{"lagoonVersion":"<VERSION>"}}
 
 # 3. Print the SDL. gql-cli emits SDL including descriptions.
-pip install 'gql[requests]'
+pip3 install 'gql[requests]' 'gql[aiohttp]'
 mkdir -p schema
 gql-cli "$LAGOON_GRAPHQL" --print-schema \
   --header Authorization:"Bearer $LAGOON_TOKEN" \

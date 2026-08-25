@@ -4,8 +4,7 @@ version: 3.0.0
 readme: README.md
 
 authors:
-  - Yusuf Hasan Miyan <yusuf.hasanmiyan@salsa.digital>
-  - Steve Worley <steven.worley@salsa.digital>
+  - Salsa Digital
 
 description: An Ansible collection for interacting with the Lagoon GraphQL API.
 
