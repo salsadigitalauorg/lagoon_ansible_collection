@@ -4,7 +4,7 @@ __metaclass__ = type
 import ast
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from .....plugins.module_utils import auth
 from .....plugins.module_utils.auth import (
@@ -32,6 +32,9 @@ def _config(**overrides):
         'strict_host_key_checking': 'accept-new',
         'known_hosts_file': None,
         'timeout': 30,
+        # Explicit rather than incidental: every test below asserts against
+        # the file cache being off unless it says otherwise.
+        'token_cache': False,
     }
     config.update(overrides)
     return config
@@ -361,6 +364,329 @@ class TestBatchModeThreading(AuthTestCase):
         mock_grant.return_value = ('tok', 3600)
         resolve_token(_config(batch_mode=False))
         self.assertFalse(mock_grant.call_args.kwargs['batch_mode'])
+
+
+class TestFileCacheDisabled(AuthTestCase):
+    """Off by default means zero filesystem activity -- not "creates the
+    directory but does not use it"."""
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_disabled_never_touches_the_file_cache(
+            self, mock_grant, mock_read, mock_write):
+        mock_grant.return_value = ('granted-token', 3600)
+
+        token = resolve_token(_config(token_cache=False))
+
+        self.assertEqual(token, 'granted-token')
+        mock_read.assert_not_called()
+        mock_write.assert_not_called()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_absent_flag_behaves_as_disabled(
+            self, mock_grant, mock_read, mock_write):
+        # A config dict that never mentions token_cache at all -- the
+        # default must be off, not "off only when explicitly False".
+        mock_grant.return_value = ('granted-token', 3600)
+        config = _config()
+        del config['token_cache']
+
+        resolve_token(config)
+
+        mock_read.assert_not_called()
+        mock_write.assert_not_called()
+
+
+class TestFileCacheEnabled(AuthTestCase):
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_file_cache_hit_avoids_the_grant(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = 'file-cached-token'
+
+        token = resolve_token(_config(token_cache=True))
+
+        self.assertEqual(token, 'file-cached-token')
+        mock_grant.assert_not_called()
+        mock_write.assert_not_called()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_file_cache_hit_backfills_the_in_memory_cache(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = 'file-cached-token'
+        config = _config(token_cache=True)
+
+        resolve_token(config)
+
+        self.assertEqual(
+            auth._cache[cache_key(config)], 'file-cached-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_backfill_means_second_resolution_rereads_nothing(
+            self, mock_grant, mock_read, mock_write):
+        # The point of the back-fill: a loop: over one task reads the file
+        # once, not once per iteration.
+        mock_read.return_value = 'file-cached-token'
+        config = _config(token_cache=True)
+
+        with patch('%s.token_is_valid' % _MODULE_PATH, return_value=True):
+            resolve_token(config)
+            resolve_token(config)
+
+        mock_read.assert_called_once()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_file_cache_miss_grants_once_and_writes_through(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_grant.return_value = ('granted-token', 3600)
+        config = _config(token_cache=True)
+
+        token = resolve_token(config)
+
+        self.assertEqual(token, 'granted-token')
+        mock_grant.assert_called_once()
+        mock_write.assert_called_once_with(
+            cache_key(config), 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_read_uses_the_same_key_as_the_in_memory_cache(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_grant.return_value = ('granted-token', 3600)
+        config = _config(token_cache=True)
+
+        resolve_token(config)
+
+        mock_read.assert_called_once_with(cache_key(config))
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_write_failure_does_not_fail_resolution(
+            self, mock_grant, mock_read, mock_write):
+        # An opportunistic cache write that fails (read-only HOME, full
+        # disk) must not turn a successful grant into a task failure.
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+
+        token = resolve_token(_config(token_cache=True))
+
+        self.assertEqual(token, 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_write_failure_still_populates_in_memory_cache(
+            self, mock_grant, mock_read, mock_write):
+        # The in-memory cache is populated unconditionally, before the
+        # file-cache write is even attempted -- a broken opt-in file
+        # cache must not also break the always-on in-memory one.
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+        config = _config(token_cache=True)
+
+        resolve_token(config)
+
+        self.assertEqual(auth._cache[cache_key(config)], 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_in_memory_hit_short_circuits_the_file_cache(
+            self, mock_grant, mock_read, mock_write):
+        config = _config(token_cache=True)
+        auth._cache[cache_key(config)] = 'memory-token'
+
+        with patch('%s.token_is_valid' % _MODULE_PATH, return_value=True):
+            token = resolve_token(config)
+
+        self.assertEqual(token, 'memory-token')
+        mock_read.assert_not_called()
+        mock_grant.assert_not_called()
+
+
+class TestFileCacheWriteFailureWarns(AuthTestCase):
+    """A write_cached_token() failure must be surfaced via warn(), per
+    the user's explicit requirement: fall back to memory, but tell the
+    operator their opt-in file cache silently isn't caching."""
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_write_failure_calls_warn(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+        warn = MagicMock()
+
+        resolve_token(_config(token_cache=True), warn=warn)
+
+        warn.assert_called_once()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_write_success_never_calls_warn(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_write.return_value = True
+        mock_grant.return_value = ('granted-token', 3600)
+        warn = MagicMock()
+
+        resolve_token(_config(token_cache=True), warn=warn)
+
+        warn.assert_not_called()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_disabled_cache_never_calls_warn(
+            self, mock_grant, mock_read, mock_write):
+        # warn is unrelated to whether the flag is on; with it off, the
+        # write path (and therefore any warning about it) is never
+        # reached at all.
+        mock_grant.return_value = ('granted-token', 3600)
+        warn = MagicMock()
+
+        resolve_token(_config(token_cache=False), warn=warn)
+
+        warn.assert_not_called()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_no_warn_callable_supplied_does_not_raise(
+            self, mock_grant, mock_read, mock_write):
+        # warn is optional -- callers that don't pass one (e.g. existing
+        # tests, or code not yet updated to thread it through) must not
+        # break.
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+
+        token = resolve_token(_config(token_cache=True))
+
+        self.assertEqual(token, 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_write_failure_still_returns_the_granted_token(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+
+        token = resolve_token(
+            _config(token_cache=True), warn=MagicMock())
+
+        self.assertEqual(token, 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_warn_message_does_not_contain_the_token(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_write.return_value = False
+        secret_looking_token = 'secret-shaped-granted-token-value'
+        mock_grant.return_value = (secret_looking_token, 3600)
+        warn = MagicMock()
+
+        resolve_token(_config(token_cache=True), warn=warn)
+
+        message = warn.call_args.args[0]
+        self.assertNotIn(secret_looking_token, message)
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_a_raising_warn_callable_does_not_fail_resolution(
+            self, mock_grant, mock_read, mock_write):
+        # warn() is a courtesy, not a dependency: a broken warn callback
+        # (e.g. a display object mid-shutdown) must not turn an already-
+        # successful grant into a failure. This is the property that
+        # makes it safe to pass a real AnsibleModule.warn/display.warning
+        # here without a defensive try/except at every call site.
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+
+        def _broken_warn(_message):
+            raise RuntimeError("display is unavailable")
+
+        token = resolve_token(
+            _config(token_cache=True), warn=_broken_warn)
+
+        self.assertEqual(token, 'granted-token')
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_warn_called_with_a_single_string_argument(
+            self, mock_grant, mock_read, mock_write):
+        mock_read.return_value = None
+        mock_write.return_value = False
+        mock_grant.return_value = ('granted-token', 3600)
+        warn = MagicMock()
+
+        resolve_token(_config(token_cache=True), warn=warn)
+
+        args, kwargs = warn.call_args
+        self.assertEqual(len(args), 1)
+        self.assertEqual(kwargs, {})
+        self.assertIsInstance(args[0], str)
+        self.assertTrue(len(args[0]) > 0)
+
+
+class TestExplicitTokensNeverReachDisk(AuthTestCase):
+    """A token the operator supplied directly is never persisted -- they
+    did not ask the collection to write their credential to disk. Same
+    boundary that keeps steps 1-2 away from token_is_valid()."""
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_explicit_param_token_is_not_written(
+            self, mock_grant, mock_read, mock_write):
+        token = resolve_token(
+            _config(token='explicit-token', token_cache=True))
+
+        self.assertEqual(token, 'explicit-token')
+        mock_write.assert_not_called()
+        mock_read.assert_not_called()
+        mock_grant.assert_not_called()
+
+    @patch('%s.write_cached_token' % _MODULE_PATH)
+    @patch('%s.read_cached_token' % _MODULE_PATH)
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_env_var_token_is_not_written(
+            self, mock_grant, mock_read, mock_write):
+        os.environ['LAGOON_API_TOKEN'] = 'env-token'
+
+        token = resolve_token(_config(token_cache=True))
+
+        self.assertEqual(token, 'env-token')
+        mock_write.assert_not_called()
+        mock_read.assert_not_called()
+        mock_grant.assert_not_called()
 
 
 class TestNoForbiddenImports(unittest.TestCase):
