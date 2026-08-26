@@ -17,7 +17,8 @@ _KEY_FILE_NAME = 'lagoon_ssh_key'
 def request_grant(ssh_host, ssh_port, *, private_key=None,
                    private_key_file=None, ssh_options=None,
                    strict_host_key_checking='accept-new',
-                   known_hosts_file=None, timeout=30, ssh_user='lagoon'):
+                   known_hosts_file=None, timeout=30, ssh_user='lagoon',
+                   batch_mode=True):
     """Run ``ssh ... <ssh_user>@<ssh_host> grant`` and return
     ``(access_token, expires_in)``. Raises :class:`LagoonAuthError` on any
     failure -- a missing ``ssh`` binary, a non-zero exit code, a timeout, or
@@ -60,6 +61,32 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
     defaults it to ``/dev/null``, which is precisely the v1 behaviour being
     reversed.
 
+    ``batch_mode`` defaults to ``True``, emitting ``-o BatchMode=yes`` so
+    a grant that cannot authenticate (e.g. an agent holding no usable
+    key) fails immediately instead of falling through to an interactive
+    passphrase/host-key prompt that Ansible has no way to answer.
+    ``ConnectTimeout``/``timeout`` do not cover this case -- both are
+    about the network handshake, not an already-connected session
+    blocked on terminal input -- so without ``BatchMode`` the only
+    backstop is ``subprocess.run(timeout=...)`` itself, which turns a
+    prompt into an opaque multi-second stall rather than a clean auth
+    failure. Pass ``batch_mode=False`` to omit the flag entirely (not
+    ``BatchMode=no``) and defer to ``ssh_config``/``ssh_options``.
+
+    **Collection-managed options are emitted before caller-supplied**
+    ``ssh_options`` **in argv** (see :func:`_build_argv`), and OpenSSH
+    resolves repeated ``-o`` settings first-wins -- so every option this
+    function sets itself (``StrictHostKeyChecking``, ``ConnectTimeout``,
+    ``UserKnownHostsFile``, ``BatchMode``) is authoritative and cannot be
+    weakened by a caller's ``ssh_options`` (P2-D10 in
+    ``docs/plans/v3-phase2-stories.md``). This is deliberate -- it is
+    what keeps ``StrictHostKeyChecking=accept-new`` from being silently
+    overridden -- but it means v1-style ``ssh_options`` values such as
+    ``"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`` are
+    now no-ops; the equivalent behaviour must be requested via this
+    function's own ``strict_host_key_checking``/``known_hosts_file``
+    parameters instead.
+
     Key content never appears in any exception, log line, or ``repr()``
     (ISM-1402). Failure messages include truncated stderr, never the raw
     private key.
@@ -92,7 +119,8 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
 
         argv = _build_argv(
             ssh_host, ssh_port, key_path, ssh_options,
-            strict_host_key_checking, known_hosts_file, timeout, ssh_user)
+            strict_host_key_checking, known_hosts_file, timeout, ssh_user,
+            batch_mode)
 
         try:
             result = subprocess.run(
@@ -129,7 +157,12 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
 
 def _build_argv(ssh_host, ssh_port, key_path, ssh_options,
                  strict_host_key_checking, known_hosts_file, timeout,
-                 ssh_user):
+                 ssh_user, batch_mode=True):
+    # Every collection-managed -o option is appended here, BEFORE
+    # caller-supplied ssh_options below. OpenSSH resolves repeated -o
+    # settings first-wins, so this ordering is what makes these defaults
+    # authoritative rather than overridable (P2-D10) -- do not reorder
+    # this without re-reading request_grant()'s docstring.
     argv = [
         'ssh',
         '-p', str(ssh_port),
@@ -139,6 +172,9 @@ def _build_argv(ssh_host, ssh_port, key_path, ssh_options,
 
     if known_hosts_file:
         argv += ['-o', 'UserKnownHostsFile=%s' % known_hosts_file]
+
+    if batch_mode:
+        argv += ['-o', 'BatchMode=yes']
 
     argv += _parse_ssh_options(ssh_options)
 

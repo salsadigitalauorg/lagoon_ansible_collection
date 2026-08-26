@@ -70,6 +70,7 @@ def auth_argument_spec(spec=None):
         lagoon_ssh_options=dict(type='raw', default=None),
         lagoon_ssh_strict_host_key_checking=dict(
             type='str', default=_DEFAULT_STRICT_HOST_KEY_CHECKING),
+        lagoon_ssh_batch_mode=dict(type='bool', default=True),
         lagoon_token_cache=dict(type='bool', default=False),
     )
     if spec:
@@ -82,7 +83,8 @@ def resolve_token(config):
     least): ``endpoint``, ``token`` (explicit, may be ``None``),
     ``ssh_host``, ``ssh_port``, ``ssh_user``, ``private_key``,
     ``private_key_file``, ``ssh_options``, ``strict_host_key_checking``,
-    ``known_hosts_file``.
+    ``known_hosts_file``, ``batch_mode`` (defaults ``True`` if absent --
+    see :func:`.ssh.request_grant`'s docstring for why).
 
     Resolution order (plan 7.2), stopping at the first usable step:
 
@@ -156,6 +158,7 @@ def resolve_token(config):
         known_hosts_file=config.get('known_hosts_file'),
         timeout=config.get('timeout') or _DEFAULT_SSH_TIMEOUT,
         ssh_user=config.get('ssh_user') or _DEFAULT_SSH_USER,
+        batch_mode=config.get('batch_mode', True),
     )
 
     _cache[key] = access_token

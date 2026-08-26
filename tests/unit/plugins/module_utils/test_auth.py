@@ -342,6 +342,26 @@ class TestAuthArgumentSpec(AuthTestCase):
         self.assertNotIn('no_log', spec['lagoon_ssh_private_key_file'])
         self.assertNotIn('no_log', spec['lagoon_ssh_known_hosts_file'])
 
+    def test_batch_mode_defaults_true(self):
+        spec = auth_argument_spec()
+        self.assertTrue(spec['lagoon_ssh_batch_mode']['default'])
+
+
+class TestBatchModeThreading(AuthTestCase):
+
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_batch_mode_default_true_passed_to_request_grant(
+            self, mock_grant):
+        mock_grant.return_value = ('tok', 3600)
+        resolve_token(_config())
+        self.assertTrue(mock_grant.call_args.kwargs['batch_mode'])
+
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_batch_mode_false_passed_through(self, mock_grant):
+        mock_grant.return_value = ('tok', 3600)
+        resolve_token(_config(batch_mode=False))
+        self.assertFalse(mock_grant.call_args.kwargs['batch_mode'])
+
 
 class TestNoForbiddenImports(unittest.TestCase):
 

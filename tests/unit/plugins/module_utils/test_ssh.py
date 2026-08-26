@@ -495,6 +495,70 @@ class TestAgentAuth(unittest.TestCase):
         self.assertEqual(expires_in, 1800)
 
 
+class TestBatchMode(unittest.TestCase):
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_batch_mode_yes_by_default(self, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant('lagoon.example.test', 22, private_key_file='/key')
+        argv = mock_run.call_args.args[0]
+        self.assertIn('BatchMode=yes', argv)
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_batch_mode_false_omits_flag_entirely(self, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant(
+            'lagoon.example.test', 22, private_key_file='/key',
+            batch_mode=False)
+        argv = mock_run.call_args.args[0]
+        joined = ' '.join(argv)
+        self.assertNotIn('BatchMode', joined)
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_batch_mode_no_never_emitted(self, mock_run):
+        # batch_mode=False must omit the flag, not emit BatchMode=no.
+        mock_run.return_value = _grant_response()
+        request_grant(
+            'lagoon.example.test', 22, private_key_file='/key',
+            batch_mode=False)
+        argv = mock_run.call_args.args[0]
+        self.assertNotIn('BatchMode=no', argv)
+
+
+class TestOptionPrecedence(unittest.TestCase):
+    """Collection-managed -o options must precede caller ssh_options in
+    argv, since OpenSSH resolves repeated -o settings first-wins
+    (P2-D10). This is what keeps StrictHostKeyChecking=accept-new from
+    being silently overridden by a caller's ssh_options."""
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_all_collection_managed_options_precede_ssh_options(
+            self, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant(
+            'lagoon.example.test', 22, private_key_file='/key',
+            known_hosts_file='/home/user/.ssh/known_hosts',
+            ssh_options='-o StrictHostKeyChecking=no '
+                        '-o UserKnownHostsFile=/dev/null '
+                        '-o BatchMode=no')
+        argv = mock_run.call_args.args[0]
+
+        managed_positions = [
+            argv.index('StrictHostKeyChecking=accept-new'),
+            argv.index('ConnectTimeout=30'),
+            argv.index('UserKnownHostsFile=/home/user/.ssh/known_hosts'),
+            argv.index('BatchMode=yes'),
+        ]
+        caller_positions = [
+            i for i, v in enumerate(argv)
+            if v in ('StrictHostKeyChecking=no',
+                     'UserKnownHostsFile=/dev/null', 'BatchMode=no')
+        ]
+
+        self.assertEqual(len(caller_positions), 3)
+        self.assertLess(max(managed_positions), min(caller_positions))
+
+
 class TestNoForbiddenImports(unittest.TestCase):
 
     def test_forbidden_imports_absent(self):
