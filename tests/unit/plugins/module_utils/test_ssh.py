@@ -448,6 +448,53 @@ class TestPrivateKeyFileDirectNoCopy(unittest.TestCase):
         self.assertEqual(argv[argv.index('-i') + 1], '/home/user/my-key')
 
 
+class TestAgentAuth(unittest.TestCase):
+    """Neither private_key nor private_key_file supplied -> SSH agent
+    auth via inherited SSH_AUTH_SOCK (P2-D9). None of the call sites
+    above omit a key, so this path was previously untested."""
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_no_i_flag_when_neither_key_supplied(self, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant('lagoon.example.test', 22)
+        argv = mock_run.call_args.args[0]
+        self.assertNotIn('-i', argv)
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_argv_otherwise_well_formed(self, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant('lagoon.example.test', 22)
+        argv = mock_run.call_args.args[0]
+        self.assertEqual(argv[0], 'ssh')
+        self.assertIn('lagoon@lagoon.example.test', argv)
+        self.assertEqual(argv[-1], 'grant')
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    @patch('%s.tempfile.mkdtemp' % _MODULE_PATH)
+    def test_no_temp_dir_created(self, mock_mkdtemp, mock_run):
+        mock_run.return_value = _grant_response()
+        request_grant('lagoon.example.test', 22)
+        mock_mkdtemp.assert_not_called()
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_no_env_kwarg_passed_to_subprocess_run(self, mock_run):
+        # This is the test that actually protects SSH_AUTH_SOCK
+        # inheritance -- subprocess.run() inherits os.environ only when
+        # called without an env= kwarg. A future change adding env=
+        # here would break agent auth silently without this assertion.
+        mock_run.return_value = _grant_response()
+        request_grant('lagoon.example.test', 22)
+        self.assertNotIn('env', mock_run.call_args.kwargs)
+
+    @patch('%s.subprocess.run' % _MODULE_PATH)
+    def test_token_and_expiry_returned_normally(self, mock_run):
+        mock_run.return_value = _grant_response(
+            access_token='agent-tok', expires_in=1800)
+        token, expires_in = request_grant('lagoon.example.test', 22)
+        self.assertEqual(token, 'agent-tok')
+        self.assertEqual(expires_in, 1800)
+
+
 class TestNoForbiddenImports(unittest.TestCase):
 
     def test_forbidden_imports_absent(self):

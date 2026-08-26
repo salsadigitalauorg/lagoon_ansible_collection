@@ -179,6 +179,21 @@ class TestCacheKey(AuthTestCase):
         key_b = cache_key(_config(ssh_host='b.example.test'))
         self.assertNotEqual(key_a, key_b)
 
+    def test_agent_auth_key_is_deterministic(self):
+        config = _config(private_key=None, private_key_file=None)
+        self.assertEqual(
+            cache_key(config),
+            cache_key(_config(private_key=None, private_key_file=None)))
+
+    def test_agent_auth_key_varies_with_ssh_host(self):
+        key_a = cache_key(_config(
+            private_key=None, private_key_file=None,
+            ssh_host='a.example.test'))
+        key_b = cache_key(_config(
+            private_key=None, private_key_file=None,
+            ssh_host='b.example.test'))
+        self.assertNotEqual(key_a, key_b)
+
 
 class TestConfigError(AuthTestCase):
 
@@ -186,11 +201,6 @@ class TestConfigError(AuthTestCase):
         config = _config(
             token=None, ssh_host=None, private_key=None,
             private_key_file=None)
-        with self.assertRaises(LagoonConfigError):
-            resolve_token(config)
-
-    def test_ssh_host_without_any_key_raises_lagoon_config_error(self):
-        config = _config(private_key=None, private_key_file=None)
         with self.assertRaises(LagoonConfigError):
             resolve_token(config)
 
@@ -213,6 +223,58 @@ class TestConfigError(AuthTestCase):
             self.fail("must not raise LagoonAuthError for misconfiguration")
         except LagoonConfigError:
             pass
+
+
+class TestAgentAuth(AuthTestCase):
+    """Neither private_key nor private_key_file supplied -> SSH agent
+    auth via inherited SSH_AUTH_SOCK (P2-D9)."""
+
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_neither_key_calls_grant_with_both_none_no_raise(
+            self, mock_grant):
+        mock_grant.return_value = ('agent-token', 3600)
+        config = _config(private_key=None, private_key_file=None)
+
+        token = resolve_token(config)
+
+        self.assertEqual(token, 'agent-token')
+        mock_grant.assert_called_once()
+        self.assertIsNone(mock_grant.call_args.kwargs['private_key'])
+        self.assertIsNone(mock_grant.call_args.kwargs['private_key_file'])
+
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_both_keys_still_raises_config_error(self, mock_grant):
+        config = _config(
+            private_key='key-material', private_key_file='/some/path')
+        with self.assertRaises(LagoonConfigError):
+            resolve_token(config)
+        mock_grant.assert_not_called()
+
+    def test_both_keys_error_message_does_not_say_is_required(self):
+        # The old wording ("exactly one of ... is required") was wrong
+        # for this case -- supplying neither is valid (agent auth), only
+        # supplying both is the actual error.
+        config = _config(
+            private_key='key-material', private_key_file='/some/path')
+        try:
+            resolve_token(config)
+            self.fail("expected LagoonConfigError")
+        except LagoonConfigError as e:
+            self.assertNotIn('is required', str(e))
+            self.assertIn('mutually exclusive', str(e))
+
+    @patch('%s.request_grant' % _MODULE_PATH)
+    def test_agent_auth_result_is_cached_and_reused(self, mock_grant):
+        mock_grant.return_value = ('agent-token', 3600)
+        config = _config(private_key=None, private_key_file=None)
+
+        with patch('%s.token_is_valid' % _MODULE_PATH, return_value=True):
+            first = resolve_token(config)
+            second = resolve_token(config)
+
+        self.assertEqual(first, 'agent-token')
+        self.assertEqual(second, 'agent-token')
+        mock_grant.assert_called_once()
 
 
 class TestTokenValueRedaction(AuthTestCase):
@@ -265,6 +327,20 @@ class TestAuthArgumentSpec(AuthTestCase):
         spec = auth_argument_spec({'extra_option': {'type': 'str'}})
         self.assertIn('extra_option', spec)
         self.assertIn('lagoon_api_token', spec)
+
+    def test_private_key_file_and_known_hosts_file_are_path_type(self):
+        spec = auth_argument_spec()
+        self.assertEqual(
+            spec['lagoon_ssh_private_key_file']['type'], 'path')
+        self.assertEqual(
+            spec['lagoon_ssh_known_hosts_file']['type'], 'path')
+
+    def test_private_key_file_and_known_hosts_file_not_no_log(self):
+        # Paths, not key material -- redacting them would hurt
+        # debuggability without protecting a secret.
+        spec = auth_argument_spec()
+        self.assertNotIn('no_log', spec['lagoon_ssh_private_key_file'])
+        self.assertNotIn('no_log', spec['lagoon_ssh_known_hosts_file'])
 
 
 class TestNoForbiddenImports(unittest.TestCase):

@@ -23,17 +23,25 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
     failure -- a missing ``ssh`` binary, a non-zero exit code, a timeout, or
     a response that is not well-formed JSON with the expected fields.
 
-    Exactly one of ``private_key`` / ``private_key_file`` should be supplied
-    by the caller (:mod:`.auth` enforces this, not this function). When
-    ``private_key`` content is given, it is written to a securely-created
-    temporary file for the duration of the call and removed afterwards --
-    never to a fixed or predictable path (this replaces v1's fixed,
-    world-writable-directory path, which was exploitable via symlink
-    pre-creation on a shared host, and which was ``chmod``'d *after*
-    writing, leaving it briefly readable per the process umask). When
-    ``private_key_file`` is given directly (no ``private_key`` content),
-    that path is used in place and is never copied -- avoids gratuitously
-    duplicating a credential on disk.
+    At most one of ``private_key`` / ``private_key_file`` should be
+    supplied by the caller (:mod:`.auth` enforces mutual exclusion, not
+    this function). When ``private_key`` content is given, it is written
+    to a securely-created temporary file for the duration of the call and
+    removed afterwards -- never to a fixed or predictable path (this
+    replaces v1's fixed, world-writable-directory path, which was
+    exploitable via symlink pre-creation on a shared host, and which was
+    ``chmod``'d *after* writing, leaving it briefly readable per the
+    process umask). When ``private_key_file`` is given directly (no
+    ``private_key`` content), that path is used in place and is never
+    copied -- avoids gratuitously duplicating a credential on disk. When
+    **neither** is given, no ``-i`` flag is emitted at all and ``ssh``
+    authenticates via agent identities offered over ``SSH_AUTH_SOCK``,
+    which this function inherits unmodified because it passes no ``env=``
+    to :func:`subprocess.run` (P2-D9 in ``docs/plans/v3-phase2-stories.md``
+    -- this is the path AWX/ansible-runner and a locally mounted agent
+    socket rely on). Do not add an ``env=`` kwarg to the
+    :func:`subprocess.run` call below without preserving
+    ``SSH_AUTH_SOCK``, or agent auth breaks silently.
 
     ``strict_host_key_checking`` defaults to ``'accept-new'``. Passing
     ``'no'`` disables host key verification entirely and permits a MITM on

@@ -20,6 +20,16 @@ from .token import token_is_valid
 # `lagoon_api_token` set once via `set_fact`. See P2-D2 in
 # docs/plans/v3-phase2-stories.md -- this corrects parent plan §4's "one
 # grant per play" claim.
+#
+# SSH_AUTH_SOCK note: when neither private_key nor private_key_file is
+# supplied, resolve_token() requests a grant via the SSH agent (P2-D9).
+# This works only because .ssh.request_grant() passes no `env=` kwarg to
+# subprocess.run(), so the collection's own environment -- including
+# SSH_AUTH_SOCK -- is inherited by the ssh child process unmodified. If a
+# future change ever adds an explicit `env=` there, agent auth breaks
+# silently. This is the path AWX/ansible-runner (which loads the grant
+# key into an agent socket rather than a file) and a locally mounted
+# SSH_AUTH_SOCK both rely on.
 _cache = {}
 
 _DEFAULT_SSH_PORT = 22
@@ -55,6 +65,8 @@ def auth_argument_spec(spec=None):
         lagoon_ssh_port=dict(type='int', default=_DEFAULT_SSH_PORT),
         lagoon_ssh_user=dict(type='str', default=_DEFAULT_SSH_USER),
         lagoon_ssh_private_key=dict(type='str', no_log=True, default=None),
+        lagoon_ssh_private_key_file=dict(type='path', default=None),
+        lagoon_ssh_known_hosts_file=dict(type='path', default=None),
         lagoon_ssh_options=dict(type='raw', default=None),
         lagoon_ssh_strict_host_key_checking=dict(
             type='str', default=_DEFAULT_STRICT_HOST_KEY_CHECKING),
@@ -83,10 +95,10 @@ def resolve_token(config):
 
     Raises :class:`.errors.LagoonConfigError` if nothing usable is
     configured (no token, no env var, no valid cache entry, and no
-    ``ssh_host`` to grant a new one from, or an ``ssh_host`` with neither
-    a private key nor a private key file to grant with) -- this is a
-    caller configuration problem, not an auth failure, so it is
-    deliberately not a :class:`.errors.LagoonAuthError`.
+    ``ssh_host`` to grant a new one from) or if both ``private_key`` and
+    ``private_key_file`` are supplied (ambiguous -- caller must pick
+    one) -- this is a caller configuration problem, not an auth
+    failure, so it is deliberately not a :class:`.errors.LagoonAuthError`.
 
     Raises :class:`.errors.LagoonAuthError` if the SSH grant itself
     fails (wraps :func:`.ssh.request_grant`'s own failure modes).
@@ -94,6 +106,16 @@ def resolve_token(config):
     Steps 1-2 use the supplied token exactly as given and never call
     :func:`.token.token_is_valid` -- the plan does not ask the collection
     to second-guess a token the operator supplied directly.
+
+    Supplying **neither** ``private_key`` nor ``private_key_file`` is
+    valid, not an error (P2-D9): it means "authenticate via the SSH
+    agent". :func:`.ssh.request_grant` then omits ``-i`` entirely and
+    ``ssh`` falls back to agent identities offered over the inherited
+    ``SSH_AUTH_SOCK``. This is the path a locally mounted agent socket,
+    and AWX/ansible-runner (which loads the grant key into an agent
+    socket rather than a file), both rely on. v1 supported this too --
+    its ``fetch_token`` action only wrote a key file when
+    ``lagoon_ssh_private_key`` was actually set.
     """
     token = config.get('token')
     if token:
@@ -117,11 +139,10 @@ def resolve_token(config):
 
     private_key = config.get('private_key')
     private_key_file = config.get('private_key_file')
-    if bool(private_key) == bool(private_key_file):
+    if private_key and private_key_file:
         raise LagoonConfigError(
-            "exactly one of lagoon_ssh_private_key / "
-            "lagoon_ssh_private_key_file is required to request an SSH "
-            "grant")
+            "lagoon_ssh_private_key and lagoon_ssh_private_key_file are "
+            "mutually exclusive")
 
     access_token, _expires_in = request_grant(
         ssh_host,
@@ -149,6 +170,18 @@ def cache_key(config):
     ``key_material`` is the private key content if given, else the
     ``private_key_file`` path (not its content -- the file is not read
     here).
+
+    Agent auth (P2-D9: neither ``private_key`` nor ``private_key_file``
+    supplied) hashes to an empty ``key_material_hash``, so two distinct
+    agent identities sharing the same ``(endpoint, ssh_host, ssh_port,
+    ssh_user)`` collide in the cache. Accepted for this in-memory,
+    process-scoped cache -- the agent socket cannot change mid-process,
+    so a collision here is not observable. Deliberately not disambiguated
+    by hashing ``SSH_AUTH_SOCK`` in: that path is typically a random
+    per-run temp path, which would defeat cache reuse rather than protect
+    it. The cross-process file cache in ``module_utils/cache.py`` (P2-S4)
+    has a different lifetime and must make this call explicitly rather
+    than inheriting this reasoning by default (P2-D11).
     """
     private_key = config.get('private_key')
     private_key_file = config.get('private_key_file')
