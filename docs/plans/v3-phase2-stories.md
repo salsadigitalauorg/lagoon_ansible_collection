@@ -29,6 +29,13 @@
    does not share `/tmp` with containers on this machine). It is sequenced last
    so a failure there blocks nothing upstream. If it fails, stop and raise it —
    do not weaken the AC to work around a loader incompatibility.
+8. **P2-S3a and P2-S3b were added after P2-S3's review** found that
+   `resolve_token()`'s guard made SSH agent authentication unreachable — a
+   regression against v1, caught before merge but requiring its own
+   stop-and-raise per item 5 above. Both are sequenced immediately after
+   P2-S3 and before P2-S4, since P2-S5's drift test freezes the option set
+   these two stories extend; landing them after P2-S5 would mean reopening
+   that story's fragment instead of writing it once, correctly.
 
 ---
 
@@ -48,6 +55,9 @@ parent plan itself (see the amendment list at the end of this document).
 | **P2-D6** | **Argspec home** | `auth_argument_spec()` is the canonical definition, in `plugins/module_utils/auth.py`. `plugins/doc_fragments/auth.py` is a second, independent declaration of the same options for `antsibull-docs`. A drift test (P2-S5) binds the two mechanically so they cannot silently diverge once Phase 3 starts generating modules against both. |
 | **P2-D7** | **CI** | Still out of scope, per P1-D5. Local verification only, via `test-v3` and the new `graphql-mock-v3` service (P2-S7). |
 | **P2-D8** | **Mock service is a hard AC** | `graphql-mock-v3`, serving the vendored `schema/lagoon-2.33.0.graphql`, is a **hard acceptance criterion** of P2-S7, not an optional nice-to-have. This retires the Phase 5 carry-forward item "`.docker/Dockerfile.graphql-mock` still copies `api/tests/common/schema.graphql`" for the v3 path early. A `package-lock.json` must be committed alongside it, because the existing mock's dependencies (`graphql-import`, `graphql-tools`) are unpinned (`^`) with no lockfile, and an unpinned hard AC is a standing invitation for Phase 2 to break on an unrelated `npm install`. |
+| **P2-D9** | **SSH agent auth** | Supplying **neither** `lagoon_ssh_private_key` nor `lagoon_ssh_private_key_file` is valid, not an error: it means "authenticate via the SSH agent" over the inherited `SSH_AUTH_SOCK`. `resolve_token()`'s guard is mutual-exclusion-only (both supplied → error; neither → agent auth). Discovered during `review` of P2-S3, before merge: the original "exactly one of" guard made the agent path unreachable, a regression against v1 (whose `fetch_token` only wrote a key file when a key was actually given). Fixed in P2-S3a. This is the path a locally mounted `SSH_AUTH_SOCK` and AWX/ansible-runner (which loads the grant key into an agent socket rather than a file) both rely on. |
+| **P2-D10** | **`ssh` option precedence** | Collection-managed `-o` options (`StrictHostKeyChecking`, `ConnectTimeout`, `UserKnownHostsFile`, `BatchMode`) are emitted **before** caller-supplied `ssh_options` in argv, and OpenSSH resolves repeated `-o` settings first-wins — so collection defaults are authoritative and **cannot** be weakened via `ssh_options`. Deliberate: it is what keeps `StrictHostKeyChecking=accept-new` (P2-D4) from being silently overridden. Consequence: any new collection-managed default needs its own module option to stay operator-controllable (see `lagoon_ssh_batch_mode` in P2-S3b), and v1-style `ssh_options` values that set `StrictHostKeyChecking`/`UserKnownHostsFile` are now silent no-ops — record this for Phase 8's migration table. |
+| **P2-D11** | **Agent cache-key collision** | `cache_key()`'s `key_material_hash` is `''` when neither key is supplied (agent auth, P2-D9), so two distinct agent identities sharing `(endpoint, ssh_host, ssh_port, ssh_user)` collide in the cache. Accepted for the P2-S3 in-memory cache — the agent socket cannot change mid-process, so the collision is not observable. Deliberately not disambiguated by hashing `SSH_AUTH_SOCK` in, since that path is typically a random per-run temp path and hashing it in would defeat cache reuse rather than protect it. **P2-S4 must decide this deliberately** for the cross-process file cache, which has a different lifetime. |
 
 ---
 
@@ -58,8 +68,10 @@ parent plan itself (see the amendment list at the end of this document).
 | P2-S1 | `module_utils/token.py` — JWT expiry inspection | P1-S3 | S |
 | P2-S2 | `module_utils/ssh.py` — SSH grant + secure key handling | P2-S1 | L |
 | P2-S3 | `module_utils/auth.py` — resolver + in-memory cache | P2-S2 | M |
-| P2-S4 | `module_utils/cache.py` — opt-in cross-process file cache | P2-S3 | M |
-| P2-S5 | `doc_fragments/auth.py` + argspec drift test | P2-S3 | S |
+| P2-S3a | SSH agent auth fix + missing argspec options | P2-S3 | S |
+| P2-S3b | `BatchMode` default + `ssh` option-precedence documentation | P2-S3a | S |
+| P2-S4 | `module_utils/cache.py` — opt-in cross-process file cache | P2-S3b | M |
+| P2-S5 | `doc_fragments/auth.py` + argspec drift test | P2-S4 | S |
 | P2-S6 | `LagoonActionShim` in `plugins/action/__init__.py` | P2-S5 | M |
 | P2-S7 | `whoami_info` walking skeleton + sweep extension + `graphql-mock-v3` | P2-S6 | L |
 
@@ -444,6 +456,17 @@ This is where P2-S1 (validity) and P2-S2 (grant) compose. It also defines
 `auth_argument_spec()` — the canonical argspec for auth-related module
 options (P2-D6) — which P2-S5's doc fragment is checked against.
 
+**Amended after review (P2-S3a/P2-S3b, P2-D9/P2-D10/P2-D11).** The design
+below, as originally written, requires "exactly one of `private_key` /
+`private_key_file`" — this was found during review to make SSH agent
+authentication unreachable, a regression against v1. P2-S3a relaxes the
+guard to mutual-exclusion-only (both supplied → error; neither → agent
+auth) and adds the `lagoon_ssh_private_key_file`/`lagoon_ssh_known_hosts_file`
+argspec options this story's own `resolve_token` already read but never
+exposed. P2-S3b adds `lagoon_ssh_batch_mode`. See those stories for the
+corrected design; the text immediately below is left as the original
+record of what was implemented in the P2-S3 commit itself.
+
 ## Files to create
 
 ```
@@ -591,6 +614,310 @@ Refs docs/plans/v3-refactor.md Phase 2, 7.2
 
 ---
 
+# P2-S3a — SSH agent auth fix + missing argspec options
+
+## Goal
+
+Make SSH agent authentication reachable through `resolve_token()`, and add
+the two `auth_argument_spec()` options `resolve_token` already consumed but
+that no module could actually set.
+
+## Context
+
+Discovered during `review` of the P2-S3 commit, before merge — a real user
+workflow (a locally mounted `SSH_AUTH_SOCK`, and AWX/ansible-runner, which
+loads the grant key into an agent socket rather than a file) could not
+authenticate at all under the shipped P2-S3 design. `resolve_token()`'s
+guard read:
+
+```python
+if bool(private_key) == bool(private_key_file):
+    raise LagoonConfigError(...)
+```
+
+which rejects **both** "both supplied" (correct) and "neither supplied"
+(wrong — that is agent authentication). `ssh.py` (P2-S2) was already
+correct and needed no logic change: `_build_argv` guards `-i` behind `if
+key_path:`, and `subprocess.run` is called with no `env=` kwarg, so
+`SSH_AUTH_SOCK` is inherited from the collection's own environment. That
+path had zero test coverage — none of `test_ssh.py`'s 31 `request_grant`
+call sites omitted a key — so it worked by accident.
+
+This is a **v3 regression against v1**: v1's `fetch_token` action only
+wrote a key file when `lagoon_ssh_private_key` was actually set, so v1
+supported agent auth by construction. See P2-D9 and P2-D11.
+
+## Files to modify
+
+```
+plugins/module_utils/auth.py
+plugins/module_utils/ssh.py     (docstring only, no logic change)
+tests/unit/plugins/module_utils/test_auth.py
+tests/unit/plugins/module_utils/test_ssh.py
+```
+
+## Design
+
+- `resolve_token()`'s guard becomes mutual-exclusion-only:
+  ```python
+  if private_key and private_key_file:
+      raise LagoonConfigError(
+          "lagoon_ssh_private_key and lagoon_ssh_private_key_file are "
+          "mutually exclusive")
+  ```
+  Neither supplied → falls through to `request_grant(private_key=None,
+  private_key_file=None, ...)`, which omits `-i` and authenticates via the
+  agent.
+- `auth_argument_spec()` gains:
+  ```python
+  lagoon_ssh_private_key_file=dict(type='path', default=None),
+  lagoon_ssh_known_hosts_file=dict(type='path', default=None),
+  ```
+  `type='path'` for `~` expansion. **Not** `no_log` — these are paths, not
+  key material; redacting them would hurt debuggability without protecting
+  a secret.
+- `cache_key()`'s docstring documents the P2-D11 collision (agent auth
+  hashes to an empty `key_material_hash`) and explicitly defers
+  disambiguation to P2-S4 for the cross-process cache.
+- `ssh.py`'s docstring is corrected: "exactly one of" → "at most one of",
+  and the neither-supplied/agent-auth case is documented alongside a note
+  that `subprocess.run` must never gain an `env=` kwarg without preserving
+  `SSH_AUTH_SOCK`.
+
+## Testing requirements
+
+1. `test_ssh.py`, new `TestAgentAuth`: no key → no `-i` in argv; argv
+   otherwise well-formed; `tempfile.mkdtemp` never called; **`'env'` not in
+   `subprocess.run` kwargs** (this is the test that actually protects
+   `SSH_AUTH_SOCK` inheritance); token/`expires_in` returned normally.
+2. `test_auth.py`: neither key → `request_grant` called once with both
+   `None`, no raise; both keys → still `LagoonConfigError`; the both-keys
+   message does **not** contain `"is required"` (the old wording was wrong
+   for the neither-supplied case); agent-auth result is cached and reused;
+   `auth_argument_spec()` has both new options with `type='path'` and no
+   `no_log`; agent-auth `cache_key()` is deterministic and varies with
+   `ssh_host`.
+
+## Acceptance criteria
+
+- [ ] Guard is mutual-exclusion-only; neither key reaches `request_grant`
+      without raising.
+- [ ] `lagoon_ssh_private_key_file` and `lagoon_ssh_known_hosts_file` exist
+      in `auth_argument_spec()`, `type='path'`, not `no_log`.
+- [ ] `TestAgentAuth` in `test_ssh.py` asserts no `env=` kwarg is passed to
+      `subprocess.run` — the property that makes `SSH_AUTH_SOCK` work at
+      all.
+- [ ] `ssh.py`'s docstring no longer claims "exactly one of" is enforced.
+- [ ] All P2-S2/P2-S3 guardrails still hold (no `/tmp`, no `shell=True`, no
+      forbidden imports).
+
+## Verification commands
+
+```sh
+docker compose run --rm test-v3 units -v --requirements \
+  tests/unit/plugins/module_utils/test_auth.py \
+  tests/unit/plugins/module_utils/test_ssh.py
+
+grep -n "/tmp\b" plugins/module_utils/ssh.py && echo "FAIL" || echo "OK"
+grep -n "shell=True" plugins/module_utils/ssh.py && echo "FAIL" || echo "OK"
+
+python - <<'PY'
+import ast
+for f in ('auth', 'ssh'):
+    tree = ast.parse(open('plugins/module_utils/%s.py' % f).read())
+    bad = [n.module for n in ast.walk(tree)
+           if isinstance(n, ast.ImportFrom) and n.module and
+           (n.module.split('.')[0] in ('gql', 'graphql', 'requests') or n.module == 'ansible.errors')]
+    assert not bad, (f, bad)
+print("OK")
+PY
+```
+
+## Review focus
+
+- Is the "no `env=` kwarg" test actually asserting on the real call, not a
+  tautology?
+- Does the both-keys case still raise, proving the relaxation didn't go too
+  far?
+- Are `lagoon_ssh_private_key_file`/`lagoon_ssh_known_hosts_file` correctly
+  *not* `no_log` (paths, not secrets)?
+
+## Commit
+
+```
+fix(v3): allow SSH agent auth in the grant path
+
+resolve_token()'s guard rejected both "private_key and
+private_key_file supplied" (correct) and "neither supplied" (wrong --
+that is agent authentication), so the agent path was unreachable.
+Relaxed to mutual exclusion only.
+
+ssh.py already built a correct agent invocation: -i is guarded behind
+a key path and subprocess.run passes no env=, so SSH_AUTH_SOCK is
+inherited. That path had no test at all -- none of its 31
+request_grant call sites omitted a key -- so it worked by accident.
+Tests now lock in the no--i argv and the absence of an env= kwarg.
+
+Restores v1 parity: v1's fetch_token only wrote a key file when
+lagoon_ssh_private_key was set. Unblocks a mounted SSH_AUTH_SOCK
+locally and AWX/ansible-runner, which loads the key into an agent
+socket rather than a file.
+
+Also adds the lagoon_ssh_private_key_file and
+lagoon_ssh_known_hosts_file argspec options, which resolve_token
+already read and threaded to request_grant but which no module could
+set. P2-S5's doc fragment must mirror them or the drift test will
+enforce the omission.
+
+Refs docs/plans/v3-refactor.md Phase 2, 7.2 (P2-D9, P2-D11)
+```
+
+---
+
+# P2-S3b — `BatchMode` default + `ssh` option-precedence documentation
+
+## Goal
+
+Make a keyless/agent grant that cannot authenticate fail fast instead of
+stalling on an interactive prompt, and document the `-o` option-precedence
+rule that makes collection defaults authoritative over caller
+`ssh_options`.
+
+## Context
+
+Discovered while designing P2-S3a: with an agent holding no usable key,
+`ssh` may fall through to an interactive passphrase or host-key prompt that
+Ansible cannot answer. `ConnectTimeout` does not cover this — it bounds the
+TCP handshake, not an already-connected session blocked on terminal input
+— so the only backstop today is `subprocess.run(timeout=...)`, which turns
+a clean auth failure into an opaque 30-second stall. More likely now that
+P2-S3a makes agent auth reachable.
+
+Separately, while designing the fix, empirical testing showed that
+collection-managed `-o` options are appended to argv *before*
+caller-supplied `ssh_options`, and OpenSSH resolves repeated `-o` settings
+first-wins — so **a collection default cannot be overridden via
+`ssh_options`**. This is good for security (it is what makes
+`StrictHostKeyChecking=accept-new` un-overridable) but was undocumented,
+and it means v1's own `token` role idiom —
+`ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"`
+— is now a silent no-op against v3. See P2-D10.
+
+## Files to modify
+
+```
+plugins/module_utils/ssh.py
+plugins/module_utils/auth.py
+tests/unit/plugins/module_utils/test_ssh.py
+tests/unit/plugins/module_utils/test_auth.py
+```
+
+## Design
+
+- `request_grant(..., batch_mode=True)` — new keyword-only parameter.
+  `_build_argv` emits `-o BatchMode=yes` when `batch_mode` is true, and
+  emits **nothing** (not `BatchMode=no`) when false, deferring to
+  `ssh_config`/`ssh_options`.
+- Exposed as `lagoon_ssh_batch_mode` (bool, default `True`) in
+  `auth_argument_spec()`, threaded through `resolve_token()` to
+  `request_grant`. A dedicated option is required *because of* P2-D10 — a
+  collection-emitted default cannot be overridden via `ssh_options`, so
+  `ssh_options` is not a viable control surface for this.
+- `request_grant`'s docstring documents the option-precedence rule (P2-D10)
+  explicitly, including the v1-idiom-becomes-a-no-op consequence.
+- `_build_argv` gains a code comment at the top of the collection-managed
+  `-o` block warning against reordering it relative to `ssh_options`.
+
+## Testing requirements
+
+1. `test_ssh.py`, new `TestBatchMode`: `BatchMode=yes` present by default;
+   `batch_mode=False` omits the flag entirely (absent from argv, not
+   `BatchMode=no`); `BatchMode=no` never appears literally regardless of
+   `batch_mode`'s value.
+2. `test_ssh.py`, new `TestOptionPrecedence`: with a caller `ssh_options`
+   string attempting to override `StrictHostKeyChecking`,
+   `UserKnownHostsFile`, and `BatchMode`, assert every collection-managed
+   `-o` value's argv index precedes every caller-supplied conflicting
+   value's index — locking in the security property so a later refactor
+   can't reorder it and silently reintroduce v1's `StrictHostKeyChecking=no`
+   via `ssh_options`.
+3. `test_auth.py`: `lagoon_ssh_batch_mode` defaults `True` in
+   `auth_argument_spec()`; `resolve_token` passes `batch_mode=True` to
+   `request_grant` by default and threads through an explicit `False`.
+
+## Acceptance criteria
+
+- [ ] `StrictHostKeyChecking` still defaults to `accept-new` (P2-D4
+      unaffected).
+- [ ] `grep -n "BatchMode=no" plugins/module_utils/ssh.py` matches only
+      docstring prose, never a code-path emission.
+- [ ] `TestOptionPrecedence` passes, proving collection defaults win over
+      adversarial `ssh_options`.
+- [ ] `lagoon_ssh_batch_mode` defaults `True`.
+
+## Verification commands
+
+```sh
+docker compose run --rm test-v3 units -v --requirements \
+  tests/unit/plugins/module_utils/test_auth.py \
+  tests/unit/plugins/module_utils/test_ssh.py
+
+grep -n "/tmp\b" plugins/module_utils/ssh.py && echo "FAIL" || echo "OK"
+grep -n "shell=True" plugins/module_utils/ssh.py && echo "FAIL" || echo "OK"
+
+python - <<'PY'
+import ast
+for f in ('auth', 'ssh'):
+    tree = ast.parse(open('plugins/module_utils/%s.py' % f).read())
+    bad = [n.module for n in ast.walk(tree)
+           if isinstance(n, ast.ImportFrom) and n.module and
+           (n.module.split('.')[0] in ('gql', 'graphql', 'requests') or n.module == 'ansible.errors')]
+    assert not bad, (f, bad)
+print("OK")
+PY
+```
+
+## Review focus
+
+- Does `batch_mode=False` genuinely omit the flag, or does it emit
+  `BatchMode=no` (a materially different, and wrong, behaviour per the
+  design)?
+- Is the precedence test asserting on argv *positions*, not just presence —
+  i.e. does it actually prove first-wins ordering rather than just that
+  both values happen to appear somewhere?
+- Is the v1-idiom-becomes-a-no-op consequence recorded somewhere durable
+  (this story's commit body at minimum; Phase 8's migration table
+  eventually)?
+
+## Commit
+
+```
+feat(v3): default SSH grant to BatchMode=yes
+
+Without BatchMode, a grant against an agent holding no usable key can
+fall through to an interactive prompt. ConnectTimeout is TCP-only and
+does not cover it; only subprocess.run(timeout=) does, turning a clean
+auth failure into a 30s stall with an opaque timeout message. More
+likely now that agent auth is reachable (P2-S3a).
+
+Exposed as lagoon_ssh_batch_mode rather than left to ssh_options
+because collection-managed -o options are emitted before caller
+ssh_options and OpenSSH is first-wins, so a collection default cannot
+be overridden via ssh_options (P2-D10). A dedicated option is the only
+way to keep it operator-controllable.
+
+That precedence is deliberate -- it prevents ssh_options from
+weakening the StrictHostKeyChecking=accept-new default -- and is now
+documented and locked in by a test. Note the consequence for
+migrating v1 users: v1's token role passed
+"-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
+and both of those are now silently ignored.
+
+Refs docs/plans/v3-refactor.md Phase 2, 7.2 (P2-D10)
+```
+
+---
+
 # P2-S4 — `module_utils/cache.py` — opt-in cross-process file cache
 
 ## Goal
@@ -608,6 +935,17 @@ play with one Lagoon token is the common case in practice. This story gives
 them that, deliberately opt-in, with a materially different security posture
 to the always-on in-memory cache: this is the one place in the whole
 collection where a bearer token touches disk.
+
+**Must also resolve P2-D11.** P2-S3a made SSH agent auth reachable, and
+`auth.cache_key()` hashes to an empty `key_material_hash` for it — safe for
+the in-memory cache (the agent socket cannot change mid-process) but this
+file's cache has a different lifetime (cross-process, possibly
+cross-`ansible-playbook`-run), so a stale different-identity's token could
+be served across runs if two agent identities share the same
+`(endpoint, ssh_host, ssh_port, ssh_user)`. Decide explicitly whether to
+disambiguate (e.g. include some stable signal of the agent identity) or to
+document and accept the same reasoning as P2-D11 for this cache too — do not
+inherit the in-memory cache's reasoning by default without saying so.
 
 ## Files to create
 
@@ -805,9 +1143,15 @@ tests/unit/plugins/module_utils/test_auth_docs.py
 Model on v1's `api/plugins/doc_fragments/auth_options.py` but cover the full
 v3 option set: `lagoon_api_endpoint`, `lagoon_api_token`, `validate_certs`,
 plus the SSH-grant-path options (`lagoon_ssh_host`, `lagoon_ssh_port`,
-`lagoon_ssh_user`, `lagoon_ssh_private_key`, `lagoon_ssh_options`,
-`lagoon_ssh_strict_host_key_checking`) and the two cache flags
-(`lagoon_token_cache`, `lagoon_token_cache_dir` if exposed).
+`lagoon_ssh_user`, `lagoon_ssh_private_key`, `lagoon_ssh_private_key_file`,
+`lagoon_ssh_known_hosts_file`, `lagoon_ssh_options`,
+`lagoon_ssh_strict_host_key_checking`, `lagoon_ssh_batch_mode`) and the two
+cache flags (`lagoon_token_cache`, `lagoon_token_cache_dir` if exposed).
+**The option set must match `auth_argument_spec()` exactly as it stands
+after P2-S3b** — `lagoon_ssh_private_key_file`, `lagoon_ssh_known_hosts_file`
+and `lagoon_ssh_batch_mode` were added post-P2-S3 (P2-D9/P2-D10); this
+fragment must cover them from the start, not catch up to them later, or the
+drift test below enforces the omission.
 
 Must include, as prose in the relevant option descriptions:
 
@@ -818,7 +1162,15 @@ Must include, as prose in the relevant option descriptions:
   (parent plan §7.2);
 - an explicit warning on `lagoon_ssh_strict_host_key_checking: no` that
   disabling host key verification permits a MITM to supply an
-  attacker-controlled token.
+  attacker-controlled token;
+- on `lagoon_ssh_private_key`/`lagoon_ssh_private_key_file`: that supplying
+  **neither** authenticates via the SSH agent over the inherited
+  `SSH_AUTH_SOCK` (P2-D9) — this is not an error state;
+- on `lagoon_ssh_options`: that collection-managed `-o` options
+  (`StrictHostKeyChecking`, `ConnectTimeout`, `UserKnownHostsFile`,
+  `BatchMode`) are emitted before this option's value and are therefore
+  authoritative over it — a caller cannot use `lagoon_ssh_options` to
+  override any of them (P2-D10); use the dedicated option instead.
 
 ### The drift test
 
@@ -1405,7 +1757,7 @@ Refs docs/plans/v3-refactor.md Phase 2, 12.3
 
 ## Phase 2 exit criteria
 
-Phase 2 is complete when all seven commits are reviewed and merged, and:
+Phase 2 is complete when all nine commits are reviewed and merged, and:
 
 - [ ] `docker compose run --rm test-v3 units -v --requirements` is green.
 - [ ] `grep -rn "import gql\|import requests\|from graphql" plugins/` returns
@@ -1422,6 +1774,11 @@ Phase 2 is complete when all seven commits are reviewed and merged, and:
       runs against it end to end.
 - [ ] `whoami_info`'s own unit tests pass with no action shim involved,
       demonstrating the §4 module/shim boundary holds.
+- [ ] SSH agent auth (P2-D9) is covered by a test asserting no `env=` kwarg
+      reaches `subprocess.run` in `ssh.py`.
+- [ ] `lagoon_ssh_batch_mode` defaults `True`; a test proves
+      collection-managed `-o` options precede caller `ssh_options` in argv
+      (P2-D10).
 
 ## Carried forward to later phases
 
@@ -1429,6 +1786,7 @@ Phase 2 is complete when all seven commits are reviewed and merged, and:
 | ---- | ----- | ---- |
 | Lookup resolution injection in `LagoonActionShim` | 4 | Explicitly out of scope for P2-S6; the shim only handles auth in Phase 2. |
 | Extend the auth doc fragment / argspec as new auth-adjacent options appear | 3+ | Keep the P2-S5 drift test passing as the generator starts emitting modules against `doc_fragments/auth.py`. |
+| v1's `ssh_options` idiom for disabling host key checking is now a silent no-op | 8 (migration) | P2-D10: collection-managed `-o` options (`StrictHostKeyChecking`, `ConnectTimeout`, `UserKnownHostsFile`, `BatchMode`) precede caller `ssh_options` in argv and are first-wins under OpenSSH, so v1's `ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"` (the `token` role default) has no effect in v3. Not a functional regression -- v3's defaults are the secure replacement for exactly what that idiom disabled -- but must be called out in the migration table so operators don't assume the option string still does anything. |
 | **SDL input-type description coverage is sparse** | 3 | Only 14 of 193 `input` types in `schema/lagoon-2.33.0.graphql` carry any field-level `"""` description (47 total, vs. 213 on output `type` fields and ~60 on `Query`/`Mutation` fields). Parent plan §6.1.5 sources generated option help text from exactly the input-type descriptions that are mostly absent -- e.g. `AddProjectInput` has zero. `antsibull-docs` fails on undocumented options, so the Phase 3 gate module will fail docs lint unless the generator has a fallback (an `allowlist.yml` per-option `descriptions:` override block, at minimum for the gate resources). Discovered during Phase 2 story planning; not a Phase 2 blocker, but will block Phase 3's gate if not designed for up front. |
 | `.docker/Dockerfile.graphql-mock` (v1) still copies `api/tests/common/schema.graphql` | — | Retired for the **v3** path by P2-S7's `graphql-mock-v3`. The v1 service and Dockerfile stay as-is; only deleted in the post-Phase-8 cleanup story per P1-D2. |
 | Galaxy namespace ownership for `salsadigitalauorg` | before 3.0.0 tag | Unchanged from Phase 1's carry-forward. |

@@ -3,7 +3,9 @@
 **Date:** 2026-07-27
 **Last amended:** 2026-08-26 — Phase 2 story breakdown corrected §4/§7.2 (fork-model
 and token-cache design), resolved §12.3, and flagged an SDL input-description
-gap for Phase 3. See docs/plans/v3-phase2-stories.md
+gap for Phase 3. Post-review of P2-S3, §7.2 further corrected to restore SSH
+agent authentication (P2-D9) and document `ssh` option precedence (P2-D10);
+see P2-S3a/P2-S3b in docs/plans/v3-phase2-stories.md.
 **Status:** Approved for implementation — Phases 1–2 broken into stories
 **Target:** `salsadigitalauorg.lagoon` v3.0.0 (replaces `lagoon.api` v1.3.0)
 **Author:** plan agent (QuantCode Gov)
@@ -285,7 +287,9 @@ Resolution order:
 1. `lagoon_api_token` param → use as-is, skip all grant logic.
 2. `LAGOON_API_TOKEN` env var → same.
 3. Cached token → **validate** (decode JWT `exp` with a 60s skew margin; no signature verification, we're not the verifier). If valid, use it.
-4. Otherwise SSH `grant` → cache → use.
+4. Otherwise SSH `grant` → cache → use. Grant options are `lagoon_ssh_private_key` **or** `lagoon_ssh_private_key_file` **or neither** — supplying neither authenticates via the SSH agent over the inherited `SSH_AUTH_SOCK` (**amended, P2-D9**: the original design required exactly one of the two, which made agent authentication unreachable — a regression against v1, caught in review of P2-S3 and fixed in P2-S3a). `lagoon_ssh_known_hosts_file` and `lagoon_ssh_batch_mode` (default `true`) are also part of this step's option set.
+
+**`ssh` option precedence — added post-P2-S3 (P2-D10).** Collection-managed `-o` options (`StrictHostKeyChecking`, `ConnectTimeout`, `UserKnownHostsFile`, `BatchMode`) are emitted before any caller-supplied `lagoon_ssh_options`, and OpenSSH resolves repeated `-o` settings first-wins — so these defaults are authoritative and cannot be weakened via `lagoon_ssh_options`. This is what keeps `StrictHostKeyChecking=accept-new` (below) from being silently overridden, but it means v1's `token` role idiom of passing `StrictHostKeyChecking`/`UserKnownHostsFile` via `ssh_options` has no effect in v3 — use the dedicated options instead. Record for Phase 8's migration table.
 
 **Cache design — amended by the Phase 2 story breakdown (`docs/plans/v3-phase2-stories.md` P2-D1).** A single file-backed cache as originally specified below writes a bearer token to disk on every resolution, which is a credential-at-rest posture (ISM-1402) the "one grant per play" rationale in §4 doesn't actually justify — see the §4 correction above. v3 instead layers two caches:
 
@@ -303,7 +307,7 @@ Requirements for v3 (ISM-1402 — credential protection; ISM-1590 — rotation o
 - Create the key file with `os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)` — atomic, mode set at creation, fails if the path exists.
 - Use `tempfile.mkdtemp()` (mode `0700`) rather than a predictable `/tmp` path.
 - Remove key and token files in a `finally` block.
-- Token cache file mode `0600`, keyed by a hash of endpoint + SSH host + user so caches can't cross-contaminate between targets.
+- Token cache file mode `0600`, keyed by a hash of endpoint + SSH host + user so caches can't cross-contaminate between targets. **Note (P2-D11):** under SSH agent auth (no private key/private key file supplied), this hash has no key-material component to disambiguate on, so two distinct agent identities sharing the same endpoint/host/user collide. Accepted for the in-memory cache (the agent socket cannot change mid-process); P2-S4 must decide this deliberately for the cross-process file cache, which has a different lifetime.
 - `no_log: true` on `lagoon_api_token` and `lagoon_ssh_private_key`; ensure tokens never reach `-vvv` output or the audit trail.
 - Short-lived tokens are strongly preferred; document the long-lived path as exceptional and recommend vault storage + 12-month rotation.
 
@@ -393,19 +397,21 @@ have no dependency on S2.
 
 ### Phase 2 — Auth
 
-Broken into seven discrete, independently reviewable stories — one commit each,
+Broken into nine discrete, independently reviewable stories — one commit each,
 reviewed and iterated before the next begins. Full context, acceptance criteria
 and verification commands: **[`docs/plans/v3-phase2-stories.md`](./v3-phase2-stories.md)**.
 
 - [ ] **P2-S1** `module_utils/token.py` — JWT expiry inspection (decode-only, no signature verification).
 - [ ] **P2-S2** `module_utils/ssh.py` — SSH grant with secure key handling (`O_EXCL` + `0600`, `mkdtemp`, `finally` cleanup) and host key verification on by default (`accept-new`), fixing the Critical v1 defects in §11.
 - [ ] **P2-S3** `module_utils/auth.py` — param → env → validated in-memory cache → SSH grant resolver.
+- [ ] **P2-S3a** SSH agent auth fix + missing argspec options (P2-D9) — found and fixed in review of P2-S3, before merge.
+- [ ] **P2-S3b** `BatchMode` default + `ssh` option-precedence documentation (P2-D10).
 - [ ] **P2-S4** `module_utils/cache.py` — opt-in cross-process file token cache (off by default; see the §7.2 amendment above).
 - [ ] **P2-S5** `doc_fragments/auth.py` + a drift test binding it to `auth_argument_spec()`.
 - [ ] **P2-S6** `LagoonActionShim` in `plugins/action/__init__.py` — token injection only; lookup injection is Phase 4.
 - [ ] **P2-S7** `whoami_info` pulled forward from Phase 6 as a walking skeleton (resolves §12.3), plus a `graphql-mock-v3` service proving the vendored SDL loads correctly.
 
-Order is strictly sequential, S1 → S7.
+Order is strictly sequential, S1 → S3 → S3a → S3b → S4 → S7.
 
 ### Phase 3 — Generator (highest risk — validate before breadth)
 - [ ] Port `argspec.py` to `codegen/`.
@@ -462,7 +468,7 @@ Order is strictly sequential, S1 → S7.
 | `fetch_token` + `token` role                              | *removed*                       | Automatic in every module            |
 | `mutation` (generic)                                      | *removed*                       | Use typed modules                    |
 
-**Breaking changes to call out prominently:** FQCN change (`lagoon.api.*` → `salsadigitalauorg.lagoon.*`); nested field selection no longer supported; inventory batching options removed; `token` role removed.
+**Breaking changes to call out prominently:** FQCN change (`lagoon.api.*` → `salsadigitalauorg.lagoon.*`); nested field selection no longer supported; inventory batching options removed; `token` role removed. Also (P2-D10, discovered post-P2-S3): v1's `token` role passed `ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"` — in v3 both `StrictHostKeyChecking` and `UserKnownHostsFile` set via `lagoon_ssh_options` are silently ignored, since collection-managed `-o` options are emitted first and OpenSSH is first-wins. Operators relying on that idiom must switch to `lagoon_ssh_strict_host_key_checking` / `lagoon_ssh_known_hosts_file`. This is not a functional regression — v3's defaults (`accept-new`, unset) are the secure replacement for what that idiom disabled — but the option string silently doing nothing is a genuine behavioural change worth flagging explicitly in release notes. SSH agent authentication itself (P2-D9) is **not** a breaking change: v3 restores v1 parity there after a regression was caught and fixed pre-merge (P2-S3a).
 
 ---
 
@@ -482,6 +488,7 @@ Order is strictly sequential, S1 → S7.
 | `ansible-test sanity` at the repo root will also scan `api/` (D17 + D18)        | **Info**     | Units are unaffected. Sequence the `api/` deletion before sanity lands in Phase 8, in preference to `ignore-*.txt` entries.                                     |
 | v1 `token` role disables SSH host key verification unconditionally             | **Critical** | Fixed in Phase 2 (P2-S2/P2-D4) — `StrictHostKeyChecking=accept-new` by default. A MITM on the grant channel previously yielded an attacker-controlled bearer token for the whole play.                                                                        |
 | SDL carries field descriptions on only 14/193 `input` types                    | **Warning**  | Discovered during Phase 2 story planning. §6.1.5 sources generated option help from input-type descriptions, which are mostly absent (vs. 213 descriptions on output `type` fields). Will fail `antsibull-docs` lint on the Phase 3 gate module unless the generator has a per-option description fallback (e.g. an `allowlist.yml` override block). Design for this before Phase 3 starts, not after the gate fails. |
+| v3's `auth.py` guard made SSH agent auth unreachable — a regression against v1 | **Warning**  | Caught in `review` of P2-S3, before merge. v1's `fetch_token` supported agent auth (it only wrote a key file when a key was actually given); v3's original "exactly one of private_key/private_key_file" guard rejected the neither-supplied case. Fixed in P2-S3a (P2-D9); the agent path now has explicit tests (`no env= kwarg reaches subprocess.run`) — it previously worked by accident and was entirely untested. |
 
 ---
 
