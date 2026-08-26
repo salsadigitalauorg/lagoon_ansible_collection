@@ -1,8 +1,10 @@
 # Lagoon Ansible Collection v3 — Architecture & Implementation Plan
 
 **Date:** 2026-07-27
-**Last amended:** 2026-08-25 — Phase 1 story breakdown resolved §12.4 and added D17–D20. See docs/plans/v3-phase1-stories.md
-**Status:** Approved for implementation — Phase 1 broken into stories
+**Last amended:** 2026-08-26 — Phase 2 story breakdown corrected §4/§7.2 (fork-model
+and token-cache design), resolved §12.3, and flagged an SDL input-description
+gap for Phase 3. See docs/plans/v3-phase2-stories.md
+**Status:** Approved for implementation — Phases 1–2 broken into stories
 **Target:** `salsadigitalauorg.lagoon` v3.0.0 (replaces `lagoon.api` v1.3.0)
 **Author:** plan agent (QuantCode Gov)
 
@@ -84,7 +86,11 @@ The shift is *when* they run: runtime → build time.
 - The **action-plugin sidecar** is generated boilerplate that does *only* two things on the controller: (a) resolve/validate/refresh the API token, (b) resolve declared name→id lookups from cache. It then injects those as module args and delegates via `self._execute_module()`.
 - The sidecar contains **no resource-specific logic**. A single shared `LagoonActionShim` base class does the work; per-module sidecars are one-line subclasses (or a single sidecar registered for all modules via `action_groups`).
 
-Rationale: modules are per-task processes with no shared state. Without a controller-side cache, a 50-task play triggers 50 SSH `grant` round-trips plus 50 redundant name→id lookups. The sidecar buys one grant per play while keeping modules pure and independently testable. This is a documented Ansible pattern (`ansible.builtin.template`, `amazon.aws` credential resolution).
+Rationale: modules are per-task processes with no shared state. Without a controller-side cache, a 50-task play triggers 50 SSH `grant` round-trips plus 50 redundant name→id lookups. The sidecar keeps modules pure and independently testable while giving the controller a place to cache.
+
+**Correction (Phase 2 story breakdown, see `docs/plans/v3-phase2-stories.md` P2-D2):** the sidecar does **not** buy "one grant per play". Ansible forks a `WorkerProcess` per `(host, task)` pair, and action plugins execute only in the child, so a module-level/process-scoped cache is bounded by one *task*, not one play. It does cover every iteration of a `loop:` on that task — which is where Lagoon's N+1 pattern (e.g. looping over many projects) actually bites hardest in practice. Cross-task reuse within a play requires either the opt-in file-backed cache (§7.2) or an explicit `lagoon_api_token` set once via `set_fact`, per the documented fallback below.
+
+Per-module sidecars are one-line subclasses of a single shared `LagoonActionShim` base class, one file per module under `plugins/action/`. **`action_groups` does not affect action-plugin dispatch** — Ansible dispatches to an action plugin only when a same-named file exists under `plugins/action/`; `action_groups` only groups modules for `module_defaults` sharing. The earlier suggestion that a single sidecar could be "registered for all modules via `action_groups`" was incorrect and is withdrawn.
 
 **Fallback if the sidecar proves problematic:** modules already accept a token directly, so the v1 `token` role pattern remains viable as a documented alternative.
 
@@ -281,7 +287,14 @@ Resolution order:
 3. Cached token → **validate** (decode JWT `exp` with a 60s skew margin; no signature verification, we're not the verifier). If valid, use it.
 4. Otherwise SSH `grant` → cache → use.
 
-**Security requirements for the cache and key handling** (v1 has real problems here):
+**Cache design — amended by the Phase 2 story breakdown (`docs/plans/v3-phase2-stories.md` P2-D1).** A single file-backed cache as originally specified below writes a bearer token to disk on every resolution, which is a credential-at-rest posture (ISM-1402) the "one grant per play" rationale in §4 doesn't actually justify — see the §4 correction above. v3 instead layers two caches:
+
+- **In-memory, always on, process-scoped.** No disk activity. Covers every iteration of a `loop:` within one task.
+- **File-backed, opt-in (`lagoon_token_cache: true`), off by default.** For operators who need reuse across tasks or across separate `ansible-playbook` runs. Stored under `$XDG_CACHE_HOME/ansible-lagoon/` (or `~/.cache/ansible-lagoon/`) — never `/tmp` — directory `0700`, file `0600`, written atomically (`mkstemp` + `os.replace`). Entries age out via the token's own `exp` claim; **no `finally`-block deletion**, since a cache that the first worker deletes on exit never serves a second task or process — that would defeat the feature.
+
+The security requirements below (`O_EXCL`/`0600`, `mkdtemp`, `finally` cleanup) still apply in full to the **SSH private key**, which is genuinely single-use per grant call. They do not transfer unmodified to the cross-process *token* cache, which has a different lifetime and a different threat model — see P2-D1/P2-S4 for the reasoning.
+
+**Security requirements for the SSH key handling** (v1 has real problems here):
 
 > **v1 finding — Critical.** `plugins/action/fetch_token.py` writes the SSH private key to the predictable path `/tmp/lagoon_ssh_private_key`. On a multi-user or shared CI host this is exploitable: an attacker pre-creates the path as a symlink, or reads it in the window before `chmod`. `write_ssh_key()` opens the file *then* chmods, leaving a race where the key is briefly world-readable per the process umask.
 
@@ -379,11 +392,20 @@ Order is S1 → S3 → S4 → S5, with S2 inserted whenever the schema lands; S3
 have no dependency on S2.
 
 ### Phase 2 — Auth
-- [ ] `module_utils/auth.py`: param → env → validated cache → SSH grant.
-- [ ] Secure key/cache handling (`O_EXCL` + `0600`, `mkdtemp`, `finally` cleanup).
-- [ ] `LagoonActionShim` in `plugins/action/__init__.py`.
-- [ ] `doc_fragments/auth.py`.
-- [ ] Unit tests: expiry/skew, cache hit/miss, param precedence, no token leakage in output.
+
+Broken into seven discrete, independently reviewable stories — one commit each,
+reviewed and iterated before the next begins. Full context, acceptance criteria
+and verification commands: **[`docs/plans/v3-phase2-stories.md`](./v3-phase2-stories.md)**.
+
+- [ ] **P2-S1** `module_utils/token.py` — JWT expiry inspection (decode-only, no signature verification).
+- [ ] **P2-S2** `module_utils/ssh.py` — SSH grant with secure key handling (`O_EXCL` + `0600`, `mkdtemp`, `finally` cleanup) and host key verification on by default (`accept-new`), fixing the Critical v1 defects in §11.
+- [ ] **P2-S3** `module_utils/auth.py` — param → env → validated in-memory cache → SSH grant resolver.
+- [ ] **P2-S4** `module_utils/cache.py` — opt-in cross-process file token cache (off by default; see the §7.2 amendment above).
+- [ ] **P2-S5** `doc_fragments/auth.py` + a drift test binding it to `auth_argument_spec()`.
+- [ ] **P2-S6** `LagoonActionShim` in `plugins/action/__init__.py` — token injection only; lookup injection is Phase 4.
+- [ ] **P2-S7** `whoami_info` pulled forward from Phase 6 as a walking skeleton (resolves §12.3), plus a `graphql-mock-v3` service proving the vendored SDL loads correctly.
+
+Order is strictly sequential, S1 → S7.
 
 ### Phase 3 — Generator (highest risk — validate before breadth)
 - [ ] Port `argspec.py` to `codegen/`.
@@ -453,11 +475,13 @@ have no dependency on S2.
 | Dropping nested queries increases request count (N+1)                          | **Info**     | Accepted tradeoff — this is the explicit goal. Lookup caching and per-run token reuse blunt the cost. Measure in Phase 5.                                      |
 | Action-plugin sidecar reintroduces controller-side complexity                  | **Warning**  | Strict boundary in §4, enforced in review. Modules must pass their unit tests with no sidecar involved.                                                        |
 | Clean break strands GovCMS                                                     | **Warning**  | Side-by-side install is possible (new namespace), so v1 and v3 can coexist during migration. Coordinate the cutover with the GovCMS team before tagging 3.0.0. |
-| SSH key written to predictable `/tmp` path (inherited from v1)                 | **Critical** | Fixed in Phase 2 — `mkdtemp` + `O_EXCL`/`0600` + `finally` cleanup. Must not be carried forward.                                                               |
+| SSH key written to predictable `/tmp` path (inherited from v1)                 | **Critical** | Fixed in Phase 2 (P2-S2) — `mkdtemp` + `O_EXCL`/`0600` + `finally` cleanup. Must not be carried forward.                                                       |
 | `validate_certs` defaults to `False` in v1 `api_client.py` — TLS verification off | **Critical** | Fixed in P1-S4: defaults to `True`, opt-out explicit and documented (ISM-1552). Explicit review-focus item on that story.                                       |
 | GraphQL injection via `%s`/`%d` interpolation into query text (v1)              | **Critical** | Fixed in P1-S4: all user data via the `variables` map; `build_query` rejects field names containing braces, whitespace or parens.                               |
-| Guardrail sweep passes vacuously if it matches zero documents                   | **Warning**  | P1-S5 acceptance criterion: the sweep must fail on zero candidates once `plugins/modules/` is populated. Highest-leverage check in Phase 1.                     |
+| Guardrail sweep passes vacuously if it matches zero documents                   | **Warning**  | P1-S5 acceptance criterion: the sweep must fail on zero candidates once `plugins/modules/` is populated. Highest-leverage check in Phase 1. Confirmed to fire, as designed, the moment P2-S7 adds the first real module — see the sweep-extension work in that story. |
 | `ansible-test sanity` at the repo root will also scan `api/` (D17 + D18)        | **Info**     | Units are unaffected. Sequence the `api/` deletion before sanity lands in Phase 8, in preference to `ignore-*.txt` entries.                                     |
+| v1 `token` role disables SSH host key verification unconditionally             | **Critical** | Fixed in Phase 2 (P2-S2/P2-D4) — `StrictHostKeyChecking=accept-new` by default. A MITM on the grant channel previously yielded an attacker-controlled bearer token for the whole play.                                                                        |
+| SDL carries field descriptions on only 14/193 `input` types                    | **Warning**  | Discovered during Phase 2 story planning. §6.1.5 sources generated option help from input-type descriptions, which are mostly absent (vs. 213 descriptions on output `type` fields). Will fail `antsibull-docs` lint on the Phase 3 gate module unless the generator has a per-option description fallback (e.g. an `allowlist.yml` override block). Design for this before Phase 3 starts, not after the gate fails. |
 
 ---
 
@@ -471,7 +495,10 @@ have no dependency on S2.
 2. **Still open.** Confirm Galaxy namespace ownership for `salsadigitalauorg`.
    Rescoped: not a Phase 1 blocker (nothing publishes until Phase 8), but must be
    settled before tagging `3.0.0`.
-3. **Still open — Phase 3.** Whether `*_info` modules need the action shim.
+3. ~~Still open — Phase 3.~~ — **Resolved (P2-D5/P2-S7):** yes, `*_info` modules
+   need the action shim — they require a token exactly like any other module.
+   Settled by pulling `whoami_info` forward into Phase 2 as a walking skeleton.
+   See `docs/plans/v3-phase2-stories.md`.
 4. ~~Support matrix~~ — **Resolved (D19):** `requires_ansible: '>=2.16'`, tested
    Python 3.11 / 3.12 / 3.13.
 5. **New, post-Phase 8.** Cleanup story: delete `api/`, the v1 compose services and
