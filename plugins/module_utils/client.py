@@ -48,8 +48,8 @@ class LagoonClient:
     typed exceptions in :mod:`.errors`.
 
     Stateless beyond its constructor arguments: no caching, no schema
-    introspection. Token caching (Phase 2 ``auth.py``) and lookup caching
-    (Phase 4 ``lookup.py``) are layered on top of this class, not inside it.
+    introspection. Token caching (``auth.py``) and lookup caching are
+    layered on top of this class, not inside it.
     """
 
     _sleep = staticmethod(time.sleep)

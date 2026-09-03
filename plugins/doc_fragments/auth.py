@@ -4,14 +4,12 @@
 # plugins/module_utils/auth.py::resolve_token().
 #
 # This is a SECOND, INDEPENDENT declaration of the option set that
-# auth_argument_spec() owns canonically (P2-D6 in
-# docs/plans/v3-phase2-stories.md). antsibull-docs cannot read a Python
-# argspec, so the two must be maintained side by side --
+# auth_argument_spec() owns canonically. antsibull-docs cannot read a
+# Python argspec, so the two must be maintained side by side --
 # tests/unit/plugins/module_utils/test_auth_docs.py binds them
 # mechanically (names both directions, type, and default) so they cannot
-# silently diverge once Phase 3 starts generating modules against both.
-# Add an option here and to auth_argument_spec() in the same change, or
-# that test fails.
+# silently diverge. Add an option here and to auth_argument_spec() in the
+# same change, or that test fails.
 #
 # DELIBERATELY NO `no_log:` KEYS BELOW. no_log is an *argspec* key, not a
 # DOCUMENTATION key: antsibull-docs' OptionsSchema sets
@@ -22,8 +20,7 @@
 # already handled where it actually takes effect -- no_log=True on
 # lagoon_api_token and lagoon_ssh_private_key in auth_argument_spec().
 # Adding no_log here would buy no extra protection and would break the
-# first module that extends this fragment. See P2-S5's stop-and-raise in
-# docs/plans/2026-08-27-p2-s5-auth-doc-fragment.md.
+# first module that extends this fragment.
 
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type

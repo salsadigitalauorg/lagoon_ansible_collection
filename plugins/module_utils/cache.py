@@ -9,8 +9,7 @@ always-on in-memory cache in ``auth.py`` has no credential-at-rest
 exposure at all, and most operators do not need more than it offers.
 Enabling this trades that posture for reuse across tasks (and across
 separate ``ansible-playbook`` runs), which the in-memory cache cannot
-provide because Ansible forks a fresh worker per (host, task) pair -- see
-P2-D2 in ``docs/plans/v3-phase2-stories.md``.
+provide because Ansible forks a fresh worker per (host, task) pair.
 
 **A predictable path under $HOME is not the shared-temp-directory defect
 this collection fixed elsewhere.** ``ssh.py``'s docstring describes v1's
@@ -27,28 +26,27 @@ are the backstop. Please do not flag this as that bug by pattern-matching
 on "predictable path" -- the difference is the writability of the parent,
 not the guessability of the name.
 
-**No ``finally``-block deletion, deliberately.** Parent plan 7.2 requires
-key and token files be removed in a ``finally`` block, and ``ssh.py``
-does exactly that for the SSH private key, which is genuinely single-use
-per grant call. That requirement does **not** transfer to this cache: a
-cross-process cache whose writing worker deletes it on exit can never
-serve a second task or a second run, which defeats the only reason the
-feature exists. Entries age out instead, via the token's own ``exp``
-claim, checked by ``token.token_is_valid()`` on every read. 7.2 has been
-amended to say so. Do not "fix" this by adding cleanup -- doing so
-reintroduces a single-use cache that looks like it works.
+**No ``finally``-block deletion, deliberately.** ``ssh.py`` removes the
+SSH private key in a ``finally`` block, since that key is genuinely
+single-use per grant call. That requirement does **not** transfer to
+this cache: a cross-process cache whose writing worker deletes it on
+exit can never serve a second task or a second run, which defeats the
+only reason the feature exists. Entries age out instead, via the
+token's own ``exp`` claim, checked by ``token.token_is_valid()`` on
+every read. Do not "fix" this by adding cleanup -- doing so reintroduces
+a single-use cache that looks like it works.
 
 **Agent auth shares one cache entry per (endpoint, host, port, user)
-tuple -- accepted, with eyes open (P2-D11).** ``auth.cache_key()`` folds
-in a hash of the private key content or the key file path, but under SSH
-agent authentication (P2-D9: neither supplied) there is no key material
-to hash, so that component is empty and the key degenerates to the
-connection tuple. P2-D11 accepted that collision for the in-memory cache
-on the grounds that the agent socket cannot change mid-process, so a
-collision is not observable. **That justification does not transfer to
-this cache**, which outlives the process: a later ``ansible-playbook``
-run, whose agent holds a *different* identity, can read an entry written
-by an earlier one.
+tuple -- accepted, with eyes open.** ``auth.cache_key()`` folds in a
+hash of the private key content or the key file path, but under SSH
+agent authentication (neither supplied) there is no key material to
+hash, so that component is empty and the key degenerates to the
+connection tuple. The in-memory cache in ``auth.py`` accepts that
+collision on the grounds that the agent socket cannot change
+mid-process, so a collision is not observable. **That justification
+does not transfer to this cache**, which outlives the process: a later
+``ansible-playbook`` run, whose agent holds a *different* identity, can
+read an entry written by an earlier one.
 
 The residual risk, stated plainly: within a single OS user account, a run
 may be served a token minted for a different Lagoon identity that the
@@ -68,14 +66,13 @@ discriminator is the agent's loaded-key fingerprint set (``ssh-add -l``),
 which would put a new external binary, its output parsing, and its
 failure modes inside a security-sensitive key-derivation path -- a poor
 trade for a within-boundary mix-up. ``SSH_AUTH_SOCK`` itself is not
-usable as a discriminator: it is typically a random per-run temp path, so
-hashing it in would defeat cache reuse rather than protect it (the same
-finding P2-D11 recorded).
+usable as a discriminator: it is typically a random per-run temp path,
+so hashing it in would defeat cache reuse rather than protect it.
 
 Operators who need the identities kept apart have two options today, both
 better than a fingerprint hash: supply ``lagoon_ssh_private_key_file``,
 whose path participates in ``auth.cache_key()``, or grant once and
-``set_fact`` the token for the play (parent plan 4).
+``set_fact`` the token for the play.
 """
 
 from __future__ import (absolute_import, division, print_function)
@@ -206,8 +203,8 @@ def read_cached_token(key):
     if not isinstance(token, str) or not token:
         return None
 
-    # This is what ages entries out, in place of the finally-block deletion
-    # the parent plan specifies for the SSH key (see the module docstring).
+    # This is what ages entries out, in place of the finally-block
+    # deletion ssh.py uses for the SSH key (see the module docstring).
     if not token_is_valid(token):
         return None
 

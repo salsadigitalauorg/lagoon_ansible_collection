@@ -22,11 +22,11 @@ def decode_jwt_claims(token):
     message -- only the shape of the problem is described.
 
     This applies only to tokens the collection itself cached after an SSH
-    grant (resolution order step 3, plan 7.2). An explicit
-    ``lagoon_api_token`` module parameter or ``LAGOON_API_TOKEN`` env var
-    (steps 1-2) is used as-is and must never be passed through this
-    function -- there is no sensible recovery if it looked invalid, since
-    re-granting would silently discard the operator's explicit token.
+    grant. An explicit ``lagoon_api_token`` module parameter or
+    ``LAGOON_API_TOKEN`` env var is used as-is and must never be passed
+    through this function -- there is no sensible recovery if it looked
+    invalid, since re-granting would silently discard the operator's
+    explicit token.
     """
     if not isinstance(token, str):
         raise LagoonAuthError(

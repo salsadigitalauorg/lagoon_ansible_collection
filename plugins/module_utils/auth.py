@@ -19,13 +19,11 @@ from .token import token_is_valid
 # task. Cross-task reuse within a play requires either the opt-in
 # file-backed cache (module_utils/cache.py, enabled via
 # `lagoon_token_cache`, off by default) or an explicit
-# `lagoon_api_token` set once via `set_fact`. See P2-D2 in
-# docs/plans/v3-phase2-stories.md -- this corrects parent plan §4's "one
-# grant per play" claim.
+# `lagoon_api_token` set once via `set_fact`.
 #
 # SSH_AUTH_SOCK note: when neither private_key nor private_key_file is
-# supplied, resolve_token() requests a grant via the SSH agent (P2-D9).
-# This works only because .ssh.request_grant() passes no `env=` kwarg to
+# supplied, resolve_token() requests a grant via the SSH agent. This
+# works only because .ssh.request_grant() passes no `env=` kwarg to
 # subprocess.run(), so the collection's own environment -- including
 # SSH_AUTH_SOCK -- is inherited by the ssh child process unmodified. If a
 # future change ever adds an explicit `env=` there, agent auth breaks
@@ -47,10 +45,10 @@ def auth_argument_spec(spec=None):
 
     Merged with an optional caller-supplied ``spec`` dict; keys in
     ``spec`` win on conflict. This is the single source of truth for the
-    auth option set (P2-D6) -- ``plugins/doc_fragments/auth.py`` is a
-    second, independent declaration of the same options for
-    ``antsibull-docs``, and a drift test (P2-S5) binds the two together
-    so they cannot silently diverge.
+    auth option set -- ``plugins/doc_fragments/auth.py`` is a second,
+    independent declaration of the same options for ``antsibull-docs``,
+    and a drift test binds the two together so they cannot silently
+    diverge.
 
     Note for callers using :class:`.client.LagoonClient` with an
     ``AnsibleModule`` instance: ``client.py``'s ``_fetch_url_call`` reads
@@ -97,7 +95,7 @@ def resolve_token(config, warn=None):
     itself raises is swallowed rather than allowed to fail a task that
     already has a working token.
 
-    Resolution order (plan 7.2), stopping at the first usable step:
+    Resolution order, stopping at the first usable step:
 
       1. ``config['token']`` (explicit ``lagoon_api_token``) -> used
          as-is, no validation, no caching.
@@ -120,8 +118,8 @@ def resolve_token(config, warn=None):
     the only path in the collection that persists a bearer token to disk;
     see ``module_utils/cache.py``'s docstring for the credential-at-rest
     reasoning, the directory/permission posture, and the agent-auth
-    cache-key caveat (P2-D11). When the flag is off, this function makes
-    no filesystem calls whatsoever.
+    cache-key caveat. When the flag is off, this function makes no
+    filesystem calls whatsoever.
 
     A file-cache write failure (:func:`.cache.write_cached_token` returning
     ``False`` -- a read-only ``$HOME``, a full disk, an unset ``$HOME`` in
@@ -158,12 +156,12 @@ def resolve_token(config, warn=None):
     fails (wraps :func:`.ssh.request_grant`'s own failure modes).
 
     Steps 1-2 use the supplied token exactly as given and never call
-    :func:`.token.token_is_valid` -- the plan does not ask the collection
-    to second-guess a token the operator supplied directly.
+    :func:`.token.token_is_valid` -- the collection does not second-guess
+    a token the operator supplied directly.
 
     Supplying **neither** ``private_key`` nor ``private_key_file`` is
-    valid, not an error (P2-D9): it means "authenticate via the SSH
-    agent". :func:`.ssh.request_grant` then omits ``-i`` entirely and
+    valid, not an error: it means "authenticate via the SSH agent".
+    :func:`.ssh.request_grant` then omits ``-i`` entirely and
     ``ssh`` falls back to agent identities offered over the inherited
     ``SSH_AUTH_SOCK``. This is the path a locally mounted agent socket,
     and AWX/ansible-runner (which loads the grant key into an agent
@@ -255,7 +253,7 @@ def cache_key(config):
     ``private_key_file`` path (not its content -- the file is not read
     here).
 
-    Agent auth (P2-D9: neither ``private_key`` nor ``private_key_file``
+    Agent auth (neither ``private_key`` nor ``private_key_file``
     supplied) hashes to an empty ``key_material_hash``, so two distinct
     agent identities sharing the same ``(endpoint, ssh_host, ssh_port,
     ssh_user)`` collide in the cache. Accepted for this in-memory,
@@ -263,11 +261,11 @@ def cache_key(config):
     so a collision here is not observable. Deliberately not disambiguated
     by hashing ``SSH_AUTH_SOCK`` in: that path is typically a random
     per-run temp path, which would defeat cache reuse rather than protect
-    it. The cross-process file cache in ``module_utils/cache.py`` (P2-S4)
-    has a different lifetime, so it does not inherit this reasoning: it
-    records its own decision on the same collision -- also to accept it,
-    but for different reasons and with a different residual risk -- in
-    that module's docstring (P2-D11).
+    it. The cross-process file cache in ``module_utils/cache.py`` has a
+    different lifetime, so it does not inherit this reasoning -- it
+    records its own decision on the same collision, in that module's
+    docstring, also accepting it but for different reasons and with a
+    different residual risk.
     """
     private_key = config.get('private_key')
     private_key_file = config.get('private_key_file')

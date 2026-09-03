@@ -38,18 +38,16 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
     **neither** is given, no ``-i`` flag is emitted at all and ``ssh``
     authenticates via agent identities offered over ``SSH_AUTH_SOCK``,
     which this function inherits unmodified because it passes no ``env=``
-    to :func:`subprocess.run` (P2-D9 in ``docs/plans/v3-phase2-stories.md``
-    -- this is the path AWX/ansible-runner and a locally mounted agent
-    socket rely on). Do not add an ``env=`` kwarg to the
-    :func:`subprocess.run` call below without preserving
+    to :func:`subprocess.run` -- this is the path AWX/ansible-runner and a
+    locally mounted agent socket rely on. Do not add an ``env=`` kwarg to
+    the :func:`subprocess.run` call below without preserving
     ``SSH_AUTH_SOCK``, or agent auth breaks silently.
 
     ``strict_host_key_checking`` defaults to ``'accept-new'``. Passing
     ``'no'`` disables host key verification entirely and permits a MITM on
     the grant channel to hand back an attacker-controlled bearer token,
     silently, for the whole play (this reverses v1's unconditional
-    ``StrictHostKeyChecking=no`` default -- see P2-D4 in
-    ``docs/plans/v3-phase2-stories.md``). There is no implicit path to
+    ``StrictHostKeyChecking=no`` default). There is no implicit path to
     ``'no'``: a caller must pass it explicitly. This function does not itself
     emit a warning when ``'no'`` is passed -- it is a transport primitive,
     not a policy layer -- callers (``auth.py``, module documentation) are
@@ -78,8 +76,7 @@ def request_grant(ssh_host, ssh_port, *, private_key=None,
     resolves repeated ``-o`` settings first-wins -- so every option this
     function sets itself (``StrictHostKeyChecking``, ``ConnectTimeout``,
     ``UserKnownHostsFile``, ``BatchMode``) is authoritative and cannot be
-    weakened by a caller's ``ssh_options`` (P2-D10 in
-    ``docs/plans/v3-phase2-stories.md``). This is deliberate -- it is
+    weakened by a caller's ``ssh_options``. This is deliberate -- it is
     what keeps ``StrictHostKeyChecking=accept-new`` from being silently
     overridden -- but it means v1-style ``ssh_options`` values such as
     ``"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`` are
@@ -161,8 +158,8 @@ def _build_argv(ssh_host, ssh_port, key_path, ssh_options,
     # Every collection-managed -o option is appended here, BEFORE
     # caller-supplied ssh_options below. OpenSSH resolves repeated -o
     # settings first-wins, so this ordering is what makes these defaults
-    # authoritative rather than overridable (P2-D10) -- do not reorder
-    # this without re-reading request_grant()'s docstring.
+    # authoritative rather than overridable -- do not reorder this
+    # without re-reading request_grant()'s docstring.
     argv = [
         'ssh',
         '-p', str(ssh_port),
