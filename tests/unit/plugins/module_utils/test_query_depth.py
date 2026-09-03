@@ -457,6 +457,27 @@ class TestBuildQuerySweepExtension(unittest.TestCase):
             self.assertNotIn(SHADOWED_BUILD_QUERY, documents)
             self.assertIn("query me { me { id email } }", documents)
 
+    def test_sibling_relative_import_of_lagoonclient_still_resolves(self):
+        """A file living inside ``module_utils/`` itself imports
+        ``LagoonClient`` via the sibling-relative shape every other
+        cross-file import in that package uses (``from .client import
+        LagoonClient``), not the absolute
+        ``ansible_collections...module_utils.client`` shape used
+        everywhere else. This must still be trusted, not marked
+        shadowed -- ``lookup.py`` is the first real file to hit this
+        path.
+        """
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._write_fixture(
+                tmp_dir,
+                "from .client import LagoonClient\n\n"
+                "LagoonClient.build_query('me', fields=['id', 'email'])\n")
+
+            candidates = collect_candidate_documents(tmp_dir)
+            documents = [d for _, d in candidates]
+            self.assertNotIn(SHADOWED_BUILD_QUERY, documents)
+            self.assertIn("query me { me { id email } }", documents)
+
     def test_statically_invalid_call_site_is_marked_invalid(self):
         """A call whose arguments resolve statically but that the real
         build_query() rejects (e.g. an invalid operation name) is a

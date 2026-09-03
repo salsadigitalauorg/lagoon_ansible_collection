@@ -288,10 +288,15 @@ def _is_build_query_call(node):
 
 def _names_bound_to_lagoon_client(tree):
     """Return the set of local names bound, anywhere in ``tree``, to the
-    real ``LagoonClient`` class via
-    ``from ...module_utils.client import LagoonClient [as X]``.
+    real ``LagoonClient`` class via either
+    ``from ...module_utils.client import LagoonClient [as X]`` (the
+    absolute-import shape every ``plugins/modules/`` and
+    ``plugins/action/`` file uses) or ``from .client import LagoonClient
+    [as X]`` (the sibling-relative shape a file living inside
+    ``module_utils/`` itself uses, per every other cross-file import in
+    that package -- see ``auth.py``'s ``from .errors import ...``).
 
-    Only this specific import shape is trusted -- a name that merely
+    Only these two import shapes are trusted -- a name that merely
     *looks* like it holds ``LagoonClient`` (e.g. reassigned later, or
     imported from somewhere else entirely) is not, and any
     ``build_query`` reached through it must be treated as shadowed
@@ -299,8 +304,13 @@ def _names_bound_to_lagoon_client(tree):
     """
     names = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module and \
-                node.module.endswith('module_utils.client'):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        is_absolute_client_import = \
+            node.module and node.module.endswith('module_utils.client')
+        is_sibling_client_import = \
+            node.level == 1 and node.module == 'client'
+        if is_absolute_client_import or is_sibling_client_import:
             for alias in node.names:
                 if alias.name == 'LagoonClient':
                     names.add(alias.asname or alias.name)
