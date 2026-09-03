@@ -52,3 +52,15 @@ services:
       - /collections/ansible_collections/salsadigitalauorg/lagoon/.codegraph
     working_dir: /collections/ansible_collections/salsadigitalauorg/lagoon
     command: ["antsibull-docs", "lint-collection-docs", "--plugin-docs", "."]
+
+  # Serves the vendored v3 SDL (schema/lagoon-2.33.0.graphql), not the v1
+  # api/tests/common/schema.graphql the plain `graphql-mock` service above
+  # still points at. Distinct host port so both can run at once during
+  # the v1-to-v3 migration period.
+  graphql-mock-v3:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.graphql-mock-v3
+    command: ["npm", "start"]
+    ports:
+      - "4200:4000"

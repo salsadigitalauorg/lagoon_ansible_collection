@@ -1,2 +1,11 @@
 ---
 requires_ansible: '>=2.16'
+
+# module_defaults sharing only -- action_groups does not affect
+# action-plugin dispatch. That is driven entirely by the presence of a
+# same-named file under plugins/action/; whoami_info dispatches to
+# LagoonActionShim because plugins/action/whoami_info.py exists, not
+# because of this entry.
+action_groups:
+  all:
+    - whoami_info

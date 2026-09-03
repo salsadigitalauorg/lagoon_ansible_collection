@@ -1,0 +1,48 @@
+---
+# Ad hoc end-to-end proof: exercises the real whoami_info module through
+# the actual action shim (plugins/action/whoami_info.py) against
+# graphql-mock-v3, serving the vendored schema/lagoon-2.33.0.graphql.
+#
+# A single ad hoc playbook rather than a formal integration target --
+# this walking-skeleton module needs enough coverage to prove the
+# endpoint -> shim -> module -> client path end to end, not a full
+# integration test suite.
+#
+# lagoon_api_token is passed directly -- no real SSH host exists in the
+# mock setup, so this exercises the shim's token-injection path with an
+# explicit token rather than an SSH grant. That is enough to prove
+# endpoint -> shim -> module -> client end to end; the SSH grant path
+# itself is already covered by module_utils/test_ssh.py and
+# module_utils/test_auth.py.
+#
+# Run with (from the host, after `make mock-up`):
+#   ansible-playbook tests/integration/whoami_info.yml
+# (requires ansible-core and this collection on ANSIBLE_COLLECTIONS_PATH
+# locally). To run from inside the test-v3 container instead (`make
+# shell`), the mock is reachable by its compose service name rather than
+# the published host port -- override lagoon_api_endpoint to
+# http://graphql-mock-v3:4000/graphql on the same compose network.
+- name: whoami_info end-to-end proof against graphql-mock-v3
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    whoami_info_endpoint: http://localhost:4200/graphql
+  tasks:
+    - name: Look up the current user via the real action shim
+      salsadigitalauorg.lagoon.whoami_info:
+        lagoon_api_token: mock-token
+        lagoon_api_endpoint: "{{ whoami_info_endpoint }}"
+        validate_certs: false
+      register: whoami
+
+    - name: Assert the module ran end to end and reported no change
+      ansible.builtin.assert:
+        that:
+          - whoami.changed == false
+          - whoami.user is defined
+          - whoami.user.email is defined
+        fail_msg: >-
+          whoami_info did not return the expected shape against
+          graphql-mock-v3 -- see whoami: {{ whoami }}

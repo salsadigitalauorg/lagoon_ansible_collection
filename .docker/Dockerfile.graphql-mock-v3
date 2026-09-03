@@ -1,0 +1,12 @@
+FROM node:lts
+
+COPY .docker/graphql-mock/ /app/
+COPY schema/lagoon-2.33.0.graphql /app/schema.graphql
+
+WORKDIR /app
+
+RUN npm ci
+
+EXPOSE 4000
+
+CMD ["npm", "start"]

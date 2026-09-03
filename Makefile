@@ -1,6 +1,6 @@
 COLLECTION_PATH := /usr/share/ansible/collections/ansible_collections/salsadigitalauorg/lagoon
 
-.PHONY: test build lint-docs shell fetch-schema
+.PHONY: test build lint-docs shell fetch-schema mock-up mock-down verify-mock
 
 test:            ## Run unit tests in the containerised ansible-test image
 	docker compose run --rm test-v3 units -v --requirements
@@ -13,6 +13,25 @@ lint-docs:
 
 shell:
 	docker compose run --rm test-v3 bash
+
+mock-up:            ## Start the v3 GraphQL mock, serving the vendored SDL
+	docker compose up -d --build graphql-mock-v3
+
+mock-down:            ## Stop the v3 GraphQL mock
+	docker compose stop graphql-mock-v3
+
+verify-mock: mock-up            ## Confirm the vendored SDL loads under the mock's graphql-import
+	# `me { id email }` deliberately avoids any field typed as the custom
+	# `JSON` scalar (e.g. lagoonVersion) -- @graphql-tools/mock cannot
+	# auto-mock a custom scalar with no mock function registered for it
+	# and raises "No mock defined for type "JSON"" even on a
+	# successfully loaded schema, on both this service and the v1
+	# graphql-mock. A plain-scalar field is what actually proves the SDL
+	# parsed and resolved under graphql-import, which is this target's
+	# job.
+	curl -sS -X POST http://localhost:4200/graphql \
+	  -H 'Content-Type: application/json' \
+	  -d '{"query":"{ me { id email } }"}' | grep -q '"email"'
 
 fetch-schema:            ## Fetch and vendor the Lagoon SDL. Requires LAGOON_GRAPHQL, LAGOON_TOKEN, LAGOON_VERSION
 	@test -n "$(LAGOON_GRAPHQL)" || (echo "LAGOON_GRAPHQL is required" && exit 1)
