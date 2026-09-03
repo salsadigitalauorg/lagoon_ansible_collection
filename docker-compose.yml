@@ -64,3 +64,17 @@ services:
     command: ["npm", "start"]
     ports:
       - "4200:4000"
+
+  # codegen/ depends on graphql-core, a generator-only dev dependency that
+  # must never reach the environment running the shipped collection's own
+  # unit tests. This container has no ansible-core and shares no base image
+  # or requirements file with test-v3, so that isolation is structural, not
+  # just documented.
+  codegen-v3:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.codegen-v3
+    volumes:
+      - .:/work
+    working_dir: /work
+    command: ["pytest", "codegen/tests", "-v"]

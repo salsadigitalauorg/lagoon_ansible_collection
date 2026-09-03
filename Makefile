@@ -1,6 +1,7 @@
 COLLECTION_PATH := /usr/share/ansible/collections/ansible_collections/salsadigitalauorg/lagoon
 
-.PHONY: test build lint-docs shell fetch-schema mock-up mock-down verify-mock
+.PHONY: test build lint-docs shell fetch-schema mock-up mock-down verify-mock \
+	codegen-test codegen-shell
 
 test:            ## Run unit tests in the containerised ansible-test image
 	docker compose run --rm test-v3 units -v --requirements
@@ -32,6 +33,12 @@ verify-mock: mock-up            ## Confirm the vendored SDL loads under the mock
 	curl -sS -X POST http://localhost:4200/graphql \
 	  -H 'Content-Type: application/json' \
 	  -d '{"query":"{ me { id email } }"}' | grep -q '"email"'
+
+codegen-test:            ## Run codegen's own test suite in its own container
+	docker compose run --rm codegen-v3
+
+codegen-shell:
+	docker compose run --rm --entrypoint bash codegen-v3
 
 fetch-schema:            ## Fetch and vendor the Lagoon SDL. Requires LAGOON_GRAPHQL, LAGOON_TOKEN, LAGOON_VERSION
 	@test -n "$(LAGOON_GRAPHQL)" || (echo "LAGOON_GRAPHQL is required" && exit 1)

@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /work
+
+COPY codegen/requirements.txt /tmp/codegen-requirements.txt
+
+RUN set -ex; \
+  python -m pip install --no-cache-dir -r /tmp/codegen-requirements.txt
+
+CMD ["pytest", "codegen/tests", "-v"]
