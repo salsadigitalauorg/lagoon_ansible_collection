@@ -7,6 +7,12 @@
 **Status:** Ready for implementation
 **Inserted before:** P3-S4 (golden target must be built against the settled rule)
 
+**Amended by:** [P3-D18](./v3-phase3-stories.md), story **P3-S4a** — a bounded,
+scalar-leaf list is additionally permitted one level beneath a
+single-valued hop (never beneath a list hop). See
+[`2026-09-04-p3-s4-project-golden-target.md`](./2026-09-04-p3-s4-project-golden-target.md).
+The rule below is otherwise unchanged.
+
 ---
 
 ## Why this story exists
