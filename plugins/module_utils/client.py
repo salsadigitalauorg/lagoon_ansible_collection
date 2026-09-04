@@ -114,11 +114,20 @@ class LagoonClient:
     @staticmethod
     def build_query(operation, *, fields, args=None, operation_type='query',
                      operation_name=None):
-        """Build a FLAT single-level GraphQL document.
+        """Build a single-level-of-nesting GraphQL document.
 
         ``args`` maps GraphQL variable name -> GraphQL type, e.g.
-        ``{'name': 'String!'}``. ``fields`` is a list of scalar field names.
-        No nesting is permitted.
+        ``{'name': 'String!'}``. ``fields`` is a list whose entries are
+        either a plain scalar field name, or a single-entry mapping
+        ``{nesting_field: [leaf, leaf, ...]}`` selecting a bounded hop one
+        level deep -- e.g. ``{'openshift': ['id', 'name']}``. This method
+        has no SDL access and cannot tell a single-valued object hop from
+        a list hop, or a scalar leaf from an object one; it only enforces
+        the syntactic shape (valid identifiers, no caller-controlled
+        braces, at most one level of nesting). Whether a given nesting
+        field and its leaves are actually *permitted* is a semantic check
+        the SDL-backed guard performs separately -- see
+        ``tests/unit/plugins/module_utils/query_depth.py``.
 
         ``fields=[]`` is accepted and emits no selection set at all -- some
         mutations return a scalar (e.g. ``deleteProject`` returns
@@ -146,12 +155,8 @@ class LagoonClient:
 
         if fields is None:
             fields = []
-        for field in fields:
-            if not isinstance(field, str) or not field or \
-                    _FIELD_FORBIDDEN_RE.search(field):
-                raise LagoonConfigError(
-                    "invalid field %r: fields must be plain scalar names, "
-                    "no braces, parentheses or whitespace" % (field,))
+        rendered_fields = [
+            LagoonClient._render_field(field) for field in fields]
 
         if arg_names:
             var_decls = ', '.join(
@@ -164,12 +169,61 @@ class LagoonClient:
             header = '%s %s' % (operation_type, op_name)
             call = operation
 
-        if fields:
-            selection = ' { %s }' % ' '.join(fields)
+        if rendered_fields:
+            selection = ' { %s }' % ' '.join(rendered_fields)
         else:
             selection = ''
 
         return '%s { %s%s }' % (header, call, selection)
+
+    @staticmethod
+    def _render_field(field):
+        """Render one ``fields`` entry: a plain leaf name, or a
+        single-entry ``{nesting_field: [leaf, ...]}`` mapping for a
+        bounded, one-level-deep hop. Raises :class:`LagoonConfigError` for
+        anything else, including a mapping nested inside a mapping --
+        that recursion is refused structurally, not merely discouraged.
+        """
+        if isinstance(field, str):
+            if not field or _FIELD_FORBIDDEN_RE.search(field):
+                raise LagoonConfigError(
+                    "invalid field %r: fields must be plain scalar names, "
+                    "no braces, parentheses or whitespace" % (field,))
+            return field
+
+        if isinstance(field, dict):
+            if len(field) != 1:
+                raise LagoonConfigError(
+                    "invalid nested field %r: a mapping entry must have "
+                    "exactly one key" % (field,))
+            nesting_field, leaves = next(iter(field.items()))
+            if not isinstance(nesting_field, str) or \
+                    not _IDENTIFIER_RE.match(nesting_field):
+                raise LagoonConfigError(
+                    "invalid nesting field name %r" % (nesting_field,))
+            if not isinstance(leaves, list) or not leaves:
+                raise LagoonConfigError(
+                    "invalid leaves for nested field %r: must be a "
+                    "non-empty list" % (nesting_field,))
+            rendered_leaves = []
+            for leaf in leaves:
+                if isinstance(leaf, dict):
+                    raise LagoonConfigError(
+                        "invalid leaf %r under %r: nesting is permitted "
+                        "one level only" % (leaf, nesting_field))
+                if not isinstance(leaf, str) or not leaf or \
+                        _FIELD_FORBIDDEN_RE.search(leaf):
+                    raise LagoonConfigError(
+                        "invalid leaf %r under %r: leaves must be plain "
+                        "scalar names, no braces, parentheses or "
+                        "whitespace" % (leaf, nesting_field))
+                rendered_leaves.append(leaf)
+            return '%s { %s }' % (nesting_field, ' '.join(rendered_leaves))
+
+        raise LagoonConfigError(
+            "invalid field %r: fields entries must be a plain scalar "
+            "name or a single-entry {nesting_field: [leaves]} mapping" %
+            (field,))
 
     # -- Internal: retry/backoff ---------------------------------------
 

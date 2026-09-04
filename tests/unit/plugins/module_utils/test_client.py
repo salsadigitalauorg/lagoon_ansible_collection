@@ -117,6 +117,84 @@ class TestBuildQuery(unittest.TestCase):
         self.assertEqual(q1, q2)
 
 
+class TestBuildQueryNestedField(unittest.TestCase):
+    """The mapping form for a bounded, one-level-deep hop. This class has
+    no SDL access and does not distinguish a single-valued object hop
+    from a list hop -- both render identically; that distinction is the
+    SDL-backed guard's job, not build_query()'s.
+    """
+
+    def test_single_valued_shaped_nesting(self):
+        q = LagoonClient.build_query(
+            'projectByName',
+            fields=['id', {'openshift': ['id', 'name']}],
+            args={'name': 'String!'})
+        self.assertEqual(
+            q,
+            "query projectByName($name: String!) { "
+            "projectByName(name: $name) { id openshift { id name } } }")
+
+    def test_list_shaped_nesting_renders_identically_to_single_valued(self):
+        q = LagoonClient.build_query(
+            'projectByName',
+            fields=['id', {'environments': ['id', 'name']}],
+            args={'name': 'String!'})
+        self.assertEqual(
+            q,
+            "query projectByName($name: String!) { "
+            "projectByName(name: $name) { id environments { id name } } }")
+
+    def test_multiple_nested_fields_in_one_document(self):
+        q = LagoonClient.build_query(
+            'projectByName',
+            fields=[{'openshift': ['id']}, {'kubernetes': ['id']}],
+            args={'name': 'String!'})
+        self.assertEqual(
+            q,
+            "query projectByName($name: String!) { "
+            "projectByName(name: $name) { openshift { id } "
+            "kubernetes { id } } }")
+
+    def test_rejects_mapping_nested_inside_mapping(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query(
+                'projectByName',
+                fields=[{'environments': [{'openshift': ['id']}]}],
+                args={'name': 'String!'})
+
+    def test_rejects_brace_bearing_nesting_key(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query(
+                'me', fields=[{'evil { nested }': ['id']}])
+
+    def test_rejects_whitespace_bearing_nesting_key(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query(
+                'me', fields=[{'evil nested': ['id']}])
+
+    def test_rejects_empty_leaf_list(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query('me', fields=[{'openshift': []}])
+
+    def test_rejects_non_list_leaves(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query('me', fields=[{'openshift': 'id'}])
+
+    def test_rejects_multi_key_mapping(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query(
+                'me', fields=[{'openshift': ['id'], 'kubernetes': ['id']}])
+
+    def test_rejects_brace_bearing_leaf(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query(
+                'me', fields=[{'openshift': ['id { nested }']}])
+
+    def test_rejects_unsupported_field_type(self):
+        with self.assertRaises(LagoonConfigError):
+            LagoonClient.build_query('me', fields=[123])
+
+
 class TestConstructor(unittest.TestCase):
 
     def test_missing_endpoint(self):

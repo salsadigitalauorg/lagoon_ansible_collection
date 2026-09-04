@@ -1,9 +1,27 @@
-"""Flat-query nesting-depth guardrail.
+"""Selection-shape guardrail for GraphQL documents.
 
-Enforces the REST-semantics rule (docs/plans/v3-refactor.md 7.1): every
-GraphQL document in the collection must be a *flat*, single-level query --
-one operation selection set, and at most one level of field selection below
-it. No field's selection set may itself contain a nested selection set.
+Every GraphQL document this collection builds must be minimal, plus a
+bounded nesting rule -- not a raw selection-set depth limit. A document
+may select:
+
+- any number of scalar/enum leaves at the top level;
+- a **bounded object hop**: a single-valued object field, one level deep,
+  whose own leaves are all scalar/enum;
+- **one** collection (list) hop per document: a list-valued field, one
+  level deep, whose own leaves are all scalar/enum.
+
+An object-typed leaf beneath any nested selection is forbidden -- that is
+v1's actual defect (``environments { openshift { ... } }``), not merely a
+depth number. A second list selection in the same document is forbidden
+even if each, alone, would be permitted -- this is what stops a future
+document reassembling v1's ``projectInfo`` breadth one field at a time.
+
+Whether a given nesting field is *permitted* at all, and which kind (single
+or list) and leaves it declares, is governed by an explicit registry
+(:data:`PERMITTED_NESTED_SELECTIONS`) validated against the vendored SDL by
+:func:`assert_registry_matches_sdl` -- the guard's own text-based parser has
+no schema knowledge and cannot infer list-ness or leaf-object-ness on its
+own.
 
 This module is a **test-time helper**, not runtime code. It lives under
 ``tests/`` rather than ``plugins/`` deliberately and must not be
@@ -18,23 +36,27 @@ stays a plain function call, never an ``import`` of an actual *module*
 file under ``plugins/modules/`` (those require a constructed
 ``AnsibleModule`` to run at all).
 
-Depth is computed with a small character scanner rather than a regex --
-brace-nesting depth is not a regular language, and the scanner must be
-aware of string literals (including GraphQL block strings) and ``#``
-comments so that braces appearing inside them are not mistaken for
-selection-set boundaries.
+Two layers, deliberately kept separate:
 
-Depth definition, precisely::
+1. :func:`max_selection_depth` -- a character scanner (not a regex; brace
+   nesting is not a regular language) that only detects a malformed
+   document: unbalanced braces, or an unterminated string/block-string.
+   It is aware of string literals and ``#`` comments so that braces
+   appearing inside either are never mistaken for selection-set
+   boundaries. It says nothing about shape.
+2. :func:`parse_root_selection` / :func:`classify_selection_shape` -- a
+   small recursive-descent parser building an actual selection tree,
+   which :func:`assert_flat_query` classifies against the registry. This
+   is what replaced the old raw depth ceiling (previously
+   ``MAX_PERMITTED_DEPTH = 2``): depth alone cannot tell
+   ``environments { id }`` (permitted) from ``environments { openshift {
+   id } }`` (forbidden) -- both are the same depth.
 
-    query ($name: String!) { projectByName(name: $name) { id name } }
-                             ^ depth 1                    ^ depth 2
-
-- depth 1 = the operation's own selection set
-- depth 2 = a field's selection set
-
-The maximum permitted depth is **2**. A document with no selection set at
-all (e.g. a mutation returning a bare scalar) has max depth 1 and is valid.
-Anything reaching depth 3 or deeper is a violation.
+SDL parsing (registry conformance) uses the standard library only --
+``codegen/``'s ``graphql-core`` dependency must never reach the
+environment that runs this test suite; a regex/brace scan over the
+vendored SDL text is sufficient to answer "is this field list-typed"
+and "is this leaf scalar/enum".
 """
 
 from __future__ import (absolute_import, division, print_function)
@@ -103,9 +125,15 @@ class QueryDepthError(ValueError):
     string/comment -- i.e. the scanner cannot compute a depth at all."""
 
 
-#: The REST-semantics rule permits at most one level of field selection
-#: below the operation's own selection set.
-MAX_PERMITTED_DEPTH = 2
+class ShapeViolation(ValueError):
+    """Raised by :func:`classify_selection_shape` when a parsed selection
+    tree violates the nesting rule. ``reason`` is a short machine-checkable
+    tag so a test can assert *which* rule fired, not just that one did.
+    """
+
+    def __init__(self, reason, message):
+        self.reason = reason
+        super(ShapeViolation, self).__init__(message)
 
 
 def max_selection_depth(document):
@@ -187,22 +215,477 @@ def max_selection_depth(document):
     return max_depth
 
 
-def assert_flat_query(document, source=None):
-    """Raise :class:`AssertionError` if ``document`` nests deeper than
-    :data:`MAX_PERMITTED_DEPTH`.
+#: Parent type -> nesting field -> (kind, permitted scalar/enum leaves).
+#: ``kind`` is ``'single'`` for a single-valued object hop or ``'list'``
+#: for a collection hop -- checked against the SDL by
+#: :func:`assert_registry_matches_sdl`, never assumed from the call site.
+#: A nested selection is permitted only if its nesting field appears here,
+#: with only the declared leaves selected beneath it, and at most one
+#: ``'list'``-kind entry used per document (see
+#: :func:`classify_selection_shape`). Adding an entry is a reviewable diff,
+#: not an emergent property of a scanner.
+PERMITTED_NESTED_SELECTIONS = {
+    'Project': {
+        'openshift': ('single', ('id', 'name')),
+        'kubernetes': ('single', ('id', 'name')),
+        'autogeneratedRouteConfig': ('single', (
+            'enabled', 'allowPullRequests', 'prefixes',
+            'disableRequestVerification')),
+        'organizationDetails': ('single', ('id', 'name')),
+        'environments': ('list', (
+            'id', 'name', 'environmentType',
+            'kubernetesNamespaceName', 'deployType', 'autoIdle')),
+    },
+    'Environment': {
+        'project': ('single', ('id', 'name')),
+        'openshift': ('single', ('id', 'name')),
+        'kubernetes': ('single', ('id', 'name')),
+        'autogeneratedRouteConfig': ('single', (
+            'enabled', 'allowPullRequests', 'prefixes',
+            'disableRequestVerification')),
+    },
+}
 
-    ``source`` -- typically ``"<path>:<name-or-lineno>"`` -- is included in
-    the failure output so a sweep failure names the offending file and
-    symbol, not just the document text.
+
+class _Selection:
+    """One parsed field selection. ``sub`` is a list of child
+    :class:`_Selection` (a nested selection set), or ``None`` for a leaf.
     """
-    depth = max_selection_depth(document)
-    if depth > MAX_PERMITTED_DEPTH:
+
+    __slots__ = ('name', 'sub')
+
+    def __init__(self, name, sub=None):
+        self.name = name
+        self.sub = sub
+
+
+_IDENT_CHAR_RE = re.compile(r'[A-Za-z0-9_]')
+
+
+def _skip_string_or_comment(document, i):
+    """If ``document[i]`` begins a ``#`` comment or a string/block-string
+    literal, return the index just past it. Otherwise return ``i``
+    unchanged. Shared by the selection parser so it ignores braces,
+    parentheses and identifiers inside either, exactly as
+    :func:`max_selection_depth` already does.
+    """
+    n = len(document)
+    ch = document[i]
+    if ch == '#':
+        newline = document.find('\n', i)
+        return n if newline == -1 else newline + 1
+    if ch == '"':
+        if document[i:i + 3] == '"""':
+            end = document.find('"""', i + 3)
+            if end == -1:
+                raise QueryDepthError(
+                    "unterminated block string (triple-quote) starting "
+                    "at position %d" % i)
+            return end + 3
+        j = i + 1
+        while j < n:
+            if document[j] == '\\':
+                j += 2
+                continue
+            if document[j] == '"':
+                return j + 1
+            j += 1
+        raise QueryDepthError(
+            "unterminated string literal starting at position %d" % i)
+    return i
+
+
+def _skip_trivia(document, i):
+    """Advance past whitespace, commas, comments and string literals --
+    everything that can separate two selection-set tokens but carries no
+    shape information of its own.
+    """
+    n = len(document)
+    while i < n:
+        ch = document[i]
+        if ch.isspace() or ch == ',':
+            i += 1
+            continue
+        if ch in ('#', '"'):
+            new_i = _skip_string_or_comment(document, i)
+            if new_i != i:
+                i = new_i
+                continue
+        break
+    return i
+
+
+def _skip_arguments(document, i):
+    """``document[i] == '('``. Return the index just past the matching
+    ``')'``, tolerant of string literals containing parentheses.
+    """
+    n = len(document)
+    depth = 0
+    while i < n:
+        ch = document[i]
+        if ch == '"':
+            i = _skip_string_or_comment(document, i)
+            continue
+        if ch == '(':
+            depth += 1
+            i += 1
+            continue
+        if ch == ')':
+            depth -= 1
+            i += 1
+            if depth == 0:
+                return i
+            continue
+        i += 1
+    raise QueryDepthError("unterminated argument list starting search")
+
+
+def _parse_selection_set(document, i):
+    """``document[i] == '{'``. Returns ``(selections, end_index)`` where
+    ``end_index`` is just past the matching ``'}'``.
+    """
+    n = len(document)
+    i += 1
+    selections = []
+    while True:
+        i = _skip_trivia(document, i)
+        if i >= n:
+            raise QueryDepthError("unterminated selection set")
+        if document[i] == '}':
+            return selections, i + 1
+        j = i
+        while j < n and _IDENT_CHAR_RE.match(document[j]):
+            j += 1
+        if j == i:
+            raise QueryDepthError(
+                "expected a field name at position %d" % i)
+        name = document[i:j]
+        i = _skip_trivia(document, j)
+        if i < n and document[i] == '(':
+            i = _skip_arguments(document, i)
+            i = _skip_trivia(document, i)
+        if i < n and document[i] == '{':
+            sub_selections, i = _parse_selection_set(document, i)
+            selections.append(_Selection(name, sub_selections))
+        else:
+            selections.append(_Selection(name, None))
+
+
+def parse_root_selection(document):
+    """Parse ``document`` and return the selection list one level below
+    the operation's single root field -- i.e. the fields selected on
+    ``projectByName(...)`` in
+    ``query ($name: String!) { projectByName(name: $name) { id name } }``
+    -- or ``None`` if the root call has no selection set at all (a bare
+    scalar return, e.g. ``deleteProject``).
+
+    Raises :class:`QueryDepthError` if the document has no selection set,
+    or its root selection set does not contain exactly one field --
+    every document this collection builds calls exactly one root
+    operation.
+    """
+    n = len(document)
+    i = 0
+    while i < n and document[i] != '{':
+        if document[i] in ('"', '#'):
+            i = _skip_string_or_comment(document, i)
+            continue
+        i += 1
+    if i >= n:
+        raise QueryDepthError("no operation selection set found")
+    root_selections, _end = _parse_selection_set(document, i)
+    if len(root_selections) != 1:
+        raise QueryDepthError(
+            "expected exactly one root field selection, found %d" %
+            len(root_selections))
+    return root_selections[0].sub
+
+
+def classify_selection_shape(selections, parent_type, registry=None):
+    """Raise :class:`ShapeViolation` if ``selections`` (the selection list
+    one level below the document's root field, as returned by
+    :func:`parse_root_selection`) violates the nesting rule. Returns
+    ``None`` on success.
+
+    ``parent_type`` names the SDL type the root field returns (e.g.
+    ``'Project'`` for ``projectByName``), used to look up which nested
+    fields are permitted in ``registry`` (default
+    :data:`PERMITTED_NESTED_SELECTIONS`).
+
+    Enforces, in order:
+
+    - every nested (non-leaf) selection's field name is declared in the
+      registry for ``parent_type`` (``reason='undeclared_nesting'``);
+    - every leaf beneath a nested selection is one of that entry's
+      declared leaves, and is itself a plain leaf, never itself nested
+      (``reason='object_leaf_beneath_nesting'``);
+    - at most one ``'list'``-kind nested selection appears in the
+      document (``reason='multiple_list_selections'``).
+
+    A document with no nested selections at all (every selection is a
+    plain leaf) always passes -- this is the common case and needs no
+    registry lookup.
+    """
+    if selections is None:
+        return None
+
+    permitted = (registry or PERMITTED_NESTED_SELECTIONS).get(
+        parent_type, {})
+    list_selections_seen = []
+
+    for selection in selections:
+        if selection.sub is None:
+            continue
+
+        if selection.name not in permitted:
+            raise ShapeViolation(
+                'undeclared_nesting',
+                "field '%s' has a nested selection but is not declared "
+                "in PERMITTED_NESTED_SELECTIONS for parent type '%s'" %
+                (selection.name, parent_type))
+
+        kind, permitted_leaves = permitted[selection.name]
+        for leaf in selection.sub:
+            if leaf.sub is not None:
+                raise ShapeViolation(
+                    'object_leaf_beneath_nesting',
+                    "field '%s' beneath nested selection '%s' has its "
+                    "own selection set -- an object leaf beneath a "
+                    "nested selection is forbidden" %
+                    (leaf.name, selection.name))
+            if leaf.name not in permitted_leaves:
+                raise ShapeViolation(
+                    'undeclared_leaf',
+                    "leaf '%s' beneath nested selection '%s' is not one "
+                    "of its declared leaves %r" %
+                    (leaf.name, selection.name, permitted_leaves))
+
+        if kind == 'list':
+            list_selections_seen.append(selection.name)
+
+    if len(list_selections_seen) > 1:
+        raise ShapeViolation(
+            'multiple_list_selections',
+            "document selects more than one list-valued nested field "
+            "in the same document: %r -- at most one collection hop is "
+            "permitted per document" % (list_selections_seen,))
+
+    return None
+
+
+def assert_flat_query(document, source=None, parent_type=None,
+                       registry=None):
+    """Raise :class:`AssertionError` if ``document`` violates the
+    selection-shape rule: unminimal, an object leaf beneath a nested
+    selection, more than one list selection per document, or a nested
+    field not declared in ``registry``.
+
+    ``source`` -- typically ``"<path>:<name-or-lineno>"`` -- is included
+    in the failure output so a sweep failure names the offending file and
+    symbol, not just the document text. ``parent_type`` names the SDL
+    type the document's root field returns, for registry lookup;
+    omitted (``None``) for documents with no nested selections, where no
+    lookup is needed.
+
+    ``max_selection_depth`` still runs first: an unbalanced or
+    unterminated document is a malformed-document error, not a shape
+    violation, and is left to raise :class:`QueryDepthError` (a
+    :class:`ValueError`) rather than :class:`AssertionError`.
+    """
+    max_selection_depth(document)
+    root_selections = parse_root_selection(document)
+    try:
+        classify_selection_shape(root_selections, parent_type, registry)
+    except ShapeViolation as e:
         where = " in %s" % source if source else ""
         raise AssertionError(
-            "GraphQL document%s exceeds max selection depth of %d "
-            "(found depth %d) -- nested selection sets are forbidden, see "
-            "docs/plans/v3-refactor.md 7.1:\n%s"
-            % (where, MAX_PERMITTED_DEPTH, depth, document))
+            "GraphQL document%s violates the selection-shape rule "
+            "(%s): %s:\n%s" % (where, e.reason, e, document))
+
+
+def _strip_sdl_descriptions(text):
+    return re.sub(r'""".*?"""', '', text, flags=re.DOTALL)
+
+
+def _strip_sdl_field_arguments(text):
+    """Collapse every parenthesised argument list to ``()`` so the field
+    regex below does not have to parse GraphQL argument syntax -- only
+    field name and return type matter for conformance checking.
+    Tolerant of parentheses inside string-literal default values.
+    """
+    result = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == '\\' else 1
+            j = min(j + 1, n)
+            result.append(text[i:j])
+            i = j
+            continue
+        if ch == '(':
+            depth = 1
+            i += 1
+            while i < n and depth > 0:
+                if text[i] == '(':
+                    depth += 1
+                elif text[i] == ')':
+                    depth -= 1
+                i += 1
+            result.append('()')
+            continue
+        result.append(ch)
+        i += 1
+    return ''.join(result)
+
+
+def _extract_sdl_type_block(sdl_text, type_name):
+    """Return the full ``type <type_name> { ... }`` block (including an
+    ``implements ...`` clause, if any) from ``sdl_text``, brace-balanced
+    and aware of string/block-string literals. ``None`` if not found.
+    """
+    pattern = re.compile(
+        r'(?:^|\n)type %s(?:\s+implements\s+[A-Za-z_][\w&\s]*)?\s*\{' %
+        re.escape(type_name))
+    m = pattern.search(sdl_text)
+    if not m:
+        return None
+    start = sdl_text.index('{', m.start())
+    i, depth, n = start, 0, len(sdl_text)
+    while i < n:
+        if sdl_text[i:i + 3] == '"""':
+            end = sdl_text.find('"""', i + 3)
+            i = (end + 3) if end != -1 else n
+            continue
+        ch = sdl_text[i]
+        if ch == '"':
+            j = i + 1
+            while j < n and sdl_text[j] != '"':
+                j += 2 if sdl_text[j] == '\\' else 1
+            i = j + 1
+            continue
+        if ch == '{':
+            depth += 1
+            i += 1
+            continue
+        if ch == '}':
+            depth -= 1
+            i += 1
+            if depth == 0:
+                return sdl_text[start:i]
+            continue
+        i += 1
+    return None
+
+
+_SDL_FIELD_RE = re.compile(
+    r'^\s*([A-Za-z_]\w*)\s*(?:\(\))?\s*:\s*(\[?[A-Za-z_]\w*\]?!?)',
+    re.MULTILINE)
+
+
+def sdl_object_type_fields(sdl_text, type_name):
+    """Return ``{field_name: raw_type_string}`` for every field declared
+    directly on ``type type_name { ... }`` in ``sdl_text`` (not
+    inherited from an interface). ``None`` if the type is not found.
+    ``raw_type_string`` keeps the SDL's own list/``!`` markers, e.g.
+    ``'[EnvKeyValue]'``, ``'String!'``.
+    """
+    block = _extract_sdl_type_block(sdl_text, type_name)
+    if block is None:
+        return None
+    clean = _strip_sdl_field_arguments(_strip_sdl_descriptions(block))
+    fields = {}
+    for m in _SDL_FIELD_RE.finditer(clean):
+        fields[m.group(1)] = m.group(2)
+    return fields
+
+
+_SDL_SCALAR_RE = re.compile(r'(?:^|\n)scalar\s+([A-Za-z_]\w*)')
+_SDL_ENUM_RE = re.compile(r'(?:^|\n)enum\s+([A-Za-z_]\w*)\s*\{')
+
+#: GraphQL's own built-in scalars, always legal leaves regardless of
+#: whether the vendored SDL declares them again.
+_BUILTIN_SCALARS = frozenset({'Int', 'String', 'Boolean', 'Float', 'ID'})
+
+
+def sdl_scalar_and_enum_names(sdl_text):
+    """Return the set of every scalar (built-in plus ``scalar X``
+    declarations) and enum type name declared in ``sdl_text`` -- the set
+    of type names legal as a plain leaf with no selection set.
+    """
+    names = set(_BUILTIN_SCALARS)
+    names.update(m.group(1) for m in _SDL_SCALAR_RE.finditer(sdl_text))
+    names.update(m.group(1) for m in _SDL_ENUM_RE.finditer(sdl_text))
+    return names
+
+
+def assert_registry_matches_sdl(sdl_text, registry=None):
+    """Raise :class:`AssertionError` if any entry in ``registry``
+    (default :data:`PERMITTED_NESTED_SELECTIONS`) does not conform to
+    ``sdl_text``:
+
+    - the parent type and nesting field both exist;
+    - the declared ``kind`` (``'single'``/``'list'``) matches the SDL's
+      actual list-ness for that field;
+    - every declared leaf exists on the nested field's own type and is
+      itself scalar/enum (never an object) -- this is what stops the
+      registry drifting into permitting the exact fan-out the rule
+      exists to forbid.
+    """
+    registry = registry or PERMITTED_NESTED_SELECTIONS
+    scalar_and_enum_names = sdl_scalar_and_enum_names(sdl_text)
+
+    for parent_type, nested_fields in registry.items():
+        parent_fields = sdl_object_type_fields(sdl_text, parent_type)
+        if parent_fields is None:
+            raise AssertionError(
+                "registry parent type '%s' does not exist in the SDL" %
+                parent_type)
+
+        for nesting_field, (kind, leaves) in nested_fields.items():
+            if nesting_field not in parent_fields:
+                raise AssertionError(
+                    "registry field '%s.%s' does not exist in the SDL" %
+                    (parent_type, nesting_field))
+
+            raw_type = parent_fields[nesting_field]
+            is_list_in_sdl = raw_type.startswith('[')
+            sdl_kind = 'list' if is_list_in_sdl else 'single'
+            if sdl_kind != kind:
+                raise AssertionError(
+                    "registry declares '%s.%s' as kind=%r but the SDL "
+                    "declares it as a %s type (%r)" %
+                    (parent_type, nesting_field, kind, sdl_kind, raw_type))
+
+            nested_type_name = raw_type.strip('[]!')
+            nested_fields_map = sdl_object_type_fields(
+                sdl_text, nested_type_name)
+            if nested_fields_map is None:
+                raise AssertionError(
+                    "registry field '%s.%s' points at type '%s', which "
+                    "has no SDL object-type definition to validate "
+                    "leaves against" %
+                    (parent_type, nesting_field, nested_type_name))
+
+            for leaf in leaves:
+                if leaf not in nested_fields_map:
+                    raise AssertionError(
+                        "registry leaf '%s' under '%s.%s' does not "
+                        "exist on SDL type '%s'" %
+                        (leaf, parent_type, nesting_field,
+                         nested_type_name))
+                leaf_raw_type = nested_fields_map[leaf]
+                leaf_type_name = leaf_raw_type.strip('[]!')
+                if leaf_type_name not in scalar_and_enum_names:
+                    raise AssertionError(
+                        "registry leaf '%s.%s.%s' has SDL type '%s', "
+                        "which is not a scalar or enum -- an object leaf "
+                        "beneath a nested selection would reintroduce "
+                        "the fan-out this rule exists to forbid" %
+                        (parent_type, nesting_field, leaf,
+                         leaf_raw_type))
 
 
 def _iter_python_files(root_dir):

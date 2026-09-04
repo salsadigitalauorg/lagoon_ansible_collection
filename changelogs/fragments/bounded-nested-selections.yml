@@ -1,0 +1,7 @@
+---
+minor_changes:
+  - Replaced the flat-query guardrail's raw selection-set depth limit
+    with a selection-shape rule, so ``module_utils/client.py`` can read a
+    bounded object hop (for example ``openshift { id }``) or a single
+    list hop (for example ``environments { id, environmentType }``)
+    without reintroducing v1's unbounded per-row fan-out.
