@@ -72,7 +72,12 @@ These are enforced by tests. Breaking one is a defect, not a style choice.
   `action_groups` only shares `module_defaults` — it does not affect dispatch.
 - **No `gql`, `graphql-core`, `requests` or `urllib3` at runtime.** Per-file
   AST guard tests enforce this.
-- **Flat GraphQL queries only**, maximum selection-set depth 2, enforced by
+- **GraphQL selections are shape-bound, not depth-bound.** A document may
+  select scalar leaves, a bounded single-valued object hop, and at most **one**
+  list hop — each with scalar/enum leaves only. One further bounded
+  scalar-leaf list is permitted beneath a single-valued hop, never beneath a
+  list hop, and never a third level. Every nesting field must be declared in
+  `PERMITTED_NESTED_SELECTIONS`; adding one is a reviewable diff. Enforced by
   `tests/unit/plugins/module_utils/query_depth.py`.
 - **All user data passes through the GraphQL `variables` map.** Never
   interpolate user data into a query document — v1 did, and that is injection.
