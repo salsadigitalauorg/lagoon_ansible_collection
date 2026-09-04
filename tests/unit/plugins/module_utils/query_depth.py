@@ -719,7 +719,8 @@ def assert_registry_matches_sdl(sdl_text, registry=None):
     - a leaf declared as a nested list (``{field: ('list', (leaf, ...))}``,
       permitted only beneath a ``'single'``-kind entry) is itself a real
       list field on the nesting field's own SDL type, and every one of
-      *its* declared leaves is scalar/enum in turn.
+      *its* declared leaves is scalar/enum in turn -- a third level of
+      nesting is rejected outright rather than validated.
     """
     registry = registry or PERMITTED_NESTED_SELECTIONS
     scalar_and_enum_names = sdl_scalar_and_enum_names(sdl_text)
@@ -794,6 +795,14 @@ def assert_registry_matches_sdl(sdl_text, registry=None):
                             (label, inner_field, inner_type_name))
                     inner_label = '%s.%s' % (label, inner_field)
                     for inner_leaf in inner_leaves:
+                        if isinstance(inner_leaf, dict):
+                            raise AssertionError(
+                                "registry declares a further nested "
+                                "selection %r beneath '%s' -- nesting is "
+                                "permitted two levels only, and a third "
+                                "level would reintroduce the fan-out "
+                                "this rule exists to forbid" %
+                                (inner_leaf, inner_label))
                         _assert_leaf_is_scalar_or_enum(
                             inner_fields_map, inner_type_name, inner_leaf,
                             scalar_and_enum_names, inner_label)
