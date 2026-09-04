@@ -160,8 +160,8 @@ docker compose run --rm lint-docs-v3                      # or: make lint-docs
 
 - Conventional Commits with a `(v3)` scope: `feat(v3):`, `fix(v3):`,
   `test(v3):`, `docs:`.
-- The body explains *why*. Unlike code comments, commit bodies **may** (and
-  should) reference story IDs and plan paths.
+- The body explains *why*, in a terse manner.  Similar to code comments,
+  commit bodies should not reference story IDs and plan paths.
 - Add a `changelogs/fragments/` entry for user-visible changes. Sections are
   defined in `changelogs/config.yaml`.
 - **One story, one commit.** See "How to work these stories" in the current
