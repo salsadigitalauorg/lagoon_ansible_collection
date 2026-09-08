@@ -390,13 +390,10 @@ def _parse_selection_set(document, i):
             selections.append(_Selection(name, None))
 
 
-def parse_root_selection(document):
-    """Parse ``document`` and return the selection list one level below
-    the operation's single root field -- i.e. the fields selected on
-    ``projectByName(...)`` in
-    ``query ($name: String!) { projectByName(name: $name) { id name } }``
-    -- or ``None`` if the root call has no selection set at all (a bare
-    scalar return, e.g. ``deleteProject``).
+def _parse_root_field(document):
+    """Parse ``document`` and return its single root field as a
+    :class:`_Selection` -- e.g. the ``projectByName(...)`` selection in
+    ``query ($name: String!) { projectByName(name: $name) { id name } }``.
 
     Raises :class:`QueryDepthError` if the document has no selection set,
     or its root selection set does not contain exactly one field --
@@ -417,7 +414,32 @@ def parse_root_selection(document):
         raise QueryDepthError(
             "expected exactly one root field selection, found %d" %
             len(root_selections))
-    return root_selections[0].sub
+    return root_selections[0]
+
+
+def parse_root_selection(document):
+    """Parse ``document`` and return the selection list one level below
+    the operation's single root field -- i.e. the fields selected on
+    ``projectByName(...)`` in
+    ``query ($name: String!) { projectByName(name: $name) { id name } }``
+    -- or ``None`` if the root call has no selection set at all (a bare
+    scalar return, e.g. ``deleteProject``).
+
+    Raises :class:`QueryDepthError` under the same conditions as
+    :func:`_parse_root_field`.
+    """
+    return _parse_root_field(document).sub
+
+
+def root_field_name(document):
+    """Return the name of ``document``'s single root field (e.g.
+    ``'projectByName'`` for a ``projectByName(name: $name) { ... }``
+    document), so a caller can resolve the SDL type that field returns.
+
+    Raises :class:`QueryDepthError` under the same conditions as
+    :func:`parse_root_selection`.
+    """
+    return _parse_root_field(document).name
 
 
 def _split_leaf_declarations(permitted_leaves):
@@ -669,6 +691,36 @@ def sdl_object_type_fields(sdl_text, type_name):
     return fields
 
 
+#: The two SDL root operation types a document's root field can live on.
+_SDL_ROOT_TYPES = ('Query', 'Mutation')
+
+
+def resolve_root_parent_type(document, sdl_text):
+    """Return the bare SDL type name ``document``'s root field returns
+    (e.g. ``'Project'`` for a ``projectByName`` document), for use as
+    :func:`assert_flat_query`'s ``parent_type``. ``None`` when the root
+    field is declared on neither ``Query`` nor ``Mutation``.
+
+    Without this, a caller checking a reconstructed document has no way
+    to name the parent type, so the registry lookup in
+    :func:`classify_selection_shape` finds nothing and every nested
+    selection classifies as ``undeclared_nesting`` -- including one the
+    registry legally declares. Returning ``None`` reproduces exactly that
+    (unavoidably, for a field this SDL does not declare); returning a
+    resolved name is what lets a legal bounded hop pass.
+
+    List/``!`` markers are stripped, so a list-returning root field
+    resolves to its element type -- the registry keys on the type whose
+    fields the document actually selects.
+    """
+    field_name = root_field_name(document)
+    for root_type in _SDL_ROOT_TYPES:
+        root_fields = sdl_object_type_fields(sdl_text, root_type)
+        if root_fields and field_name in root_fields:
+            return root_fields[field_name].strip('[]!')
+    return None
+
+
 _SDL_SCALAR_RE = re.compile(r'(?:^|\n)scalar\s+([A-Za-z_]\w*)')
 _SDL_ENUM_RE = re.compile(r'(?:^|\n)enum\s+([A-Za-z_]\w*)\s*\{')
 
@@ -847,29 +899,81 @@ def _module_and_class_level_assigns(tree):
     return results
 
 
-def _literal_from_ast(node):
+def _module_and_class_level_literals(tree):
+    """Return ``{name: value}`` for every module-level or class-level
+    assignment of a statically-resolvable literal to a plain name --
+    lists, tuples, dicts and scalars alike, not just the strings
+    :func:`_module_and_class_level_assigns` collects.
+
+    Kept separate from that function rather than widening it: its callers
+    treat every value it yields as a candidate GraphQL *document* string,
+    so returning a list from it would make them scan non-documents.
+
+    Used to resolve a ``fields=_SOME_CONSTANT`` reference at a
+    ``build_query(...)`` call site. A name assigned more than once is
+    dropped entirely -- which of the two values reaches the call cannot
+    be known statically, and resolving it to either would risk checking a
+    document the code never builds.
+    """
+    literals = {}
+    seen_twice = set()
+
+    def _scan_body(body):
+        for stmt in body:
+            if isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if not isinstance(target, ast.Name):
+                        continue
+                    if target.id in literals or target.id in seen_twice:
+                        literals.pop(target.id, None)
+                        seen_twice.add(target.id)
+                        continue
+                    try:
+                        literals[target.id] = _literal_from_ast(stmt.value)
+                    except ValueError:
+                        seen_twice.add(target.id)
+            if isinstance(stmt, ast.ClassDef):
+                _scan_body(stmt.body)
+
+    _scan_body(tree.body)
+    return literals
+
+
+def _literal_from_ast(node, constants=None):
     """Return the plain Python value ``node`` represents if -- and only
     if -- it is fully built from :class:`ast.Constant` leaves (nested
     inside, at most, ``ast.List``/``ast.Tuple``/``ast.Dict``).
 
-    Raises :class:`ValueError` for anything else (a name reference, a
+    ``constants``, when supplied, is a ``{name: value}`` map from
+    :func:`_module_and_class_level_literals` permitting a bare
+    :class:`ast.Name` to resolve to a module-level constant's value. A
+    ``fields`` list held in such a constant is the natural way to write a
+    non-trivial read selection, and leaving it unresolved makes the sweep
+    skip the call site entirely rather than check it -- so the document is
+    never examined at all, which is strictly worse than checking it.
+
+    Raises :class:`ValueError` for anything else (an unknown name, a
     function call, a comprehension, an f-string, ...) so the caller can
     treat the containing ``build_query(...)`` invocation as not fully
     statically resolvable, rather than silently resolving to a wrong or
     partial value.
     """
+    if isinstance(node, ast.Name):
+        if constants is not None and node.id in constants:
+            return constants[node.id]
+        raise ValueError("unresolvable name reference: %r" % (node.id,))
     if isinstance(node, ast.Constant):
         return node.value
     if isinstance(node, ast.List):
-        return [_literal_from_ast(elt) for elt in node.elts]
+        return [_literal_from_ast(elt, constants) for elt in node.elts]
     if isinstance(node, ast.Tuple):
-        return tuple(_literal_from_ast(elt) for elt in node.elts)
+        return tuple(_literal_from_ast(elt, constants) for elt in node.elts)
     if isinstance(node, ast.Dict):
         if any(k is None for k in node.keys):
             # A ``**spread`` entry -- not a literal key/value pair.
             raise ValueError("dict contains a non-literal spread entry")
         return {
-            _literal_from_ast(k): _literal_from_ast(v)
+            _literal_from_ast(k, constants): _literal_from_ast(v, constants)
             for k, v in zip(node.keys, node.values)
         }
     raise ValueError("not a statically resolvable literal: %r" % (node,))
@@ -966,14 +1070,19 @@ def _call_is_trusted_build_query(node, trusted_client_names,
     return False
 
 
-def _resolve_build_query_args(node):
+def _resolve_build_query_args(node, constants=None):
     """Resolve ``node`` (a call to ``build_query``) to the
     ``(operation, kwargs)`` pair :meth:`LagoonClient.build_query` would
     receive at runtime.
 
+    ``constants`` is passed through to :func:`_literal_from_ast`, letting
+    an argument held in a module-level constant (typically ``fields``)
+    resolve to its value instead of forcing the whole call site to
+    ``UNRESOLVED_BUILD_QUERY``.
+
     Raises :class:`ValueError` if any argument is not fully statically
-    resolvable (dynamic ``fields``, a variable, a comprehension, a
-    ``*args``/``**kwargs`` spread, ...) or if the call shape omits a
+    resolvable (dynamic ``fields``, an unknown variable, a comprehension,
+    a ``*args``/``**kwargs`` spread, ...) or if the call shape omits a
     required argument -- callers must record such a call site as
     unresolved rather than dropping it, so it still counts toward the
     vacuous-pass guard while making the "not checked" state visible
@@ -986,9 +1095,9 @@ def _resolve_build_query_args(node):
     for keyword in node.keywords:
         if keyword.arg is None:
             raise ValueError("**kwargs spread is not statically resolvable")
-        kwargs[keyword.arg] = _literal_from_ast(keyword.value)
+        kwargs[keyword.arg] = _literal_from_ast(keyword.value, constants)
 
-    positional = [_literal_from_ast(arg) for arg in node.args]
+    positional = [_literal_from_ast(arg, constants) for arg in node.args]
 
     if positional:
         if 'operation' in kwargs:
@@ -1016,7 +1125,7 @@ def _resolve_build_query_args(node):
     return operation, kwargs
 
 
-def _reconstruct_build_query_call(node):
+def _reconstruct_build_query_call(node, constants=None):
     """Reconstruct the GraphQL document a trusted ``build_query(...)``
     call site would produce at runtime.
 
@@ -1029,7 +1138,7 @@ def _reconstruct_build_query_call(node):
     violation, not merely "not checked".
     """
     try:
-        operation, kwargs = _resolve_build_query_args(node)
+        operation, kwargs = _resolve_build_query_args(node, constants)
     except ValueError:
         return UNRESOLVED_BUILD_QUERY
 
@@ -1059,6 +1168,7 @@ def _build_query_call_sites(tree, path):
     trusted_client_names = _names_bound_to_lagoon_client(tree)
     trusted_bare_names = _names_bound_to_build_query(
         tree, trusted_client_names)
+    constants = _module_and_class_level_literals(tree)
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not _is_build_query_call(node):
@@ -1069,7 +1179,7 @@ def _build_query_call_sites(tree, path):
                 node, trusted_client_names, trusted_bare_names):
             yield (label, SHADOWED_BUILD_QUERY)
         else:
-            yield (label, _reconstruct_build_query_call(node))
+            yield (label, _reconstruct_build_query_call(node, constants))
 
 
 def _doc_constant_value_node_ids(tree):
@@ -1107,11 +1217,13 @@ def collect_candidate_documents(root_dir):
        ``LagoonClient.build_query(...)``, or bare ``build_query(...)``
        via a plain alias). One that provably resolves to the real
        :meth:`LagoonClient.build_query` is reconstructed by calling that
-       real implementation with its statically-resolved arguments, and
-       may itself be paired with a placeholder instead of a document:
-       :data:`UNRESOLVED_BUILD_QUERY` (arguments not fully resolvable --
-       skip the depth assertion for this entry) or
-       :data:`INVALID_BUILD_QUERY` (arguments resolve, but the real
+       real implementation with its statically-resolved arguments --
+       including an argument held in a module-level or class-level
+       constant, so a ``fields`` list written that way is checked rather
+       than skipped. Such a call may still be paired with a placeholder
+       instead of a document: :data:`UNRESOLVED_BUILD_QUERY` (arguments
+       not fully resolvable -- skip the depth assertion for this entry)
+       or :data:`INVALID_BUILD_QUERY` (arguments resolve, but the real
        implementation rejects them -- an unconditional violation). A
        call that cannot be proven to reach the real implementation at
        all -- a shadowing local ``build_query`` -- is paired with

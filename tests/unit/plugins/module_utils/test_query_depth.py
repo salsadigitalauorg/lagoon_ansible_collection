@@ -24,6 +24,8 @@ from .query_depth import (
     collect_candidate_documents,
     max_selection_depth,
     parse_root_selection,
+    resolve_root_parent_type,
+    root_field_name,
     sdl_object_type_fields,
     sdl_scalar_and_enum_names,
 )
@@ -578,6 +580,239 @@ class TestBuildQueryIntegration(unittest.TestCase):
         assert_flat_query(q, source='build_query:me')
 
 
+class TestRootFieldName(unittest.TestCase):
+
+    def test_query_root_field_name(self):
+        self.assertEqual(
+            root_field_name(
+                'query ($name: String!) { projectByName(name: $name) '
+                '{ id } }'),
+            'projectByName')
+
+    def test_mutation_root_field_name(self):
+        self.assertEqual(
+            root_field_name(
+                'mutation ($input: DeleteProjectInput!) { deleteProject('
+                'input: $input) }'),
+            'deleteProject')
+
+    def test_two_root_fields_raises(self):
+        with self.assertRaises(QueryDepthError):
+            root_field_name('query { me { id } you { id } }')
+
+
+class TestResolveRootParentType(unittest.TestCase):
+    """The parent_type resolution half of the sweep's guard fixes.
+
+    Reverting resolve_root_parent_type (or the sweep's use of it) alone
+    breaks these and
+    TestParentTypeResolutionInSweep::test_declared_bounded_hop_passes_the_sweep,
+    while the constant-resolution tests in
+    TestConstantFieldsResolutionInSweep stay green -- the two fixes are
+    independently proven, so a future partial revert is still caught.
+    """
+
+    def setUp(self):
+        self.sdl_text = _SDL_PATH.read_text(encoding='utf-8')
+
+    def test_query_field_resolves_to_its_return_type(self):
+        document = LagoonClient.build_query(
+            'projectByName', fields=['id'], args={'name': 'String!'})
+        self.assertEqual(
+            resolve_root_parent_type(document, self.sdl_text), 'Project')
+
+    def test_mutation_field_resolves_to_its_return_type(self):
+        document = LagoonClient.build_query(
+            'addProject', fields=['id'], args={'input': 'AddProjectInput!'},
+            operation_type='mutation')
+        self.assertEqual(
+            resolve_root_parent_type(document, self.sdl_text), 'Project')
+
+    def test_scalar_returning_mutation_resolves_to_the_scalar(self):
+        document = LagoonClient.build_query(
+            'deleteProject', fields=[],
+            args={'input': 'DeleteProjectInput!'},
+            operation_type='mutation')
+        self.assertEqual(
+            resolve_root_parent_type(document, self.sdl_text), 'String')
+
+    def test_list_returning_field_resolves_to_its_element_type(self):
+        document = LagoonClient.build_query(
+            'allProjects', fields=['id'])
+        self.assertEqual(
+            resolve_root_parent_type(document, self.sdl_text), 'Project')
+
+    def test_unknown_root_field_resolves_to_none(self):
+        document = LagoonClient.build_query('noSuchRootField', fields=['id'])
+        self.assertIsNone(
+            resolve_root_parent_type(document, self.sdl_text))
+
+
+class TestParentTypeResolutionInSweep(unittest.TestCase):
+    """A legally declared bounded hop must pass the sweep, and an
+    undeclared one must still fail it -- the discriminating pair that
+    proves the parent_type fix widened coverage correctly rather than
+    just suppressing the check.
+
+    Both fixtures write `fields` as an INLINE LITERAL, so they exercise
+    the parent_type fix alone and are unaffected by the constant-
+    resolution fix.
+    """
+
+    def setUp(self):
+        self.sdl_text = _SDL_PATH.read_text(encoding='utf-8')
+
+    def _sweep_fixture(self, fields_literal):
+        source = (
+            "from ansible_collections.salsadigitalauorg.lagoon."
+            "plugins.module_utils.client import LagoonClient\n\n"
+            "def read(client):\n"
+            "    return LagoonClient.build_query(\n"
+            "        'projectByName', fields=%s,\n"
+            "        args={'name': 'String!'})\n" % fields_literal)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with open(os.path.join(tmp_dir, 'fixture_module.py'), 'w',
+                       encoding='utf-8') as f:
+                f.write(source)
+            candidates = collect_candidate_documents(tmp_dir)
+        resolved = [(s, d) for s, d in candidates
+                    if d not in (UNRESOLVED_BUILD_QUERY,
+                                 INVALID_BUILD_QUERY,
+                                 SHADOWED_BUILD_QUERY)]
+        self.assertEqual(
+            len(resolved), 1,
+            "fixture must produce exactly one resolved document, got %r"
+            % (candidates,))
+        return resolved[0]
+
+    def test_declared_bounded_hop_passes_the_sweep(self):
+        source, document = self._sweep_fixture(
+            "['id', {'openshift': ['id']}]")
+        assert_flat_query(
+            document, source=source,
+            parent_type=resolve_root_parent_type(document, self.sdl_text))
+
+    def test_declared_bounded_hop_fails_without_parent_type(self):
+        """The defect itself: the same legal document the test above
+        accepts is rejected when no parent_type is resolved.
+        """
+        _source, document = self._sweep_fixture(
+            "['id', {'openshift': ['id']}]")
+        with self.assertRaises(AssertionError) as ctx:
+            assert_flat_query(document)
+        self.assertIn('undeclared_nesting', str(ctx.exception))
+
+    def test_undeclared_hop_still_fails_with_parent_type(self):
+        source, document = self._sweep_fixture(
+            "['id', {'deployTargetConfigs': ['id']}]")
+        with self.assertRaises(AssertionError) as ctx:
+            assert_flat_query(
+                document, source=source,
+                parent_type=resolve_root_parent_type(
+                    document, self.sdl_text))
+        self.assertIn('undeclared_nesting', str(ctx.exception))
+
+
+class TestConstantFieldsResolutionInSweep(unittest.TestCase):
+    """A `fields` list held in a module-level constant must be resolved
+    and checked, not skipped as unresolved.
+
+    Both fixtures reach `fields` THROUGH A MODULE-LEVEL CONSTANT, so they
+    exercise the constant-resolution fix alone and are unaffected by the
+    parent_type fix. Reverting constant resolution alone leaves these
+    failing while TestParentTypeResolutionInSweep stays green.
+    """
+
+    def setUp(self):
+        self.sdl_text = _SDL_PATH.read_text(encoding='utf-8')
+
+    def _sweep_fixture(self, source):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with open(os.path.join(tmp_dir, 'fixture_module.py'), 'w',
+                       encoding='utf-8') as f:
+                f.write(source)
+            return collect_candidate_documents(tmp_dir)
+
+    def test_constant_fields_are_resolved_not_skipped(self):
+        candidates = self._sweep_fixture(
+            "from ansible_collections.salsadigitalauorg.lagoon."
+            "plugins.module_utils.client import LagoonClient\n\n"
+            "_FIELDS = ['id', 'name']\n\n"
+            "def read(client):\n"
+            "    return LagoonClient.build_query(\n"
+            "        'projectByName', fields=_FIELDS,\n"
+            "        args={'name': 'String!'})\n")
+        documents = [d for _s, d in candidates]
+        self.assertIn(
+            "query projectByName($name: String!) { "
+            "projectByName(name: $name) { id name } }",
+            documents,
+            "a fields list in a module-level constant must resolve to a "
+            "real document; %r means the call site was skipped unchecked"
+            % (documents,))
+
+    def test_illegal_hop_behind_a_constant_is_caught(self):
+        """The vacuous pass itself: before constant resolution this call
+        site recorded UNRESOLVED_BUILD_QUERY, which the sweep skips, so
+        the undeclared hop was never examined at all.
+        """
+        candidates = self._sweep_fixture(
+            "from ansible_collections.salsadigitalauorg.lagoon."
+            "plugins.module_utils.client import LagoonClient\n\n"
+            "_FIELDS = ['id', {'deployTargetConfigs': ['id', 'weight']}]\n\n"
+            "def read(client):\n"
+            "    return LagoonClient.build_query(\n"
+            "        'projectByName', fields=_FIELDS,\n"
+            "        args={'name': 'String!'})\n")
+        resolved = [(s, d) for s, d in candidates
+                    if d != UNRESOLVED_BUILD_QUERY]
+        self.assertEqual(
+            len(resolved), 1,
+            "the call site must resolve to a real document rather than "
+            "being skipped as unresolved, got %r" % (candidates,))
+        source, document = resolved[0]
+        with self.assertRaises(AssertionError) as ctx:
+            assert_flat_query(
+                document, source=source,
+                parent_type=resolve_root_parent_type(
+                    document, self.sdl_text))
+        self.assertIn('undeclared_nesting', str(ctx.exception))
+
+    def test_reassigned_constant_stays_unresolved(self):
+        """Two assignments to one name: which value reaches the call
+        cannot be known statically, so the call site must stay honestly
+        unresolved rather than resolve to either.
+        """
+        candidates = self._sweep_fixture(
+            "from ansible_collections.salsadigitalauorg.lagoon."
+            "plugins.module_utils.client import LagoonClient\n\n"
+            "_FIELDS = ['id']\n"
+            "_FIELDS = ['name']\n\n"
+            "def read(client):\n"
+            "    return LagoonClient.build_query('me', fields=_FIELDS)\n")
+        self.assertTrue(candidates)
+        self.assertTrue(
+            all(d == UNRESOLVED_BUILD_QUERY for _s, d in candidates),
+            "a reassigned constant must not resolve to either value, "
+            "got %r" % (candidates,))
+
+    def test_function_local_fields_constant_stays_unresolved(self):
+        """Only module-level and class-level constants are collected; a
+        function-local name is not, and must stay unresolved.
+        """
+        candidates = self._sweep_fixture(
+            "from ansible_collections.salsadigitalauorg.lagoon."
+            "plugins.module_utils.client import LagoonClient\n\n"
+            "def read(client):\n"
+            "    local_fields = ['id']\n"
+            "    return LagoonClient.build_query('me', fields=local_fields)\n")
+        self.assertTrue(candidates)
+        self.assertTrue(
+            all(d == UNRESOLVED_BUILD_QUERY for _s, d in candidates),
+            "a function-local fields name must stay unresolved, got %r"
+            % (candidates,))
+
+
 class TestSweep(unittest.TestCase):
 
     def _plugins_dir(self):
@@ -586,6 +821,7 @@ class TestSweep(unittest.TestCase):
         return os.path.normpath(path)
 
     def test_sweep_runs_clean_against_current_plugins_tree(self):
+        sdl_text = _SDL_PATH.read_text(encoding='utf-8')
         candidates = collect_candidate_documents(self._plugins_dir())
         for source, document in candidates:
             if document == UNRESOLVED_BUILD_QUERY:
@@ -605,7 +841,13 @@ class TestSweep(unittest.TestCase):
                 "resolve to LagoonClient.build_query -- either it is "
                 "genuinely shadowed (rename it) or the sweep's provenance "
                 "check needs to learn this import shape" % source)
-            assert_flat_query(document, source=source)
+            # Resolving the root field's return type is what makes a
+            # legally declared bounded hop checkable at all: with no
+            # parent_type the registry lookup finds nothing and every
+            # nested selection classifies as undeclared_nesting.
+            assert_flat_query(
+                document, source=source,
+                parent_type=resolve_root_parent_type(document, sdl_text))
 
     def test_vacuous_pass_guard(self):
         """The sweep must not silently match zero documents once
