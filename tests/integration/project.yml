@@ -1,0 +1,117 @@
+---
+# Ad hoc end-to-end proof: exercises the real project module through the
+# actual action shim (plugins/action/project.py) against graphql-mock-v3,
+# serving the vendored schema/lagoon-2.33.0.graphql.
+#
+# graphql-tools/mock auto-mocks every field with a type-appropriate
+# placeholder value (a fixed string/int/bool, not a real Lagoon record),
+# so this cannot assert real create/update/delete semantics -- that is
+# what tests/unit/plugins/modules/test_project.py's mocked-transport
+# tests already cover in full, including the {id, patch} nesting and the
+# create-only/no_log behaviours. What this playbook proves is the one
+# thing the unit tests cannot: the module's real read/create/update/
+# delete documents are all accepted by an actual GraphQL server parsing
+# the real vendored SDL, end to end through endpoint -> shim -> module ->
+# client -> LagoonResourceModule, with no part of that path mocked.
+#
+# graphql-tools/mock also never returns null for a nullable field such
+# as projectByName, so state: present always takes the update branch
+# here, never the true create branch (addProject is exercised by name
+# only, never actually reached) -- the task below is named accordingly.
+# The create branch itself, and every other state transition, is proven
+# by the mocked-transport unit tests instead, where the read result is
+# fully under the test's control.
+#
+# lagoon_api_token is passed directly -- no real SSH host exists in the
+# mock setup, so this exercises the shim's token-injection path with an
+# explicit token rather than an SSH grant, the same shape whoami_info.yml
+# uses.
+#
+# Run with (from the host, after `make mock-up`):
+#   ansible-playbook tests/integration/project.yml
+# (requires ansible-core and this collection on ANSIBLE_COLLECTIONS_PATH
+# locally). To run from inside the test-v3 container instead (`make
+# shell`), the mock is reachable by its compose service name rather than
+# the published host port -- override project_endpoint to
+# http://graphql-mock-v3:4000/graphql on the same compose network.
+- name: project end-to-end proof against graphql-mock-v3
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    project_endpoint: http://localhost:4200/graphql
+  tasks:
+    - name: Set project options via the real action shim (state=present)
+      salsadigitalauorg.lagoon.project:
+        name: integration-test-project
+        git_url: git@example.test:integration-test-project.git
+        production_environment: main
+        lagoon_api_token: mock-token
+        lagoon_api_endpoint: "{{ project_endpoint }}"
+        validate_certs: false
+      register: created
+
+    - name: Assert the read/diff/update path ran end to end
+      ansible.builtin.assert:
+        that:
+          - created.changed == true
+          - created.project is defined
+          - created.project.name is defined
+        fail_msg: >-
+          project state=present did not return the expected shape
+          against graphql-mock-v3 -- see created: {{ created }}
+
+    - name: Update the same project via the real action shim
+      salsadigitalauorg.lagoon.project:
+        name: integration-test-project
+        auto_idle: 0
+        lagoon_api_token: mock-token
+        lagoon_api_endpoint: "{{ project_endpoint }}"
+        validate_certs: false
+      register: updated
+
+    - name: Assert the update ran end to end
+      ansible.builtin.assert:
+        that:
+          - updated.changed == true
+          - updated.project is defined
+        fail_msg: >-
+          project update did not return the expected shape against
+          graphql-mock-v3 -- see updated: {{ updated }}
+
+    - name: Preview a change under check mode
+      salsadigitalauorg.lagoon.project:
+        name: integration-test-project
+        auto_idle: 1
+        lagoon_api_token: mock-token
+        lagoon_api_endpoint: "{{ project_endpoint }}"
+        validate_certs: false
+      check_mode: true
+      diff: true
+      register: previewed
+
+    - name: Assert check mode reported a diff with no server-side change
+      ansible.builtin.assert:
+        that:
+          - previewed.diff is defined
+        fail_msg: >-
+          check mode did not report a diff against graphql-mock-v3 --
+          see previewed: {{ previewed }}
+
+    - name: Delete the project via the real action shim
+      salsadigitalauorg.lagoon.project:
+        name: integration-test-project
+        state: absent
+        lagoon_api_token: mock-token
+        lagoon_api_endpoint: "{{ project_endpoint }}"
+        validate_certs: false
+      register: deleted
+
+    - name: Assert the delete ran end to end
+      ansible.builtin.assert:
+        that:
+          - deleted.changed == true
+        fail_msg: >-
+          project delete did not report changed against graphql-mock-v3
+          -- see deleted: {{ deleted }}
