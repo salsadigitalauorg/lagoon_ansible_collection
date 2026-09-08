@@ -23,6 +23,7 @@ from ansible_collections.salsadigitalauorg.lagoon.plugins.module_utils \
     .resource import camel_to_snake
 from ansible_collections.salsadigitalauorg.lagoon.plugins.modules \
     .project import (
+        _DIFF_IGNORE,
         _FIELDS,
         argument_spec,
         run_module,
@@ -465,14 +466,34 @@ class TestCreateOnlyAddOrgOwner(unittest.TestCase):
         self.assertTrue(payload['addOrgOwner'])
 
 
-class TestCreateOnlyIdDoesNotTrip(unittest.TestCase):
+class TestIdIsNeverUserSupplied(unittest.TestCase):
+    """id is UpdateProjectInput's own update key, not a field on either
+    input's flat payload -- it is not in argument_spec() at all, and a
+    value reaching module.params under that name (e.g. a task written
+    against a stale argspec) must have no effect anywhere: not on create,
+    not on the update patch, regardless of whether it matches or differs
+    from the existing project's real id.
+    """
 
-    def test_unsupplied_id_never_triggers_create_only_enforcement(self):
-        """id is both create-only and diff-ignored. Enforcement keys on
-        supplied params, so a user who never sets it must be unaffected
-        even though the existing project always has one.
-        """
-        module = _make_module(auto_idle=0)
+    def test_id_is_not_an_argspec_option(self):
+        self.assertNotIn(
+            'id', _ARGSPEC,
+            "id is the update key derived from current state, never a "
+            "caller-supplied option -- see _DIFF_IGNORE")
+
+    def test_supplied_id_is_absent_from_the_create_payload(self):
+        module = _make_module(
+            id=999, git_url='git@github.com:example/my-project.git',
+            production_environment='main')
+
+        _result, execute = _run(
+            module, [None, _existing()], {'addProject': {'id': 42}})
+
+        payload = execute.mutation_named('addProject')[0][1]['input']
+        self.assertNotIn('id', payload)
+
+    def test_supplied_id_is_absent_from_the_update_patch(self):
+        module = _make_module(id=999, auto_idle=0)
 
         result, execute = _run(
             module, [_existing(), _existing(autoIdle=0)],
@@ -586,10 +607,18 @@ class TestArgspecCoversEveryWireField(unittest.TestCase):
         """resource.py reads each wire field from the param whose name is
         camel_to_snake(field). An argspec that spells one differently
         makes that option silently inert -- the value is accepted, then
-        dropped before it reaches the diff. Covers all 42, not a sample.
+        dropped before it reaches the diff. Covers all 42 non-diff-ignored
+        fields, not a sample.
+
+        _DIFF_IGNORE fields are excluded: _desired_from_params() skips
+        them before it ever consults params (resource.py), so the
+        silent-drop premise this test guards against cannot apply to
+        them -- id is one such field, read from current state rather than
+        from any option, and deliberately has no argspec entry at all.
         """
+        checked_fields = [f for f in _FIELDS if f not in _DIFF_IGNORE]
         missing = [
-            (field, camel_to_snake(field)) for field in _FIELDS
+            (field, camel_to_snake(field)) for field in checked_fields
             if camel_to_snake(field) not in _ARGSPEC]
 
         self.assertEqual(
@@ -598,7 +627,8 @@ class TestArgspecCoversEveryWireField(unittest.TestCase):
             "would be silently dropped: %r" % (missing,))
 
     def test_argspec_has_no_option_without_a_wire_field(self):
-        derived = {camel_to_snake(field) for field in _FIELDS}
+        checked_fields = [f for f in _FIELDS if f not in _DIFF_IGNORE]
+        derived = {camel_to_snake(field) for field in checked_fields}
         derived.add('state')
 
         extra = sorted(set(_ARGSPEC) - derived)
