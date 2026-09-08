@@ -1,0 +1,3 @@
+minor_changes:
+  - Added the ``project`` module, which creates, updates and deletes
+    Lagoon projects. Supports check mode and diff mode.

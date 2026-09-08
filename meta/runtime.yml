@@ -8,4 +8,5 @@ requires_ansible: '>=2.16'
 # because of this entry.
 action_groups:
   all:
+    - project
     - whoami_info

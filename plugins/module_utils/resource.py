@@ -6,11 +6,15 @@ import re
 _CAMEL_BOUNDARY_RE = re.compile(r'(?<!^)(?=[A-Z])')
 
 
-def _camel_to_snake(name):
+def camel_to_snake(name):
     """Convert a camelCase wire field name (e.g. ``gitUrl``) to the
     snake_case argspec option name Ansible convention expects
     (``git_url``). A mechanical case transform, not a lookup table --
     every declared field gets this for free.
+
+    Public because a resource module needs this exact mapping to name an
+    option in its own error messages. A second implementation there could
+    drift from this one and report an option that does not exist.
     """
     return _CAMEL_BOUNDARY_RE.sub('_', name).lower()
 
@@ -21,7 +25,7 @@ class LagoonResourceModule:
     Operates entirely in the wire field namespace -- the camelCase
     field names a flat read operation returns (``self.fields``). It
     holds no argspec-option-name mapping table (derived mechanically via
-    :func:`_camel_to_snake`) and no mutation wire-shaping logic (the
+    :func:`camel_to_snake`) and no mutation wire-shaping logic (the
     create/update asymmetry, create-only/update-only enforcement): both
     are resource-specific business logic and stay with the caller
     (module ``main()``), matching the rule that modules hold 100% of the
@@ -131,28 +135,30 @@ class LagoonResourceModule:
 
     def _do_create(self, module, client, desired):
         after_preview = self._filtered(desired)
-        diff = self._report_diff(None, after_preview)
+        changed_no_log = self._changed_no_log(None, desired)
+        diff = self._report_diff(None, after_preview, changed_no_log)
         if module.check_mode:
             return self._result(True, diff, dict(desired))
 
         self.create(client, desired)
         fresh = self._normalise_current(self.read(client))
         after = self._filtered(fresh) if fresh is not None else after_preview
-        diff = self._report_diff(None, after)
+        diff = self._report_diff(None, after, changed_no_log)
         return self._result(True, diff, fresh)
 
     def _do_update(self, module, client, current, desired, changed_fields):
         before = self._filtered(current)
         after_preview = dict(before)
         after_preview.update(self._filtered(desired))
-        diff = self._report_diff(before, after_preview)
+        changed_no_log = self._changed_no_log(current, desired)
+        diff = self._report_diff(before, after_preview, changed_no_log)
         if module.check_mode:
             return self._result(True, diff, current)
 
         self.update(client, current, desired, changed_fields)
         fresh = self._normalise_current(self.read(client))
         after = self._filtered(fresh) if fresh is not None else after_preview
-        diff = self._report_diff(before, after)
+        diff = self._report_diff(before, after, changed_no_log)
         return self._result(True, diff, fresh)
 
     def _do_delete(self, module, client, current):
@@ -181,7 +187,7 @@ class LagoonResourceModule:
         for field in self.fields:
             if field in self.diff_ignore:
                 continue
-            key = _camel_to_snake(field)
+            key = camel_to_snake(field)
             if key not in params:
                 continue
             value = params[key]
@@ -218,12 +224,39 @@ class LagoonResourceModule:
         return {field: data[field] for field in self.fields
                 if field not in self.diff_ignore and field in data}
 
-    def _report_diff(self, before_full, after_full):
-        before_map = before_full or {}
-        after_map = after_full or {}
-        changed_no_log = sorted(
+    def _changed_no_log(self, current, desired):
+        """Which ``no_log_fields`` the caller's desired state changes.
+
+        Computed from ``desired`` rather than from a post-mutation read so
+        a write-only field still reports its changed/unchanged fact: such
+        a field is absent from the read by design, and comparing two reads
+        would always find it unchanged. A field the caller did not supply
+        is never reported.
+        """
+        current_map = current or {}
+        return sorted(
             field for field in self.no_log_fields
-            if before_map.get(field) != after_map.get(field))
+            if field in desired and current_map.get(field) != desired[field])
+
+    def _report_diff(self, before_full, after_full, changed_no_log=None):
+        """Build the ``--diff`` dict, withholding every ``no_log_fields``
+        value from both sides.
+
+        ``changed_no_log`` overrides which no_log fields are reported as
+        changed. A write-only field (one the read deliberately never
+        selects) is absent from both a real run's ``before`` and its
+        post-mutation ``after``, so comparing those two would find no
+        difference and silently report nothing -- while the check-mode
+        preview, which compares against the desired state, would report a
+        change. The caller passes the set it computed from the desired
+        state so both paths agree.
+        """
+        if changed_no_log is None:
+            before_map = before_full or {}
+            after_map = after_full or {}
+            changed_no_log = sorted(
+                field for field in self.no_log_fields
+                if before_map.get(field) != after_map.get(field))
 
         diff = {
             'before': self._strip_no_log(before_full),
