@@ -23,7 +23,9 @@
    before a single line of code was written — see the decisions table below.
 6. **P3-S4 is the load-bearing story in this phase.** It hand-writes `project`
    against `resource.py`/`lookup.py` with no generator involved, and every
-   later story's gate is "reproduce this file byte-for-byte". If P3-S4 is
+   later story's gate is "reproduce this file's structure and behaviour"
+   (P3-D5; softened from a byte-for-byte text diff on review, see
+   `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`). If P3-S4 is
    wrong, everything after it inherits the mistake silently. Route it through
    an extra review pass focused only on §7.4's flow, independent of the
    generator work that follows.
@@ -57,7 +59,7 @@ the parent plan itself.
 | **P3-D2** | **Gate resource selection** | `env_variable`'s real input types (`EnvVariableByNameInput`, `DeleteEnvVariableByNameInput`) take `project`/`environment` as **name strings**, not ids — it needs no lookup at all, contradicting the parent plan's original `lookups: [project_id, environment_id]`. Kept in the gate set anyway, repurposed: it proves the list-read + client-side-filter path (`getEnvVariablesByProjectEnvironmentName` returns `[EnvKeyValue]`, not a single record) and enum-case diffing (`scope` is the `EnvVariableScope` enum, upper-case, on input; plain `String` on output). `environment` becomes the resource proving both lookup types end to end (`AddEnvironmentInput.project: Int!` on create, `updateEnvironment(id: Int!, ...)` on update) — the role the parent plan had originally assigned to `env_variable`. |
 | **P3-D3** | **Description fallback chain** | Measured against the gate resources: `AddProjectInput` 0/36 fields with an SDL description, `UpdateProjectPatchInput` 0/39, `EnvVariableByNameInput` 0/6. `antsibull-docs` fails on any undocumented option, so the parent plan's §6.1.5 ("source option help from SDL descriptions") cannot close the gate as written. Fallback chain, each step only filling what the previous left undescribed: (1) the input type's own SDL description; (2) the same-named field's description on the mutation's output type (covers 29/36 on `project`, 10/14 on `environment`, but 0/6 on `env_variable` — `EnvKeyValue`'s fields are undescribed too); (3) an `allowlist.yml` per-module `descriptions:` override block; (4) **fail the build** if any option is still undescribed after all three. Docs lint must never be the first place a coverage gap is discovered — `make generate` fails first, locally, before a commit exists to review. |
 | **P3-D4** | **Phase 3/4 boundary** | The parent plan's original split — generator-only in Phase 3, `resource.py`/`lookup.py` deferred to Phase 4 — cannot close the Phase 3 gate as written: that gate requires "`check_mode`/`--diff` are correct", and that correctness lives entirely in the read-diff-mutate engine the old Phase 4 owned. `resource.py` and `lookup.py` move into this phase (P3-S2/P3-S3), proven together with the generator on three resources — the same walking-skeleton shape P2-D5 used for `whoami_info`. The old Phase 5 ("generate the core set") folds into this phase's later breadth stories (P3-S10/S11/S12); Phase 5 is retired, Phases 6/7/8 keep their existing numbers. |
-| **P3-D5** | **Golden-target technique** | `project` is hand-written first (P3-S4), directly against `resource.py`/`lookup.py`, with no generator involved — proving the runtime engine on a real resource before any code generates anything. The generator's own acceptance criterion (P3-S9) is then "regenerate `project` and diff it against P3-S4's committed file — zero difference". This is a stronger check than a hand-reviewed "looks about right"; it makes the generator's correctness mechanically verifiable rather than a matter of read-through confidence. |
+| **P3-D5** | **Golden-target technique** | `project` is hand-written first (P3-S4), directly against `resource.py`/`lookup.py`, with no generator involved — proving the runtime engine on a real resource before any code generates anything. The generator's own acceptance criterion (P3-S9) compares the regenerated `project` against P3-S4's committed file **structurally**: parsed argspec/DOCUMENTATION/EXAMPLES/RETURN/module-constant equality, built-GraphQL-document equality, and the full `test_project.py` suite passing against the generated module in place of the hand-written one — not a textual diff. Originally specified as byte-for-byte; softened on review (`docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`) once a byte-for-byte gate started turning every incidental detail of the hand-written file (comment wording, key order, even a generated-file marker header retroactively added just to make the diff literal) into a constraint discovered one gap at a time rather than a genuine correctness signal. Structural equivalence is stronger on every load-bearing artefact (dict equality catches a wrong `type=` regardless of layout; the unit-suite run is real behavioural proof a text diff never gave) and only tolerant of formatting that was never load-bearing. What it stops catching: divergence in comments/docstrings — mitigated by a one-time review at P3-S9, not a continuous diff. |
 | **P3-D6** | **`codegen/` test isolation** | `codegen/` depends on `graphql-core` (D3: generator-only, never a runtime dependency). A new `codegen-v3` compose service runs `codegen/`'s own `pytest` suite in a container that never touches the `test-v3`/`ansible-test` environment, so `graphql-core` has no path into the environment that also runs the shipped collection's unit tests. This keeps D3 structurally enforced (a forbidden-import AST test *inside* `test-v3` would prove `graphql-core` isn't imported by `plugins/`, but would not prove it can't reach that environment at all — a separate container does). |
 | **P3-D7** | **`no_log` on `value`** | `env_variable`'s `value` option is `no_log: true` (Lagoon environment variables routinely hold secrets). Ansible's default `no_log` behaviour on `--diff` would replace the *entire* diff for that field with `VALUE_SPECIFIED_IN_NO_LOG_PARAMETER`, which would fail the Phase 3 gate's own "`--diff` is correct" criterion by making the diff useless for the one field most likely to actually change. Resolved explicitly (owner's decision, not Ansible's default): the diff reports **changed/unchanged only** for `value` — the boolean fact of a difference, never either side's plaintext, on both the check-mode preview and the real-run result. See P3-S11 for the mechanism. |
 | **P3-D8** | **`client.py` args-interpolation hardening deferred to Phase 8** | P2-S7's review found `LagoonClient.build_query()` interpolates the `args` dict's GraphQL *type* strings unvalidated (only argument *names* are checked) — reproduced producing a depth-3 document from a crafted type string, and a `"` in a field name crashing the depth scanner instead of failing cleanly. `args` values are generator-controlled from this phase onward, not user-controlled, so the risk is latent rather than exploitable through any code path this collection ships. Explicitly deferred to Phase 8 alongside the collection's other pre-release security hardening (§11) — not fixed opportunistically mid-Phase-3, so the generator's early stories aren't blocked on an unrelated `client.py` change. |
@@ -69,7 +71,7 @@ the parent plan itself.
 | **P3-D14** | **One list selection per document** | v1's `projectInfo` nested five object lists into one document; the object-beneath-list prohibition alone blocks its actual per-row expansion, but a cap is still needed so a future document cannot reassemble `projectInfo`'s breadth — five *scalar-leaf* lists in one read — even with every individual leaf legal under P3-D10. A composite info module wanting both `environments` and `envVariables` issues two reads, not one; each is separately cacheable and separately permissioned, the same reasoning P3-D2 already applied to `env_variable`'s own list read. |
 | **P3-D15** | **`GraphQLNonNull` on a shared create/update/delete argspec is a create-time check, not argspec `required`** | §6.1 rule 2 ("`GraphQLNonNull` → `required: true`"), applied literally to `project`, would make `git_url`/`production_environment` argspec-required — which also then requires them for `state: absent` and for an update touching one unrelated field, since one flat argspec serves create, update *and* delete. Found hand-writing `project` (P3-S4) against the full 42-option union. Only the resource's own read/delete key (`name`) is argspec-`required`; the create mutation's other `NonNull` fields are enforced in the create branch only, raising `LagoonConfigError` naming the missing option(s) before the create mutation is called. The generator must derive "argspec-required" from the read key alone and "create-required" from the create mutation's `NonNull` set as two distinct checks. See `docs/plans/2026-09-04-p3-s4-project-golden-target.md`. |
 | **P3-D16** | **Create-only enforcement is readability-driven, not a single unconditional raise** | P3-D1 says a create-only field supplied against an existing resource always raises. Found false in one direction verifying `project` against the SDL: `Project.organization: Int` is a plain readable scalar, so a create playbook re-run with `organization:` set should stay idempotent when the value already matches, not fail every replay. The only mutations that could converge a genuine mismatch (`addExistingProjectToOrganization`, `removeProjectFromOrganization`) are `@deprecated` or explicitly destructive beyond the one field (SDL: "will return the project to a state where it has no groups or notifications"), and the suggested non-deprecated replacement (`bulkImportProjectsAndGroupsToOrganization`) has no `input` type in this SDL at all — so neither is called to converge it. Resolved into three mechanical clauses keyed only on readability: a create-only field that is readable and equal to current state is a no-op; readable and different raises `LagoonConfigError` naming both values; unreadable (`addOrgOwner` — no SDL path back to any readable field) raises unconditionally, since convergence can never be proven. See `docs/plans/2026-09-04-p3-s4-project-golden-target.md`. |
-| **P3-D17** | **`private_key` is readable but deliberately excluded from the read** | `Project.privateKey: String` (SDL) is a readable scalar, but re-fetching SSH key material every run solely to diff it is an unjustified secret-handling cost with little idempotency benefit (Lagoon generates a key pair server-side when none is supplied). Kept in `fields`/`no_log_fields` for `RETURN` docs and P3-D7's no_log diff mechanism, but excluded from the actual `projectByName` read selection — its diff always reports via `changed_no_log_fields` when supplied, never a `before`/`after` value, and the create/update closures send it whenever supplied regardless of read state. See `docs/plans/2026-09-04-p3-s4-project-golden-target.md`. |
+| **P3-D17** | **`private_key` is readable but deliberately excluded from the read** | `Project.privateKey: String` (SDL) is a readable scalar, but re-fetching SSH key material every run solely to diff it is an unjustified secret-handling cost with little idempotency benefit (Lagoon generates a key pair server-side when none is supplied). Kept in `fields`/`no_log_fields` for P3-D7's no_log diff mechanism, but excluded from the actual `projectByName` read selection — its diff always reports via `changed_no_log_fields` when supplied, never a `before`/`after` value, and the create/update closures send it whenever supplied regardless of read state. Consequently it is never present in the returned dict on any path, so `RETURN`'s `contains:` block omits it entirely rather than documenting it as a withheld-but-present no_log value (see the corrected P3-S7 design below) — the dict-level description states its absence in prose instead. See `docs/plans/2026-09-04-p3-s4-project-golden-target.md` and `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`. |
 | **P3-D18** | **Bounded scalar-leaf list permitted one level beneath a single-valued hop (amends P3-S3a)** | `autogeneratedRouteConfig { pathRoutes { fromService toService path } }` is depth 4 and violates P3-S3a's "no object leaf beneath any nested selection" as committed (reproduced: `classify_selection_shape` raises `object_leaf_beneath_nesting`; `LagoonClient.build_query` structurally refuses a mapping nested inside a mapping) — yet `pathRoutes` is bounded by one project's own route configuration and every one of its three leaves is a plain scalar, the same "bounded hop, scalar leaves only" property the rule already permits at the top level, one level deeper because it sits beneath a single-valued hop rather than beside it. The registry gains a nested-list leaf form permitted only beneath a `'single'`-kind entry — never beneath a `'list'`-kind entry, which stays unconditionally forbidden as v1's actual defect — and it counts toward the existing one-list-per-document cap. Landed as its own story, **P3-S4a**, before P3-S4, so the golden target is built against a settled rule rather than one changing in the same commit — the same reasoning that put P3-S3a before P3-S4 originally. See `docs/plans/2026-09-04-p3-s4-project-golden-target.md`. |
 
 ---
@@ -88,7 +90,7 @@ the parent plan itself.
 | P3-S6 | `codegen/wire.py` | P3-S5 | M |
 | P3-S7 | `codegen/docgen.py` | P3-S6 | M |
 | P3-S8 | `codegen/allowlist.py` + `allowlist.yml` | P3-S7 | M |
-| P3-S9 | Templates + `generate.py` — gate: reproduce `project` byte-for-byte | P3-S8 | L |
+| P3-S9 | Templates + `generate.py` — gate: reproduce `project`'s structure and behaviour | P3-S8 | L |
 | P3-S10 | Generate `environment` | P3-S9 | M |
 | P3-S11 | Generate `env_variable` | P3-S10 | M |
 | P3-S12 | Gate closure | P3-S11 | S |
@@ -679,7 +681,8 @@ criteria and the commit message — read it before implementing this story.
 
 Prove `resource.py`/`lookup.py` on a real resource, hand-written with no
 generator involved — the file every later story's generator output must
-reproduce byte-for-byte (P3-D5).
+reproduce structurally, per P3-D5 (softened from a byte-for-byte text diff
+on review — see `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`).
 
 ## Context
 
@@ -1071,9 +1074,10 @@ helper).
 ## Acceptance criteria
 
 - [ ] All six cases pass.
-- [ ] Test 6's diff is exact — not "similar shape", byte-for-byte on the
-      dict structure (dict equality, key order doesn't matter for a dict
-      but the *keys and values* must match exactly).
+- [ ] Test 6's diff is exact — not "similar shape", exact dict equality
+      (key order doesn't matter for a dict, but the *keys and values*
+      must match exactly) — the same structural-comparison standard P3-D5/
+      P3-S9 apply at the whole-file level.
 - [ ] The (a) vs (b) decision above is made and stated in the module
       docstring, not left ambiguous for P3-S9 to reinterpret.
 
@@ -1152,13 +1156,39 @@ def render_documentation(module_name, description, options, ...):
     hand-written DOCUMENTATION for the auth-fragment extension shape and
     author/version_added conventions -- match them exactly."""
 
-def render_return(module_name, fields, no_log_fields):
-    """no_log_fields (P3-D7): RETURN block still documents the field
-    exists and its type, but its own `description` must say plainly
-    that the value is never included in --diff or logs -- the RETURN
-    block is not itself no_log-sensitive (it's documentation, not
+def render_return(module_name, fields, read_selection, hop_flattening,
+                   no_log_fields):
+    """`contains:` is built from `read_selection` (post-`hop_flattening`
+    wire names), not from `fields` directly -- `fields` is the argspec
+    union and can include names the read never selects at all (P3-D17:
+    `private_key` is in `fields`/`no_log_fields` but deliberately absent
+    from every gate module's read). A field in `fields` but absent from
+    `read_selection` after flattening gets no `contains:` entry: describing
+    one would claim a key the returned dict can never actually hold.
+    State its absence in the dict-level `description` instead (see
+    `project`'s handling of `private_key` and `addOrgOwner`,
+    `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`).
+
+    For fields the read *does* select, `contains:` entries reuse the same
+    `resolve_option_description` step ordering as `render_documentation`
+    (P3-D3) -- one description table serves both `options:` and
+    `RETURN.contains:`, not two independently hand-maintained prose sets.
+
+    `no_log_fields` that *are* present in `read_selection` (none of the
+    current gate modules have one, but the design must not assume that
+    stays true) still get a `contains:` entry whose own `description`
+    says plainly the value is never included in --diff or logs -- the
+    RETURN block is not itself no_log-sensitive (it's documentation, not
     module output), but it must not create a false expectation that a
-    real run's returned dict will contain the secret."""
+    real run's returned dict will contain the secret. This is distinct
+    from the P3-D17 case above: a no_log field absent from the read is
+    omitted entirely; one present in the read gets a "withheld" note.
+
+    `hop_flattening` also drives the returned *type*: a bounded object
+    hop (e.g. `openshift: Openshift` on the SDL) flattens to a scalar
+    (`openshift: int`, the hop's own id leaf) in the returned dict, and
+    `contains:` must describe the flattened type, never the SDL's raw
+    object type."""
 ```
 
 ### Implementation notes
@@ -1192,16 +1222,34 @@ def render_return(module_name, fields, no_log_fields):
    override block covering all six fields (since output-type fallback
    contributes nothing here) — this is the case that actually forces the
    override block to be complete, not just present.
+8. `render_return` against `project`'s real `fields`/`read_selection`/
+   `hop_flattening` produces a `contains:` block with exactly the 40
+   fields present in the flattened read selection — `private_key` and
+   `add_org_owner` (in `fields`, absent from the read) get no entry, and
+   the dict-level description states their absence instead.
+9. A field appearing in both an `options:` entry and a `contains:` entry
+   resolves to the *same* description string via the same override
+   table — proves RETURN and DOCUMENTATION are not two independently-
+   maintained prose sets for the same field.
+10. A hop-flattened field (e.g. `openshift`) gets the flattened scalar
+    type (`int`) in `contains:`, not the SDL's raw object type
+    (`Openshift`).
 
 ## Acceptance criteria
 
-- [ ] All seven cases pass.
+- [ ] All ten cases pass.
 - [ ] Test 6 and 7 run against the real schema file, not a synthetic
       fixture — this is the check that would have caught the original
       §6.1.5 gap before a single module tried to generate.
 - [ ] The build-failure error names every undescribed field in one pass.
-- [ ] `no_log_fields`' RETURN description explicitly states the value is
-      withheld.
+- [ ] A no_log field *present* in the read selection gets a RETURN
+      description explicitly stating the value is withheld; a no_log
+      field *absent* from the read selection gets no `contains:` entry
+      at all (test 8) — the two cases must not be conflated.
+- [ ] Regenerating `project` produces a `RETURN` block matching
+      `plugins/modules/project.py`'s hand-written one under P3-S9's
+      structural-equivalence comparison (parsed YAML equality on
+      `RETURN`, not textual).
 
 ## Verification commands
 
@@ -1371,13 +1419,16 @@ Refs docs/plans/v3-refactor.md 6, 6.1; docs/plans/v3-phase3-stories.md P3-D2
 
 ---
 
-# P3-S9 — Templates + `generate.py` — gate: reproduce `project` byte-for-byte
+# P3-S9 — Templates + `generate.py` — gate: reproduce `project`'s structure and behaviour
 
 ## Goal
 
 Wire every prior Phase 3 story together into `make generate`, and prove it
-by regenerating `project` and diffing it against P3-S4's hand-written,
-already-reviewed file — zero difference.
+by regenerating `project` and comparing it **structurally** against P3-S4's
+hand-written, already-reviewed file: parsed argspec/DOCUMENTATION/EXAMPLES/
+RETURN/module-constant equality, built-GraphQL-document equality, and the
+full `test_project.py` suite passing against the generated module in place
+of the hand-written one.
 
 ## Context
 
@@ -1385,6 +1436,22 @@ This is the highest-risk story in the phase. Everything before it is a
 component; this is the integration. P3-D5's golden-target technique exists
 specifically so this story's correctness is mechanically checkable rather
 than a matter of reviewer confidence in a large diff.
+
+Originally specified as a byte-for-byte textual diff. Softened to
+structural equivalence on review, once that requirement started turning
+every incidental detail of the hand-written file — comment wording,
+key order in a literal dict, a generated-file marker header retroactively
+added purely so the diff would be zero — into a constraint the generator
+had to reproduce exactly, discovered one gap at a time rather than as a
+correctness signal (see `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md`).
+Structural comparison is *stronger* than a text diff on every load-bearing
+artefact — dict equality on the argspec catches a wrong `type=` regardless
+of surrounding layout, and running the real unit suite against the
+generated module is genuine behavioural proof a text diff never actually
+gave — and only tolerant of formatting that was never load-bearing in the
+first place. What it stops catching: divergence in comments/docstrings,
+mitigated by a one-time review focus item below rather than a continuous
+diff.
 
 ## Files to create
 
@@ -1437,35 +1504,50 @@ verify-generated:    ## Fail if committed modules differ from a fresh generation
 
 ### Implementation notes
 
-- **The generated `project.py` must not be a superset or near-match of
-  P3-S4's file — it must be identical**, modulo the generated-file marker
-  header that P3-S4's hand-written version won't have. Decide up front: does
-  P3-S4 get amended in *this* story to add the marker retroactively (so the
-  diff is truly zero), or does the diff check explicitly skip the header
-  lines? **Prefer amending P3-S4's file in this story's commit** — it keeps
-  "byte-for-byte" literally true rather than "byte-for-byte modulo an
-  agreed exception", which is a weaker and more error-prone guarantee.
-- If the diff is *not* zero after reasonable effort, that is a signal the
-  golden target (P3-S4) encoded a shape the generator cannot reasonably
-  produce — per the top-level "stop and raise it" rule, raise this rather
-  than loosening the gate or hand-editing the generated output to match.
+- **The generated `project.py` must be structurally equivalent to P3-S4's
+  file, not merely a superset or near-match** — see the comparison table
+  in `docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md` Part 3.
+  Every generated file still starts with the marker comment from parent
+  plan §5 ("GENERATED FILE -- DO NOT EDIT... Regenerate: make generate");
+  P3-S4's hand-written file does not need retroactive amendment to carry
+  one, since the marker line is not itself a compared artefact under
+  structural equivalence (it was previously added only to make a textual
+  diff report zero).
+- If the structural comparison finds a genuine difference after reasonable
+  effort, that is still a signal the golden target (P3-S4) encoded a shape
+  the generator cannot reasonably produce — per the top-level "stop and
+  raise it" rule, raise this rather than loosening the gate further or
+  hand-editing the generated output to match.
 - Action-shim template output must match P3-S4's hand-written
-  `plugins/action/project.py` exactly too — it's a one-line subclass, so
-  this should be the easiest part of the gate, but check it explicitly
-  rather than assuming.
+  `plugins/action/project.py` under the same structural comparison — it's
+  a one-line subclass, so this should be the easiest part of the gate, but
+  check it explicitly rather than assuming.
 
 ## Testing requirements
 
 1. `python codegen/generate.py` (no `--check`) run against a temp output
-   directory produces a `project.py` that, diffed against
-   `plugins/modules/project.py` (post this story's header-alignment
-   amendment), is **empty** — zero lines of difference.
-2. Same for `plugins/action/project.py`.
+   directory produces a `project.py` that is structurally equivalent to
+   `plugins/modules/project.py`:
+   - `argument_spec()` — evaluated and compared by `assertEqual` on the
+     resulting dict;
+   - `DOCUMENTATION`/`EXAMPLES`/`RETURN` — parsed as YAML and compared as
+     data structures;
+   - module-level constants (`_FIELDS`, `_READ_SELECTION`,
+     `_HOP_FLATTENING`, `_CREATE_ONLY`, `_UPDATE_ONLY`, `_DIFF_IGNORE`,
+     `_NO_LOG_FIELDS`, `_CREATE_REQUIRED`, `_UNREADABLE_CREATE_ONLY`) —
+     evaluated as literals and compared by value;
+   - the GraphQL documents the generated module actually builds — compare
+     the built document strings (reuse `query_depth.py`'s
+     `_literal_from_ast`/`build_query` reconstruction machinery rather than
+     re-deriving it).
+2. Same structural comparison for `plugins/action/project.py`.
 3. `--check` mode against the *actual* committed `plugins/` tree exits 0
    (proves the real Makefile target works, not just the temp-dir case).
-4. `--check` mode fails (nonzero exit, clear message) if a committed
-   generated file is hand-edited — simulate by editing a throwaway copy of
-   `project.py`'s output in a temp dir, not the real committed file.
+4. `--check` mode fails (nonzero exit, clear message naming which
+   structural comparison failed, not just "generation differs") if a
+   committed generated file is hand-edited — simulate by editing a
+   throwaway copy of `project.py`'s output in a temp dir, not the real
+   committed file.
 5. Every generated file (this story's output for `project`, and later
    `environment`/`env_variable`) starts with the exact marker comment from
    parent plan §5.
@@ -1474,27 +1556,37 @@ verify-generated:    ## Fail if committed modules differ from a fresh generation
    of `env_variable` with the `descriptions:` override block removed) and
    confirm `generate.py` exits nonzero naming the undescribed fields, rather
    than emitting a partially-documented module.
+7. **The primary evidence, not a supplementary check**: run
+   `tests/unit/plugins/modules/test_project.py` against the *generated*
+   module in place of the hand-written one, and confirm it passes
+   unmodified. This is the strongest form of equivalence in the gate —
+   the generated module must actually behave like the hand-written one,
+   not merely resemble it structurally.
 
 ## Acceptance criteria
 
-- [ ] Test 1 and 2 pass — **this is the gate**. Do not relax it to "close
-      enough" or "same fields, different formatting".
+- [ ] Tests 1, 2 and 7 pass — **this is the gate**. Do not relax the
+      structural comparisons to "close enough"; each field listed in
+      test 1 is compared exactly, just not textually.
 - [ ] `make generate && make verify-generated` is a clean no-op sequence
       (generating twice in a row produces no diff on the second run).
 - [ ] `docker compose run --rm lint-docs-v3` passes against the generated
-      `project.py` (should be identical to P3-S4's already-passing file,
-      but confirm rather than assume).
+      `project.py` (should be structurally identical to P3-S4's already-
+      passing file, but confirm rather than assume).
 - [ ] `docker compose run --rm test-v3 units --requirements` still passes
       against the *generated* `project.py` replacing the hand-written one —
       P3-S4's own unit tests must not have depended on anything specific to
-      the hand-written file's incidental structure.
+      the hand-written file's incidental structure (test 7).
+- [ ] The generated module's comments and docstrings were actually read
+      and judged against `AGENTS.md`'s comment conventions during review —
+      see review focus below; structural equivalence does not check prose
+      quality, so this must happen as a deliberate one-time step.
 
 ## Verification commands
 
 ```sh
 make codegen-test
 make generate
-git diff --stat plugins/modules/project.py plugins/action/project.py   # expect empty
 make verify-generated
 docker compose run --rm test-v3 units --requirements
 docker compose run --rm lint-docs-v3
@@ -1502,17 +1594,23 @@ docker compose run --rm lint-docs-v3
 
 ## Review focus
 
-- Is the byte-for-byte claim actually true, verified by running the
-  commands above during review, not inferred from the story's own
+- Is the structural-equivalence claim actually true, verified by running
+  the commands above during review, not inferred from the story's own
   narrative?
 - Did the template get built by working backwards from the golden file (as
   instructed), or does it show signs of having been designed independently
-  and then patched until the diff happened to close — the latter is more
-  fragile against the next resource (P3-S10) exposing a case the template
-  wasn't really general enough to handle.
+  and then patched until the comparisons happened to pass — the latter is
+  more fragile against the next resource (P3-S10) exposing a case the
+  template wasn't really general enough to handle.
 - Is `verify-generated`'s failure mode (test 4) actually informative (names
-  the file and the specific difference), or just "generation differs,
-  exit 1"?
+  the file and the specific structural difference), or just "generation
+  differs, exit 1"?
+- Were the generated module's comments and docstrings read and judged
+  against `AGENTS.md`'s conventions (no story/plan references, terse,
+  standalone)? Structural equivalence does not check this, so it is not
+  caught by any automated comparison in this story — it must be a
+  deliberate review step, not an assumption that "the template was
+  written carefully so it's probably fine".
 
 ## Commit
 
@@ -1520,14 +1618,18 @@ docker compose run --rm lint-docs-v3
 feat(v3): add generate.py and templates, closing the Phase 3 gate on project
 
 Regenerating project from allowlist.yml reproduces P3-S4's
-hand-written module and action shim byte-for-byte (P3-S4's files
-amended in this commit to add the generated-file marker header
-retroactively, so the equivalence is literal, not "modulo an agreed
-exception"). verify-generated fails loudly, naming the file, if a
-committed generated file diverges from a fresh generation.
+hand-written module and action shim structurally: identical argspec,
+DOCUMENTATION/EXAMPLES/RETURN, module-level constants and built
+GraphQL documents, and the full test_project.py suite passes
+unmodified against the generated module in place of the hand-written
+one. verify-generated fails loudly, naming the file and the specific
+structural difference, if a committed generated file diverges from a
+fresh generation.
 
 This is the mechanically-checkable version of the Phase 3 gate:
-docs/plans/v3-phase3-stories.md P3-D5.
+docs/plans/v3-phase3-stories.md P3-D5, softened from a byte-for-byte
+text diff to structural equivalence per
+docs/plans/2026-09-09-p3-s4-return-contains-and-gate.md.
 
 Refs docs/plans/v3-refactor.md 5, 9 Phase 3
 ```
