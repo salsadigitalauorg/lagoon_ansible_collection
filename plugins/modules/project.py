@@ -342,8 +342,188 @@ project:
   - >-
     C(privateKey) is never included. This module does not read stored key
     material back from Lagoon.
+  - >-
+    C(addOrgOwner) is never included. It is accepted only when creating a
+    project and has no readable counterpart on the resource.
   returned: success
   type: dict
+  contains:
+    id:
+      description: ID of the project, assigned by Lagoon.
+      type: int
+      returned: success
+    name:
+      description: Name of the project.
+      type: str
+      returned: success
+    gitUrl:
+      description: Git URL of the project.
+      type: str
+      returned: success
+    subfolder:
+      description: Subfolder of the repository the C(.lagoon.yml) is in, if set.
+      type: str
+      returned: success
+    routerPattern:
+      description: Router pattern used by the project, if different from the deploy target default.
+      type: str
+      returned: success
+    openshift:
+      description: ID of the OpenShift deploy target the project is deployed to, if set.
+      type: int
+      returned: success
+    openshiftProjectPattern:
+      description: Pattern of the OpenShift project/namespace generated for the project.
+      type: str
+      returned: success
+    kubernetes:
+      description: ID of the Kubernetes deploy target the project is deployed to, if set.
+      type: int
+      returned: success
+    kubernetesNamespacePattern:
+      description: Pattern of the Kubernetes namespace generated for the project.
+      type: str
+      returned: success
+    activeSystemsDeploy:
+      description: Name of the system handling deploy actions for the project.
+      type: str
+      returned: success
+    activeSystemsPromote:
+      description: Name of the system handling promote actions for the project.
+      type: str
+      returned: success
+    activeSystemsRemove:
+      description: Name of the system handling remove actions for the project.
+      type: str
+      returned: success
+    activeSystemsTask:
+      description: Name of the system handling task actions for the project.
+      type: str
+      returned: success
+    activeSystemsMisc:
+      description: Name of the system handling miscellaneous actions for the project.
+      type: str
+      returned: success
+    branches:
+      description: Which branches are deployed.
+      type: str
+      returned: success
+    pullrequests:
+      description: Which pull requests are deployed.
+      type: str
+      returned: success
+    productionEnvironment:
+      description: Name of the environment marked as the production environment.
+      type: str
+      returned: success
+    productionRoutes:
+      description: Routes attached to the active environment.
+      type: str
+      returned: success
+    productionAlias:
+      description: Drush alias of the active production environment.
+      type: str
+      returned: success
+    standbyProductionEnvironment:
+      description: Name of the environment marked as the standby production environment.
+      type: str
+      returned: success
+    standbyRoutes:
+      description: Routes attached to the standby environment.
+      type: str
+      returned: success
+    standbyAlias:
+      description: Drush alias of the standby production environment.
+      type: str
+      returned: success
+    availability:
+      description: Availability level of the project.
+      type: str
+      returned: success
+    autoIdle:
+      description: Whether the project has auto idling enabled.
+      type: int
+      returned: success
+    storageCalc:
+      description: Whether storage for the project is calculated.
+      type: int
+      returned: success
+    developmentEnvironmentsLimit:
+      description: How many development environments may be deployed at one time.
+      type: int
+      returned: success
+    problemsUi:
+      description: Whether the Problems UI is available for the project.
+      type: int
+      returned: success
+    factsUi:
+      description: Whether the Facts UI is available for the project.
+      type: int
+      returned: success
+    productionBuildPriority:
+      description: Build priority of the production environment.
+      type: int
+      returned: success
+    developmentBuildPriority:
+      description: Build priority of development environments.
+      type: int
+      returned: success
+    deploymentsDisabled:
+      description: Whether deploying environments is disabled for the project.
+      type: int
+      returned: success
+    organization:
+      description: ID of the organization the project belongs to, if any.
+      type: int
+      returned: success
+    buildImage:
+      description: Build image the project uses, if set.
+      type: str
+      returned: success
+    sharedBaasBucket:
+      description: Whether the project uses a shared backup bucket rather than a dedicated one.
+      type: bool
+      returned: success
+    autogeneratedRoutes:
+      description: Whether autogenerated routes are enabled for the project.
+      type: bool
+      returned: success
+    autogeneratedRoutesPullrequests:
+      description: Whether autogenerated routes are created for pull request environments.
+      type: bool
+      returned: success
+    autogeneratedRoutePrefixes:
+      description: Prefixes added to the project's autogenerated routes.
+      type: list
+      elements: str
+      returned: success
+    autogeneratedPathRoutes:
+      description: Path-based routes added to the project's autogenerated routes.
+      type: list
+      elements: dict
+      returned: success
+      contains:
+        from_service:
+          description: Service the request is routed from.
+          type: str
+          returned: success
+        to_service:
+          description: Service the request is routed to.
+          type: str
+          returned: success
+        path:
+          description: Path routed, for example C(/api).
+          type: str
+          returned: success
+    disableRequestVerification:
+      description: Whether request verification is disabled on the project's autogenerated routes.
+      type: bool
+      returned: success
+    restrictions:
+      description: Actions restricted for the project.
+      type: list
+      elements: str
+      returned: success
   sample:
     id: 42
     name: my-project
