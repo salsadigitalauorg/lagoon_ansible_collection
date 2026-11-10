@@ -464,6 +464,12 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         lagoon_ssh_private_key = self.get_var(lagoon, 'ssh_private_key')
         lagoon_ssh_private_key_file = self.get_var(lagoon, 'ssh_private_key_file')
 
+        # Fallback to environment variables (e.g. AWX credential injection).
+        if not lagoon_ssh_private_key:
+            lagoon_ssh_private_key = os.environ.get('LAGOON_SSH_PRIVATE_KEY')
+        if not lagoon_ssh_private_key_file:
+            lagoon_ssh_private_key_file = os.environ.get('LAGOON_SSH_KEY_PATH')
+
         if lagoon_ssh_private_key:
             if not lagoon_ssh_private_key_file:
                 lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
@@ -477,7 +483,20 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         )
 
         if rc > 0:
-            raise AnsibleError("Failed to fetch Lagoon API token: %s (error code: %s) " % (error, rc))
+            raise AnsibleError(
+                "Failed to fetch Lagoon API token (rc=%d): %s\n"
+                "  ssh_host: %s\n"
+                "  ssh_port: %s\n"
+                "  key_path: %s\n"
+                "  key_provided: %s\n"
+                "  env LAGOON_SSH_PRIVATE_KEY set: %s\n"
+                "  env LAGOON_SSH_KEY_PATH set: %s\n"
+                "  ssh_options: -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+                % (rc, error, lagoon.get('ssh_host'), lagoon.get('ssh_port'),
+                   lagoon_ssh_private_key_file, bool(lagoon_ssh_private_key),
+                   bool(os.environ.get('LAGOON_SSH_PRIVATE_KEY')),
+                   bool(os.environ.get('LAGOON_SSH_KEY_PATH')))
+            )
 
         return token['access_token'].strip()
 
