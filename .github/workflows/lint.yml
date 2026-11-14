@@ -1,0 +1,48 @@
+name: Lint
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+# Least privilege: this workflow only reads the checkout.
+permissions:
+  contents: read
+
+env:
+  # Keep in step with .pre-commit-config.yaml, docker-compose.yml and ruff.toml.
+  # Different ruff versions can format differently, so CI and local tooling must
+  # agree or developers get spurious "works locally, fails in CI" diffs.
+  RUFF_VERSION: 0.17.5
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+
+    steps:
+      # Third-party actions are pinned by full commit SHA, not a mutable tag,
+      # so an upstream tag move cannot silently change what runs in CI.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Install Ruff
+        run: python -m pip install --disable-pip-version-check "ruff==${RUFF_VERSION}"
+
+      # Blocking. Formatting is mechanical, so there is never a reason to merge
+      # unformatted code; `ruff format .` fixes any failure here.
+      - name: Check formatting
+        run: ruff format --check --diff .
+
+      # Advisory for now. Surfaces findings as PR annotations without failing
+      # the build, so the existing backlog can be burnt down incrementally.
+      # Remove continue-on-error once it reports clean.
+      - name: Lint
+        run: ruff check --output-format=github .
+        continue-on-error: true

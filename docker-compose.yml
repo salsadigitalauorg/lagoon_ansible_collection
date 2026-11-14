@@ -24,6 +24,22 @@ services:
     working_dir: /collections/ansible_collections/lagoon/api
     command: ["antsibull-docs", "lint-collection-docs", "--plugin-docs", "."]
 
+  # Python formatting check, for developers without ruff installed locally.
+  #   docker compose run --rm lint-python              # check (same as CI)
+  #   docker compose run --rm lint-python format .      # fix in place
+  #
+  # Mounts the repo root, not ./api, because ruff.toml lives at the root.
+  # Version must match .github/workflows/lint.yml and .pre-commit-config.yaml.
+  lint-python:
+    image: ghcr.io/astral-sh/ruff:0.17.5-alpine
+    volumes:
+      - .:/io
+    working_dir: /io
+    # The image sets no entrypoint and puts ruff in Cmd, so overriding command
+    # alone would drop the binary. Declare it explicitly instead.
+    entrypoint: ["ruff"]
+    command: ["format", "--check", "--diff", "."]
+
   docs:
     build:
       context: .
