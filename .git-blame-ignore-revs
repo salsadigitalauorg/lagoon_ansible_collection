@@ -1,0 +1,11 @@
+# Revisions to ignore when running git blame.
+#
+# These are purely mechanical, whole-codebase reformats with no behavioural
+# change. Listing them here keeps `git blame` pointing at the commit that last
+# changed the logic rather than the one that moved the whitespace.
+#
+# GitHub honours this file automatically. To opt in locally:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: format entire codebase with ruff
+74db65509b889b02543cd1cdd80757b18d8946e1

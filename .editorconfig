@@ -1,0 +1,22 @@
+# https://editorconfig.org
+# Makes editors match ruff.toml before a commit is attempted, so 2-space Python
+# indentation is not reintroduced at the point of typing.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Trailing whitespace is significant in Markdown line breaks.
+trim_trailing_whitespace = false
