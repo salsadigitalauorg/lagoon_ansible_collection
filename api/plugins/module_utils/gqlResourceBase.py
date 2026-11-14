@@ -75,8 +75,6 @@ GROUPS_FIELDS = [
     "type",
 ]
 
-DEFAULT_BATCH_SIZE = 100
-
 
 class ResourceBase(Display):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
@@ -91,8 +89,23 @@ class ResourceBase(Display):
     def sanitisedName(self, name):
         return re.sub(r"[\W_-]+", "-", name)
 
-    def sanitiseForQueryAlias(self, name):
-        return re.sub(r"[\W-]+", "_", name)
+    def warnIfBatchSize(self, batch_size, resource: str):
+        """Warn that a batch_size argument was supplied but has no effect.
+
+        Batching was removed because the Lagoon API degrades sharply on queries
+        carrying many aliased root fields. The arguments are still accepted so
+        that existing playbooks and inventory files keep working; they will be
+        removed in a future major version.
+        """
+
+        if batch_size is None:
+            return
+
+        self.warning(
+            "[DEPRECATION WARNING] batch_size is deprecated and has no effect; "
+            f"the Lagoon API is now queried one {resource} at a time. "
+            "Remove the argument - it will be rejected in a future release."
+        )
 
     def queryTopLevelFields(
         self,
