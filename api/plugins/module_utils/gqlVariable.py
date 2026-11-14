@@ -1,3 +1,4 @@
+from .display import redacting
 from .gql import GqlClient
 from .gqlResourceBase import ResourceBase, VARIABLES_FIELDS
 
@@ -33,7 +34,12 @@ class Variable(ResourceBase):
                 field_query.select(var_fields)
                 field_queries.append(field_query)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            # Read path: the response holds every variable value for every
+            # project named, none of them known in advance, so redacting()
+            # cannot mask them - this one has to stay muted. Do not "finish
+            # the migration" to redacting() here.
+            with self.client.silenced():
+                resources = self.queryResources(DSLQuery(*field_queries))
 
         for pName in project_names:
             try:
@@ -45,8 +51,7 @@ class Variable(ResourceBase):
         return res
 
     def addOrUpdateByName(self, projectName:str, environmentName: str, name:str, value:str, scope:str) -> dict:
-        res = self.client.execute_query(
-            """
+        mutation = """
             mutation addOrUpdateEnvVariableByName(
                 $environment: String
                 $project: String!
@@ -63,15 +68,23 @@ class Variable(ResourceBase):
                 }) {
                     id
                 }
-            }""",
-            {
-                "environment": environmentName,
-                "project": projectName,
-                "scope": scope,
-                "name": name,
-                "value": str(value),
-            }
-        )
+            }"""
+
+        variables = {
+            "environment": environmentName,
+            "project": projectName,
+            "scope": scope,
+            "name": name,
+            "value": str(value),
+        }
+
+        # Write path: the value is known, so scrub it from output by value
+        # rather than muting the client. That keeps the TransportQueryError
+        # diagnostic in execute_query visible (ISM-1911) - muting here hid it,
+        # leaving no output at all when debugging a bad scope or auth error.
+        with redacting({str(value)}):
+            res = self.client.execute_query(mutation, variables)
+
         return res['addOrUpdateEnvVariableByName']
 
     def delete(self, id: int) -> bool:
