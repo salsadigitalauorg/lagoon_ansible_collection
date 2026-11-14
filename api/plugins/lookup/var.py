@@ -1,6 +1,8 @@
 from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import (
+    Environment,
+)
 from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
 
 DOCUMENTATION = """
@@ -76,49 +78,57 @@ EXAMPLES = """
 
 
 class LookupModule(LagoonLookupBase):
+    def run(self, terms, variables=None, **kwargs):
 
-  def run(self, terms, variables=None, **kwargs):
+        ret = []
 
-    ret = []
+        self.set_options(var_options=variables, direct=kwargs)
+        self.createClient()
+        environment = self.get_option("environment")
 
-    self.set_options(var_options=variables, direct=kwargs)
-    self.createClient()
-    environment = self.get_option('environment')
+        for term in terms:
+            if environment:
+                env_name = (
+                    term
+                    + "-"
+                    + environment.replace("/", "-").replace("_", "-").replace(".", "-")
+                )
+                self._display.v(f"Lagoon variable lookup environment: {env_name}")
+                lagoonEnvironment = Environment(self.client).byNs(
+                    env_name, ["id", "kubernetesNamespaceName"]
+                )
+                if not len(lagoonEnvironment.environments):
+                    raise AnsibleError(
+                        f"Unable to fetch environment {env_name}; errors: {lagoonEnvironment.errors}"
+                    )
 
-    for term in terms:
-      if environment:
-        env_name = term + '-' + environment.replace('/', '-').replace('_', '-').replace('.', '-')
-        self._display.v(f"Lagoon variable lookup environment: {env_name}")
-        lagoonEnvironment = Environment(self.client).byNs(env_name, ['id', 'kubernetesNamespaceName'])
-        if not len(lagoonEnvironment.environments):
-          raise AnsibleError(
-              f"Unable to fetch environment {env_name}; errors: {lagoonEnvironment.errors}")
+                lagoonEnvironment.withVariables()
+                env_vars = lagoonEnvironment.environments[0]["envVariables"]
+            else:
+                self._display.v(f"Lagoon variable lookup project: {term}")
+                lagoonProject = Project(self.client).byName(term, ["name"])
+                if not len(lagoonProject.projects):
+                    raise AnsibleError(
+                        f"Unable to fetch project {term}; errors: {lagoonProject.errors}"
+                    )
 
-        lagoonEnvironment.withVariables()
-        env_vars = lagoonEnvironment.environments[0]['envVariables']
-      else:
-        self._display.v(f"Lagoon variable lookup project: {term}")
-        lagoonProject = Project(self.client).byName(term, ['name'])
-        if not len(lagoonProject.projects):
-          raise AnsibleError(
-              f"Unable to fetch project {term}; errors: {lagoonProject.errors}")
+                lagoonProject.withVariables()
+                env_vars = lagoonProject.projects[0]["envVariables"]
 
-        lagoonProject.withVariables()
-        env_vars = lagoonProject.projects[0]['envVariables']
+            if self.get_option("return_dict"):
+                vars_dict = {}
+                for var in env_vars:
+                    vars_dict[var["name"]] = var
+                ret.append(vars_dict)
+            elif self.get_option("var_name"):
+                self._display.v(
+                    f"Lagoon variable lookup name: {self.get_option('var_name')}"
+                )
+                for var in env_vars:
+                    if var["name"] == self.get_option("var_name"):
+                        ret.append(var)
+                        break
+            else:
+                ret.append(env_vars)
 
-      if self.get_option('return_dict'):
-        vars_dict = {}
-        for var in env_vars:
-          vars_dict[var['name']] = var
-        ret.append(vars_dict)
-      elif self.get_option('var_name'):
-        self._display.v(
-            f"Lagoon variable lookup name: {self.get_option('var_name')}")
-        for var in env_vars:
-          if var['name'] == self.get_option('var_name'):
-            ret.append(var)
-            break
-      else:
-        ret.append(env_vars)
-
-    return ret
+        return ret

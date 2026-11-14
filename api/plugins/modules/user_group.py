@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: user_group
 description: Manage the groups for a user
 short_description: Manage the groups for a user
@@ -22,9 +22,9 @@ options:
     type: str
     required: true
     choices: [ GUEST, REPORTER, DEVELOPER, MAINTAINER, OWNER ]
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add user to group.
   lagoon.api.user_group:
     email: user@example.com
@@ -32,4 +32,4 @@ EXAMPLES = r'''
     role: GUEST
   register: group_add
 - debug: var=group_add
-'''
+"""

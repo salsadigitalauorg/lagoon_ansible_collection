@@ -5,12 +5,12 @@ from .....plugins.module_utils.gqlTaskDefinition import TaskDefinition
 from gql.dsl import DSLFragment, DSLQuery
 
 import sys
-sys.modules['ansible.utils.display'] = unittest.mock.Mock()
-sys.modules['gql.client.Client'] = unittest.mock.Mock()
+
+sys.modules["ansible.utils.display"] = unittest.mock.Mock()
+sys.modules["gql.client.Client"] = unittest.mock.Mock()
 
 
 class GqlTaskDefinitionTester(unittest.TestCase):
-
     def test_get(self):
         client = get_mock_gql_client()
         lagoonTaskDefinition = TaskDefinition(client)
@@ -22,7 +22,9 @@ class GqlTaskDefinitionTester(unittest.TestCase):
         assert isinstance(query_args[1], DSLFragment)
         assert isinstance(query_args[2], DSLQuery)
 
-        assert "\n" + dsl_exes_to_str(*query_args) == """
+        assert (
+            "\n" + dsl_exes_to_str(*query_args)
+            == """
 fragment Image on AdvancedTaskDefinitionImage {
   id
   type
@@ -77,13 +79,16 @@ fragment Command on AdvancedTaskDefinitionCommand {
     ...Command
   }
 }"""
+        )
 
     def test_get_with_fields(self):
         client = get_mock_gql_client()
         lagoonTaskDefinition = TaskDefinition(client)
         lagoonTaskDefinition.get_definitions(fields=["id"])
         query_args = client.execute_query_dynamic.call_args.args
-        assert "\n" + dsl_exes_to_str(*query_args) == """
+        assert (
+            "\n" + dsl_exes_to_str(*query_args)
+            == """
 fragment Image on AdvancedTaskDefinitionImage {
   id
   image
@@ -100,11 +105,15 @@ fragment Command on AdvancedTaskDefinitionCommand {
     ...Command
   }
 }"""
+        )
 
         lagoonTaskDefinition.get_definitions(
-            fields=["id", "advancedTaskDefinitionArguments"])
+            fields=["id", "advancedTaskDefinitionArguments"]
+        )
         query_args = client.execute_query_dynamic.call_args.args
-        assert "\n" + dsl_exes_to_str(*query_args) == """
+        assert (
+            "\n" + dsl_exes_to_str(*query_args)
+            == """
 fragment Image on AdvancedTaskDefinitionImage {
   id
   advancedTaskDefinitionArguments {
@@ -135,3 +144,4 @@ fragment Command on AdvancedTaskDefinitionCommand {
     ...Command
   }
 }"""
+        )

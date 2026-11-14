@@ -4,7 +4,6 @@ from ansible.errors import AnsibleError
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -15,9 +14,9 @@ class ActionModule(LagoonActionBase):
 
         self._display.vvv("Task args: %s" % self._task.args)
 
-        environment_name = self._task.args.get('environment')
-        environment_id = self._task.args.get('environment_id')
-        patch_values = self._task.args.get('values')
+        environment_name = self._task.args.get("environment")
+        environment_id = self._task.args.get("environment_id")
+        patch_values = self._task.args.get("values")
 
         if not environment_name and not environment_id:
             raise AnsibleError("Environment name or id is required.")
@@ -39,11 +38,11 @@ class ActionModule(LagoonActionBase):
             if not key in environment:
                 update_required = True
                 break
-            if key in ['openshift', 'kubernetes']:
+            if key in ["openshift", "kubernetes"]:
                 # Cast the cluster id to int here - it will be used
                 # further down when updating the environment.
                 value = int(value)
-                if str(value) != str(environment[key]['id']):
+                if str(value) != str(environment[key]["id"]):
                     update_required = True
                     break
             elif str(value) != str(environment[key]):
@@ -51,11 +50,11 @@ class ActionModule(LagoonActionBase):
                 break
 
         if not update_required:
-            result['update'] = environment
+            result["update"] = environment
             return result
 
-        result['update'] = lagoonEnvironment.update(environment['id'], patch_values)
-        result['changed'] = True
-        self._display.v("Update: %s" % result['update'])
+        result["update"] = lagoonEnvironment.update(environment["id"], patch_values)
+        result["changed"] = True
+        self._display.v("Update: %s" % result["update"])
 
         return result

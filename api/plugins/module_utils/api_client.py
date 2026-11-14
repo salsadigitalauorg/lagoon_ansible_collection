@@ -1,4 +1,5 @@
-from __future__ import (absolute_import, division, print_function)
+from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import json
@@ -14,26 +15,26 @@ from ansible.module_utils.six.moves.urllib.error import HTTPError, URLError
 
 # display = Display()
 
-class ApiClient:
 
+class ApiClient:
     def __init__(self, endpoint, token, options={}) -> None:
         self.options = options
 
-        if 'headers' not in self.options:
-            self.options['headers'] = {}
-        elif not isinstance(self.options['headers'], dict):
+        if "headers" not in self.options:
+            self.options["headers"] = {}
+        elif not isinstance(self.options["headers"], dict):
             raise AnsibleError("Expecting client headers to be dictionary.")
 
-        self.options['headers']['Content-Type'] = 'application/json'
-        self.options['headers']['Authorization'] = "Bearer %s" % token
-        self.options['endpoint'] = endpoint
+        self.options["headers"]["Content-Type"] = "application/json"
+        self.options["headers"]["Authorization"] = "Bearer %s" % token
+        self.options["endpoint"] = endpoint
 
     ###
     # Get projects from specific groups.
     ###
     def projects_in_group(self, group):
         query = {
-            'query': """query ($group: String!) {
+            "query": """query ($group: String!) {
                 allProjectsInGroup(input: { name: $group }) {
                     id
                     name
@@ -51,17 +52,17 @@ class ApiClient:
                     environments { id name environmentType autoIdle updated created route }
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "group": "%s"
-            }"""
+            }""",
         }
 
         result = self.make_api_call(self.__prepare_graphql_query(query) % group)
-        return filter(None, result['data']['allProjectsInGroup'])
+        return filter(None, result["data"]["allProjectsInGroup"])
 
     def project(self, project):
         query = {
-            'query': """query projectInfo($name: String!) {
+            "query": """query projectInfo($name: String!) {
                 projectByName(name: $name) {
                     id
                     name
@@ -104,17 +105,19 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"name": "%s"}'
+            "variables": '{"name": "%s"}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % project)
-        if result['data']['projectByName'] == None:
+        if result["data"]["projectByName"] == None:
             raise AnsibleError(
-                "Unable to get details for project %s; please make sure the project name is correct" % project)
-        return result['data']['projectByName']
+                "Unable to get details for project %s; please make sure the project name is correct"
+                % project
+            )
+        return result["data"]["projectByName"]
 
     def project_from_environment(self, environment):
         query = {
-            'query': """query projectInfoFromEnv($name: String!) {
+            "query": """query projectInfoFromEnv($name: String!) {
                 environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
                     project {
                         id
@@ -126,17 +129,19 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"name": "%s"}'
+            "variables": '{"name": "%s"}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % environment)
-        if result['data']['environmentByKubernetesNamespaceName']['project'] == None:
+        if result["data"]["environmentByKubernetesNamespaceName"]["project"] == None:
             raise AnsibleError(
-                "Unable to get project details for environment %s; please make sure the environment name is correct" % environment)
-        return result['data']['environmentByKubernetesNamespaceName']['project']
+                "Unable to get project details for environment %s; please make sure the environment name is correct"
+                % environment
+            )
+        return result["data"]["environmentByKubernetesNamespaceName"]["project"]
 
     def project_get_variables(self, project):
         query = {
-            'query': """query projectVars($name: String!) {
+            "query": """query projectVars($name: String!) {
                 projectByName(name: $name) {
                     envVariables {
                         id
@@ -146,72 +151,84 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"name": "%s"}'
+            "variables": '{"name": "%s"}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % project)
-        if result['data']['projectByName'] == None:
+        if result["data"]["projectByName"] == None:
             raise AnsibleError(
-                "Unable to get variables for %s; please make sure the project name is correct" % project)
-        return result['data']['projectByName']['envVariables']
+                "Unable to get variables for %s; please make sure the project name is correct"
+                % project
+            )
+        return result["data"]["projectByName"]["envVariables"]
 
     def project_get_groups(self, project):
         query = {
-            'query': """query projectByName($name: String!) {
+            "query": """query projectByName($name: String!) {
                 projectByName(name: $name) {
                     groups { name }
                 }
             }
             """,
-            'variables': '{"name": "%s"}'
+            "variables": '{"name": "%s"}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % project)
 
-        if result['data']['projectByName'] == None:
+        if result["data"]["projectByName"] == None:
             raise AnsibleError(
-                "Unable to get groups for %s; please make sure the project name is correct" % project)
+                "Unable to get groups for %s; please make sure the project name is correct"
+                % project
+            )
 
-        return result['data']['projectByName']['groups']
+        return result["data"]["projectByName"]["groups"]
 
     def project_deploy(self, project, branch, wait=False, delay=60, retries=30):
         query = {
-            'query': """mutation deploy($project: String!, $branch: String!) {
+            "query": """mutation deploy($project: String!, $branch: String!) {
                 deployEnvironmentBranch (input: {
                     project: { name: $project },
                     branchName: $branch
                 })
             }""",
-            'variables': '{"project": "%s", "branch": "%s"}' %
-            (project, branch)
+            "variables": '{"project": "%s", "branch": "%s"}' % (project, branch),
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
         if not wait:
-            return result['data']['deployEnvironmentBranch']
+            return result["data"]["deployEnvironmentBranch"]
 
         # display.display(
         #     "\033[30;1mWait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries))
         return self.project_check_deploy_status(project, branch, wait, delay, retries)
 
-    def project_check_deploy_status(self, project, branch, wait=False, delay=60, retries=30, current_try=1):
+    def project_check_deploy_status(
+        self, project, branch, wait=False, delay=60, retries=30, current_try=1
+    ):
         time.sleep(delay)
         environment = self.environment(
-            project + '-' + branch.replace('/', '-').replace('_', '-').replace('.', '-'))
+            project + "-" + branch.replace("/", "-").replace("_", "-").replace(".", "-")
+        )
 
-        if (not wait or (len(environment['deployments']) and
-            'status' in environment['deployments'][0] and
-            environment['deployments'][0]['status'] in ['complete', 'failed', 'new', 'cancelled'])):
-            return environment['deployments'][0]['status']
+        if not wait or (
+            len(environment["deployments"])
+            and "status" in environment["deployments"][0]
+            and environment["deployments"][0]["status"]
+            in ["complete", "failed", "new", "cancelled"]
+        ):
+            return environment["deployments"][0]["status"]
 
         if retries - current_try == 0:
             raise AnsibleError(
-                'Maximium number of retries reached; view deployment logs for more information.')
+                "Maximium number of retries reached; view deployment logs for more information."
+            )
 
         # display.display(
         #     "\033[30;1mRETRYING: Wait for deployment completion for %s(%s) (%s retries left).\033[0m" % (project, branch, retries - current_try))
-        return self.project_check_deploy_status(project, branch, wait, delay, retries, current_try + 1)
+        return self.project_check_deploy_status(
+            project, branch, wait, delay, retries, current_try + 1
+        )
 
     def project_update(self, project_id, patch):
         query = {
-            'query': """mutation UpdateProjectDeploymentCluster($projectId: Int!) {
+            "query": """mutation UpdateProjectDeploymentCluster($projectId: Int!) {
                 updateProject(input: {id: $projectId, patch: %s}) {
                     id
                     name
@@ -231,15 +248,16 @@ class ApiClient:
                         name
                     }
                 }
-            }""" % self.__patch_dict_to_string(patch),
-            'variables': '{"projectId": %s}' % project_id
+            }"""
+            % self.__patch_dict_to_string(patch),
+            "variables": '{"projectId": %s}' % project_id,
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        return result['data']['updateProject']
+        return result["data"]["updateProject"]
 
     def environment(self, environment):
         query = {
-            'query': """query environmentInfo($name: String!) {
+            "query": """query environmentInfo($name: String!) {
                 environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
                     id
                     name
@@ -265,24 +283,25 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"name": "%s"}' % environment
+            "variables": '{"name": "%s"}' % environment,
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        if result['data']['environmentByKubernetesNamespaceName'] == None:
+        if result["data"]["environmentByKubernetesNamespaceName"] == None:
             raise AnsibleError(
-                "Unable to get details for environment %s; please make sure the environment name is correct" % environment)
+                "Unable to get details for environment %s; please make sure the environment name is correct"
+                % environment
+            )
 
-        environment = result['data']['environmentByKubernetesNamespaceName']
+        environment = result["data"]["environmentByKubernetesNamespaceName"]
 
-        if 'routes' in environment and environment['routes']:
-            environment['routes'] = environment['routes'].split(',')
+        if "routes" in environment and environment["routes"]:
+            environment["routes"] = environment["routes"].split(",")
 
         return environment
 
-
     def environment_by_id(self, environment_id):
         query = {
-            'query': """query environmentInfo($envId: Int!) {
+            "query": """query environmentInfo($envId: Int!) {
                 environmentById(id: $envId) {
                     id
                     name
@@ -298,17 +317,19 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"envId": %s}' % environment_id
+            "variables": '{"envId": %s}' % environment_id,
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        if result['data']['environmentById'] == None:
+        if result["data"]["environmentById"] == None:
             raise AnsibleError(
-                "Unable to get details for environment %s; please make sure the environment id is correct" % environment_id)
-        return result['data']['environmentById']
+                "Unable to get details for environment %s; please make sure the environment id is correct"
+                % environment_id
+            )
+        return result["data"]["environmentById"]
 
     def environment_get_variables(self, environment):
         query = {
-            'query': """query envVars($name: String!) {
+            "query": """query envVars($name: String!) {
                 environmentByKubernetesNamespaceName(kubernetesNamespaceName: $name) {
                     envVariables {
                         id
@@ -318,17 +339,19 @@ class ApiClient:
                     }
                 }
             }""",
-            'variables': '{"name": "%s"}'
+            "variables": '{"name": "%s"}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % environment)
-        if result['data']['environmentByKubernetesNamespaceName'] == None:
+        if result["data"]["environmentByKubernetesNamespaceName"] == None:
             raise AnsibleError(
-                "Unable to get variables for %s; please make sure the environment name is correct" % environment)
-        return result['data']['environmentByKubernetesNamespaceName']['envVariables']
+                "Unable to get variables for %s; please make sure the environment name is correct"
+                % environment
+            )
+        return result["data"]["environmentByKubernetesNamespaceName"]["envVariables"]
 
     def environment_update(self, environment_id, patch):
         query = {
-            'query': """mutation updateEnvironment($environmentId: Int!) {
+            "query": """mutation updateEnvironment($environmentId: Int!) {
                 updateEnvironment(input: {id: $environmentId, patch: %s}) {
                     id
                     name
@@ -341,97 +364,100 @@ class ApiClient:
                         name
                     }
                 }
-            }""" % self.__patch_dict_to_string(patch),
-            'variables': '{"environmentId": %s}' % environment_id
+            }"""
+            % self.__patch_dict_to_string(patch),
+            "variables": '{"environmentId": %s}' % environment_id,
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        return result['data']['updateEnvironment']
+        return result["data"]["updateEnvironment"]
 
     def environment_delete(self, project_name, environment_name):
         query = {
-            'query': """
+            "query": """
                 mutation DeleteEnvironment($project_name: String!, $environment_name: String!) {
                     deleteEnvironment(input: { project: $project_name, name: $environment_name })
                 }
             """,
-            'variables': """{
+            "variables": """{
                 "project_name": "%s",
                 "environment_name": "%s"
-            }""" % (project_name, environment_name)
+            }"""
+            % (project_name, environment_name),
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
 
-        if "deleteEnvironment" not in result['data']:
+        if "deleteEnvironment" not in result["data"]:
             return False
 
-        if 'errors' in result['data']:
+        if "errors" in result["data"]:
             # display.v(json.dumps(result['data']['errors']))
             return False
 
-        return True if result['data']['deleteEnvironment'] == 'success' else False
+        return True if result["data"]["deleteEnvironment"] == "success" else False
 
     def add_variable(self, type, type_id, name, value, scope):
         query = {
-            'query': """mutation AddEnvVar($type: EnvVariableType!, $type_id: Int!, $name: String!, $value: String!, $scope: EnvVariableScope!) {
+            "query": """mutation AddEnvVar($type: EnvVariableType!, $type_id: Int!, $name: String!, $value: String!, $scope: EnvVariableScope!) {
                 addEnvVariable(input: {type: $type, typeId: $type_id, scope: $scope, name: $name, value: $value}) {
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "type": "%s",
                 "type_id": %s,
                 "name": "%s",
                 "value": "%s",
                 "scope": "%s"
-            }"""
+            }""",
         }
-        result = self.make_api_call(self.__prepare_graphql_query(query) % (
-            type, type_id, name, value, scope))
-        return result['data']['addEnvVariable']['id']
+        result = self.make_api_call(
+            self.__prepare_graphql_query(query) % (type, type_id, name, value, scope)
+        )
+        return result["data"]["addEnvVariable"]["id"]
 
     def delete_variable(self, id):
         query = {
-            'query': """mutation DeleteVar($id: Int!) {
+            "query": """mutation DeleteVar($id: Int!) {
         deleteEnvVariable(input:  { id: $id }) }""",
-            'variables': '{"id": %s}'
+            "variables": '{"id": %s}',
         }
         result = self.make_api_call(self.__prepare_graphql_query(query) % id)
-        return result['data']['deleteEnvVariable']
+        return result["data"]["deleteEnvVariable"]
 
     def update_metadata(self, id, key, value):
         query = {
-            'query': """mutation UpdateMeta($id: Int!, $key: String!, $value: String!) {
+            "query": """mutation UpdateMeta($id: Int!, $key: String!, $value: String!) {
                 updateProjectMetadata(input: { id: $id, patch: { key: $key, value: $value }}) {
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "id": %s,
                 "key": "%s",
                 "value": "%s"
-            }"""
+            }""",
         }
         self.make_api_call(self.__prepare_graphql_query(query) % (id, key, value))
-        return '%s:%s' % (key, value)
+        return "%s:%s" % (key, value)
 
     def remove_metadata(self, id, key):
         query = {
-            'query': """mutation RemoveMeta($id: Int!, $key: String!) {
+            "query": """mutation RemoveMeta($id: Int!, $key: String!) {
                 removeProjectMetadataByKey(input: { id: $id, key: $key }) {
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "id": %s,
                 "key": "%s"
-            }"""
+            }""",
         }
         self.make_api_call(self.__prepare_graphql_query(query) % (id, key))
-        return '%s' % (key)
+        return "%s" % (key)
 
-    def add_project_notification(self, project, notification, type='SLACK'):
+    def add_project_notification(self, project, notification, type="SLACK"):
         query = {
-            'query': """mutation notification(
+            "query": """mutation notification(
                 $project: String!
                 $type: NotificationType!
                 $name: String!
@@ -445,17 +471,19 @@ class ApiClient:
                     name
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "project": "%s",
                 "name": "%s",
                 "type": "%s"
-            }"""
+            }""",
         }
-        return self.make_api_call(self.__prepare_graphql_query(query) % (project, notification, type))
+        return self.make_api_call(
+            self.__prepare_graphql_query(query) % (project, notification, type)
+        )
 
     def remove_project_notification(self, project, notification, type):
         query = {
-            'query': """mutation notification(
+            "query": """mutation notification(
                 $project: String!
                 $type: NotificationType!
                 $name: String!
@@ -468,58 +496,56 @@ class ApiClient:
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "project": "%s",
                 "name": "%s",
                 "type": "%s"
-            }"""
+            }""",
         }
 
-        return self.make_api_call(self.__prepare_graphql_query(query) % (project, notification, type))
+        return self.make_api_call(
+            self.__prepare_graphql_query(query) % (project, notification, type)
+        )
 
     def group(self, name):
         query = {
-            'query': """query group($name: String!) {
+            "query": """query group($name: String!) {
                 groupByName(name: $name) {
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "name": "%s"
-            }"""
+            }""",
         }
-        result = self.make_api_call(
-            self.__prepare_graphql_query(query) % (name)
-        )
-        return result['data']['groupByName']
+        result = self.make_api_call(self.__prepare_graphql_query(query) % (name))
+        return result["data"]["groupByName"]
 
     def group_add(self, name, parent=None):
         query = {
-            'query': """mutation group($name: String!) {
+            "query": """mutation group($name: String!) {
                 addGroup(input: { name: $name }) {
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "name": "%s"
-            }"""
+            }""",
         }
 
-        result = self.make_api_call(
-            self.__prepare_graphql_query(query) % (name)
-        )
+        result = self.make_api_call(self.__prepare_graphql_query(query) % (name))
 
-        if result['errors']:
+        if result["errors"]:
             raise AnsibleError("Group '%s' exists" % (name))
 
-        return result['data']['addGroup']
+        return result["data"]["addGroup"]
 
     def group_remove(self, id):
         query = {}
 
     def user_add_group(self, email, group_name, role):
         query = {
-            'query': """mutation group(
+            "query": """mutation group(
                 $email: String!
                 $group: String!
                 $role: GroupRole!
@@ -532,19 +558,21 @@ class ApiClient:
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "email": "%s",
                 "group": "%s",
                 "role": "%s"
-            }"""
+            }""",
         }
 
-        result = self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name, role.upper()))
-        return result['data']['addUserToGroup']['id']
+        result = self.make_api_call(
+            self.__prepare_graphql_query(query) % (email, group_name, role.upper())
+        )
+        return result["data"]["addUserToGroup"]["id"]
 
     def user_remove_group(self, email, group_name):
         query = {
-            'query': """mutation group(
+            "query": """mutation group(
                 $email: String!
                 $group: String!
             ) {
@@ -555,17 +583,19 @@ class ApiClient:
                     id
                 }
             }""",
-            'variables': """{
+            "variables": """{
                 "email": "%s",
                 "group": "%s"
-            }"""
+            }""",
         }
 
-        return self.make_api_call(self.__prepare_graphql_query(query) % (email, group_name))
+        return self.make_api_call(
+            self.__prepare_graphql_query(query) % (email, group_name)
+        )
 
     def deploy_target_config_get(self, project_name):
-       query = {
-           'query': """query projectInfo($name: String!) {
+        query = {
+            "query": """query projectInfo($name: String!) {
                projectByName(name: $name) {
                    id
                    deployTargetConfigs {
@@ -580,19 +610,21 @@ class ApiClient:
                    }
                }
            }""",
-           'variables': '{"name": "%s"}'
-       }
-       result = self.make_api_call(
-           self.__prepare_graphql_query(query) % project_name)
-       if result['data']['projectByName'] == None:
-           raise AnsibleError(
-               "Unable to get deployTargetConfigs for project %s; please make sure the project name is correct" % project)
-       return result['data']['projectByName']
-    
+            "variables": '{"name": "%s"}',
+        }
+        result = self.make_api_call(self.__prepare_graphql_query(query) % project_name)
+        if result["data"]["projectByName"] == None:
+            raise AnsibleError(
+                "Unable to get deployTargetConfigs for project %s; please make sure the project name is correct"
+                % project
+            )
+        return result["data"]["projectByName"]
+
     def deploy_target_config_add(self, project_id, configs):
         query_configs = []
         for idx, config in enumerate(configs):
-            query_configs.append("""
+            query_configs.append(
+                """
                 deployTarget%d: addDeployTargetConfig(
                     input: {
                         project: %d
@@ -614,27 +646,41 @@ class ApiClient:
                         name
                     }
                 }
-            """ % (idx, project_id, config['branches'], config['pullrequests'],
-                int(config['deployTarget']), config['weight']))
+            """
+                % (
+                    idx,
+                    project_id,
+                    config["branches"],
+                    config["pullrequests"],
+                    int(config["deployTarget"]),
+                    config["weight"],
+                )
+            )
         query = {
-            'query': """mutation addDeployTargetConfigs { %s }""" % self.__join_mutations(query_configs)
+            "query": """mutation addDeployTargetConfigs { %s }"""
+            % self.__join_mutations(query_configs)
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        return result['data']
+        return result["data"]
 
     def deploy_target_config_delete(self, project_id, config_ids):
         query_configs = []
         if isinstance(config_ids, list):
             for config_id in config_ids:
-                query_configs.append(self.deploy_target_config_delete_mutation(project_id, config_id))
+                query_configs.append(
+                    self.deploy_target_config_delete_mutation(project_id, config_id)
+                )
         else:
-            query_configs.append(self.deploy_target_config_delete_mutation(project_id, config_ids))
+            query_configs.append(
+                self.deploy_target_config_delete_mutation(project_id, config_ids)
+            )
 
         query = {
-            'query': """mutation deleteDeployTargetConfigs { %s }""" % self.__join_mutations(query_configs)
+            "query": """mutation deleteDeployTargetConfigs { %s }"""
+            % self.__join_mutations(query_configs)
         }
         result = self.make_api_call(self.__prepare_graphql_query(query))
-        return result['data']
+        return result["data"]
 
     def deploy_target_config_delete_mutation(self, project_id, config_id):
         return """deleteDeployTargetConfig%d: deleteDeployTargetConfig(
@@ -643,20 +689,21 @@ class ApiClient:
     def make_api_call(self, payload):
         # display.v("API call payload: %s" % payload)
         try:
-            response = open_url(self.options.get('endpoint'), data=payload,
-                                validate_certs=self.options.get(
-                                    'validate_certs', False),
-                                headers=self.options.get('headers', {}),
-                                timeout=self.options.get('timeout', 30))
+            response = open_url(
+                self.options.get("endpoint"),
+                data=payload,
+                validate_certs=self.options.get("validate_certs", False),
+                headers=self.options.get("headers", {}),
+                timeout=self.options.get("timeout", 30),
+            )
         except HTTPError as e:
-            raise AnsibleError(
-                "Received HTTP error: %s" % (to_native(e)))
+            raise AnsibleError("Received HTTP error: %s" % (to_native(e)))
         except URLError as e:
-            raise AnsibleError(
-                "Failed lookup url: %s" % (to_native(e)))
+            raise AnsibleError("Failed lookup url: %s" % (to_native(e)))
         except SSLValidationError as e:
             raise AnsibleError(
-                "Error validating the server's certificate: %s" % (to_native(e)))
+                "Error validating the server's certificate: %s" % (to_native(e))
+            )
         except ConnectionError as e:
             raise AnsibleError("Error connecting: %s" % (to_native(e)))
 
@@ -671,7 +718,7 @@ class ApiClient:
     def __patch_dict_to_string(self, patch):
         value_list = []
         for key, value in patch.items():
-            value_item = key + ': '
+            value_item = key + ": "
             if type(value) is int:
                 value_item += str(value)
             else:
@@ -681,13 +728,13 @@ class ApiClient:
                 except ValueError:
                     value_item += '"' + value + '"'
             value_list.append(value_item)
-        return '{' + ', '.join(value_list) + '}'
+        return "{" + ", ".join(value_list) + "}"
 
     # Remove newlines, tabs & multiple spaces.
     def __prepare_graphql_query(self, query):
         query_str = json.dumps(query)
         query_str = query_str.replace("\\n", "").replace("\\t", "")
-        return re.sub(' +', ' ', query_str)
+        return re.sub(" +", " ", query_str)
 
     def __join_mutations(self, mutations):
         return " ".join(mutations)

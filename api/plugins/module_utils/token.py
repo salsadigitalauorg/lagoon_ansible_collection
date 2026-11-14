@@ -4,21 +4,23 @@ import subprocess
 import json
 from typing import List, Union
 
+
 def write_ssh_key(key_content: str, key_path: str):
     """Helper function for writing a private key to a file."""
     try:
-        with open(key_path, 'w') as fh:
+        with open(key_path, "w") as fh:
             fh.write(key_content)
         # Set permissions to 0600 (read/write for owner only)
         os.chmod(key_path, 0o600)
     except IOError as e:
-        print('unable to write ssh key to file')
+        print("unable to write ssh key to file")
         print(e)
         raise
 
+
 def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path: str):
     """Fetch a token from Lagoon via SSH."""
-    ssh_command = ['ssh', '-p', f'{ssh_port}']
+    ssh_command = ["ssh", "-p", f"{ssh_port}"]
 
     # Add options.
     if isinstance(ssh_options, str):
@@ -28,8 +30,8 @@ def fetch_token(ssh_host, ssh_port, ssh_options: Union[str, List[str]], key_path
         ssh_command.extend(ssh_options)
 
     if key_path:
-        ssh_command.extend(['-i', key_path])
-    ssh_command.extend([f"lagoon@{ssh_host}", 'grant'])
+        ssh_command.extend(["-i", key_path])
+    ssh_command.extend([f"lagoon@{ssh_host}", "grant"])
 
     try:
         ssh_res = subprocess.run(ssh_command, capture_output=True, check=True)

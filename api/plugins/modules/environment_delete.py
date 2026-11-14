@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: environment_delete
 short_description: Delete a project environment
 description:
@@ -17,11 +17,11 @@ options:
       - The project branch.
     required: true
     type: str
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Remove the Lagoon environment.
   lagoon.api.environment_delete:
     project: test-project
     branch: temp-env
-'''
+"""

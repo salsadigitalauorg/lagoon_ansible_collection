@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: query
 description: Run a query against the Lagoon API.
 short_description: Run a query against the Lagoon API.
@@ -41,9 +41,9 @@ options:
         type: list
         elements: str
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Query specific fields for all projects.
   lagoon.api.query:
     query: allProjects
@@ -84,4 +84,4 @@ EXAMPLES = r'''
           - value
           - scope
   register: query_results
-'''
+"""

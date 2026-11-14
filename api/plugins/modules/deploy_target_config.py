@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: deploy_target_config
 
 short_description: Manage deploy target configs for a project.
@@ -49,9 +49,9 @@ seealso:
   - name: Lagoon deploy target configs docs
     description: Link to the Lagoon deploy target configs documentation.
     link: https://github.com/uselagoon/lagoon/blob/main/docs/using-lagoon-advanced/deploytarget_configs.md
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add Lagoon deploy target configs.
   lagoon.api.deploy_target_config:
     project: '{{ project.name }}'
@@ -83,4 +83,4 @@ EXAMPLES = r'''
         deployTarget: 2
         weight: 1
     replace: true
-'''
+"""

@@ -5,7 +5,6 @@ from ansible.errors import AnsibleError, AnsibleOptionsError
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -34,19 +33,21 @@ class ActionModule(LagoonActionBase):
         # Get the list of available tasks for the environment.
         lagoonTaskDefinition = TaskDefinition(self.client)
         task_definitions = lagoonTaskDefinition.get_definitions(
-            environment_id=environment_id,
-            fields=['id', 'name'])
+            environment_id=environment_id, fields=["id", "name"]
+        )
 
         # Get the task definition id.
         task_id = -1
         for td in task_definitions:
-            if td['name'] == task_name:
-                task_id = td['id']
+            if td["name"] == task_name:
+                task_id = td["id"]
                 break
         if task_id == -1:
             raise AnsibleError(f"Task '{task_name}' not found")
 
         # Invoke the task.
         result["changed"] = True
-        result['task_id'] = Task(self.client).invoke(environment_id, task_id, task_arguments)
+        result["task_id"] = Task(self.client).invoke(
+            environment_id, task_id, task_arguments
+        )
         return result

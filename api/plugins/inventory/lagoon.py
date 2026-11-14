@@ -159,7 +159,7 @@ cache_prefix: lagoon
 
 
 class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
-    NAME = 'lagoon.api.lagoon'
+    NAME = "lagoon.api.lagoon"
 
     def parse(self, inventory: InventoryData, loader, path, cache=True):
         super(InventoryModule, self).parse(inventory, loader, path, cache)
@@ -169,7 +169,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         # cache may be True or False at this point to indicate if the inventory is being refreshed
         # get the user's cache option too to see if we should save the cache if it is changing
-        user_cache_setting = self.get_option('cache')
+        user_cache_setting = self.get_option("cache")
 
         # read if the user has caching enabled and the cache isn't being refreshed
         attempt_to_read_cache = user_cache_setting and cache
@@ -186,7 +186,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 # This occurs if the cache_key is not in the cache or if the cache_key expired, so the cache needs to be updated
                 cache_needs_update = True
 
-        lagoons = self.get_option('lagoons')
+        lagoons = self.get_option("lagoons")
 
         if not attempt_to_read_cache or cache_needs_update:
             # Fetch and process projects from Lagoon.
@@ -195,103 +195,106 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         if cache_needs_update:
             self._cache[cache_key] = self.all_objects
 
-        strict = self.get_option('strict')
+        strict = self.get_option("strict")
         self.populate()
 
         try:
             for host in inventory.hosts:
                 hostvars = inventory.hosts[host].get_vars()
                 # Create composed groups.
-                self._add_host_to_composed_groups(self.get_option(
-                    'groups'), hostvars, host, strict=strict)
+                self._add_host_to_composed_groups(
+                    self.get_option("groups"), hostvars, host, strict=strict
+                )
                 # Create keyed groups.
-                self._add_host_to_keyed_groups(self.get_option(
-                    'keyed_groups'), hostvars, host, strict=strict)
+                self._add_host_to_keyed_groups(
+                    self.get_option("keyed_groups"), hostvars, host, strict=strict
+                )
         except Exception as e:
-            raise AnsibleParserError("failed to parse %s: %s " % (
-                to_native(path), to_native(e)), orig_exc=e)
+            raise AnsibleParserError(
+                "failed to parse %s: %s " % (to_native(path), to_native(e)), orig_exc=e
+            )
 
     def fetch_objects(self, lagoons):
 
         if lagoons:
             if not isinstance(lagoons, list):
-                raise AnsibleError(
-                    "Expecting lagoons to be a list."
-                )
+                raise AnsibleError("Expecting lagoons to be a list.")
 
             for lagoon in lagoons:
-
                 if not isinstance(lagoon, dict):
-                    raise AnsibleError(
-                        "Expecting lagoon to be a dictionary."
-                    )
+                    raise AnsibleError("Expecting lagoon to be a dictionary.")
 
-                if 'transport' not in lagoon:
-                    lagoon['transport'] = 'ssh'
-                elif lagoon['transport'] != 'ssh':
+                if "transport" not in lagoon:
+                    lagoon["transport"] = "ssh"
+                elif lagoon["transport"] != "ssh":
                     # @TODO kubectl support.
-                    raise AnsibleError(
-                        "Only ssh transport is supported."
-                    )
+                    raise AnsibleError("Only ssh transport is supported.")
 
                 # Set default connections details to public Lagoon.
-                lagoon['ssh_host'] = self.get_var(lagoon, 'ssh_host', 'ssh.lagoon.amazeeio.cloud')
-                lagoon['ssh_port'] = self.get_var(lagoon, 'ssh_port', '32222')
+                lagoon["ssh_host"] = self.get_var(
+                    lagoon, "ssh_host", "ssh.lagoon.amazeeio.cloud"
+                )
+                lagoon["ssh_port"] = self.get_var(lagoon, "ssh_port", "32222")
 
                 # Endpoint & token can be provided in the file directly
                 # or in --extra-vars. They could also be provided in separate
                 # places.
-                lagoon_api_endpoint = self.get_var(lagoon, 'api_endpoint')
-                lagoon_api_token = self.get_var(lagoon, 'api_token')
+                lagoon_api_endpoint = self.get_var(lagoon, "api_endpoint")
+                lagoon_api_token = self.get_var(lagoon, "api_token")
 
                 if not lagoon_api_endpoint:
-                    raise AnsibleError(
-                        "Expecting lagoon_api_endpoint."
-                    )
+                    raise AnsibleError("Expecting lagoon_api_endpoint.")
 
                 if not lagoon_api_token:
                     # Try fetching a fresh token.
                     lagoon_api_token = self.fetch_lagoon_api_token(lagoon)
 
                 # Batch sizes should be overridable by environment variables.
-                batch_project_environments_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_project_environments_size', 100))
-                batch_project_groups_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_project_groups_size', 100))
-                batch_project_variables_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_project_variables_size', 100))
-                batch_environment_project_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_environment_project_size', 100))
-                batch_environment_cluster_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_environment_cluster_size', 100))
-                batch_environment_variables_size = intWhenStr(self.get_var(
-                    lagoon, 'api_batch_environment_variables_size', 100))
+                batch_project_environments_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_project_environments_size", 100)
+                )
+                batch_project_groups_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_project_groups_size", 100)
+                )
+                batch_project_variables_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_project_variables_size", 100)
+                )
+                batch_environment_project_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_environment_project_size", 100)
+                )
+                batch_environment_cluster_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_environment_cluster_size", 100)
+                )
+                batch_environment_variables_size = intWhenStr(
+                    self.get_var(lagoon, "api_batch_environment_variables_size", 100)
+                )
 
                 self.lagoon_api = GqlClient(
                     lagoon_api_endpoint,
                     lagoon_api_token,
-                    lagoon['headers'] if 'headers' in lagoon else {},
+                    lagoon["headers"] if "headers" in lagoon else {},
                     self.display,
                 )
-                lagoonProject = Project(self.lagoon_api, {'exitOnError': True})
-                lagoonEnvironment = Environment(
-                    self.lagoon_api, {'exitOnError': True})
+                lagoonProject = Project(self.lagoon_api, {"exitOnError": True})
+                lagoonEnvironment = Environment(self.lagoon_api, {"exitOnError": True})
 
                 objects = {
-                    'lagoon': lagoon,
-                    'project_list': [],
-                    'project_environments': {},
+                    "lagoon": lagoon,
+                    "project_list": [],
+                    "project_environments": {},
                 }
 
-                lagoon_groups = self.get_var(lagoon, 'filter_groups')
+                lagoon_groups = self.get_var(lagoon, "filter_groups")
                 # Backwards-compatibility.
                 if not lagoon_groups:
-                    lagoon_groups = self.get_var(lagoon, 'groups')
+                    lagoon_groups = self.get_var(lagoon, "groups")
                 if isinstance(lagoon_groups, str):
                     lagoon_groups = lagoon_groups.split(",")
 
                 if lagoon_groups:
-                    self.display.v(f"Fetching list of projects for these groups: [{', '.join(lagoon_groups)}]")
+                    self.display.v(
+                        f"Fetching list of projects for these groups: [{', '.join(lagoon_groups)}]"
+                    )
                     for group in lagoon_groups:
                         lagoonProject.allInGroup(group)
                 else:
@@ -301,30 +304,36 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 project_names = []
                 # Ensure unique.
                 for project in lagoonProject.projects:
-                    if project['name'] not in project_names:
-                        objects['project_list'].append(project)
-                        project_names.append(project['name'])
-                lagoonProject.projects = objects['project_list']
+                    if project["name"] not in project_names:
+                        objects["project_list"].append(project)
+                        project_names.append(project["name"])
+                lagoonProject.projects = objects["project_list"]
 
-                lagoonProject.withEnvironments([
-                    'id',
-                    'name',
-                    'kubernetesNamespaceName',
-                    'environmentType',
-                    'route',
-                    'routes',
-                ], batch_project_environments_size).withGroups(
-                    batch_size=batch_project_groups_size
-                ).withVariables(batch_size=batch_project_variables_size)
+                lagoonProject.withEnvironments(
+                    [
+                        "id",
+                        "name",
+                        "kubernetesNamespaceName",
+                        "environmentType",
+                        "route",
+                        "routes",
+                    ],
+                    batch_project_environments_size,
+                ).withGroups(batch_size=batch_project_groups_size).withVariables(
+                    batch_size=batch_project_variables_size
+                )
                 if len(lagoonProject.errors):
-                    self.display.error(f"Errors while fetching project subresources: {lagoonProject.errors}")
-                    raise AnsibleError("""Encountered errors while fetching project subresources.
+                    self.display.error(
+                        f"Errors while fetching project subresources: {lagoonProject.errors}"
+                    )
+                    raise AnsibleError(
+                        """Encountered errors while fetching project subresources.
                         Errors at this stage may indicate that the query is too big and the API server
                         cannot handle the load; try adjusting the batch levels and retry.""",
                     )
 
                 for p in lagoonProject.projects:
-                    for e in p['environments']:
+                    for e in p["environments"]:
                         # If a project does not yet have an environment, `e`
                         # might be None.
                         if not e:
@@ -332,22 +341,26 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                         lagoonEnvironment.environments.append(e)
 
                 lagoonEnvironment.withProject(
-                    ['name'], batch_environment_project_size).withCluster(
-                        batch_size=batch_environment_cluster_size
-                ).withVariables(batch_size=batch_environment_variables_size)
+                    ["name"], batch_environment_project_size
+                ).withCluster(batch_size=batch_environment_cluster_size).withVariables(
+                    batch_size=batch_environment_variables_size
+                )
 
                 if len(lagoonEnvironment.errors):
-                    self.display.error(f"Errors while fetching environment subresources: {lagoonEnvironment.errors}")
-                    raise AnsibleError("""Encountered errors while fetching project subresources.
+                    self.display.error(
+                        f"Errors while fetching environment subresources: {lagoonEnvironment.errors}"
+                    )
+                    raise AnsibleError(
+                        """Encountered errors while fetching project subresources.
                         Errors at this stage may indicate that the query is too big and the API server
                         cannot handle the load; try adjusting the batch levels and retry.""",
-                                       )
+                    )
 
                 for e in lagoonEnvironment.environments:
-                    pname = e['project']['name']
-                    if not pname in objects['project_environments']:
-                        objects['project_environments'][pname] = []
-                    objects['project_environments'][pname].append(e)
+                    pname = e["project"]["name"]
+                    if not pname in objects["project_environments"]:
+                        objects["project_environments"][pname] = []
+                    objects["project_environments"][pname].append(e)
 
                 self.all_objects.append(objects)
 
@@ -376,17 +389,16 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     def populate(self):
         for objects in self.all_objects:
-            for project in objects['project_list']:
-                project_envs = objects['project_environments'].get(
-                    project['name'])
+            for project in objects["project_list"]:
+                project_envs = objects["project_environments"].get(project["name"])
                 if not project_envs:
                     project_envs = []
                 for environment in project_envs:
-                    self.add_environment(project, environment, objects['lagoon'])
+                    self.add_environment(project, environment, objects["lagoon"])
 
     # Add the environment to the inventory set.
     def add_environment(self, project, environment, lagoon):
-        namespace = environment['kubernetesNamespaceName']
+        namespace = environment["kubernetesNamespaceName"]
 
         # Add host to the inventory.
         self.inventory.add_host(namespace)
@@ -397,91 +409,99 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             for key, value in hostvars.items():
                 self.inventory.set_variable(namespace, key, value)
         except Exception as e:
-            raise AnsibleParserError("failed to parse: %s " % (to_native(e)), orig_exc=e)
+            raise AnsibleParserError(
+                "failed to parse: %s " % (to_native(e)), orig_exc=e
+            )
 
     def collect_host_vars(self, namespace, environment, project, lagoon):
 
         host_vars = {
-            'name': namespace,
-            'project_id': project['id'],
-            'project_name': project['name'],
-            'env_id': environment['id'],
-            'env_name': environment['name'],
-            'type': environment['environmentType'],
-            'git_url': project['gitUrl'],
-            'cluster_id': environment['kubernetes']['id'],
-            'cluster_name': environment['kubernetes']['name'],
-
+            "name": namespace,
+            "project_id": project["id"],
+            "project_name": project["name"],
+            "env_id": environment["id"],
+            "env_name": environment["name"],
+            "type": environment["environmentType"],
+            "git_url": project["gitUrl"],
+            "cluster_id": environment["kubernetes"]["id"],
+            "cluster_name": environment["kubernetes"]["name"],
             # Complex values.
-            'project_variables': {var['name']: var['value'] for var in project['envVariables']},
-            'environment_variables': {var['name']: var['value'] for var in environment['envVariables']},
-            'lagoon_groups': project['groups'],
-
+            "project_variables": {
+                var["name"]: var["value"] for var in project["envVariables"]
+            },
+            "environment_variables": {
+                var["name"]: var["value"] for var in environment["envVariables"]
+            },
+            "lagoon_groups": project["groups"],
             # This adds all information returned from the Lagoon query to the host variable
             # list, this will by dynamic and keys are not guaranteed.
-            'lagoon_project': project,
-            'lagoon_environment': environment,
-
+            "lagoon_project": project,
+            "lagoon_environment": environment,
             # Ansible specific host variables these define how ansible
             # will connect to the remote host when the host is selected
             # for provisioning the play.
-            'ansible_user': namespace,
-            'ansible_ssh_user': namespace,
-            'ansible_host': lagoon['ssh_host'],
-            'ansible_port': lagoon['ssh_port'],
-            'ansible_ssh_common_args': '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"'
+            "ansible_user": namespace,
+            "ansible_ssh_user": namespace,
+            "ansible_host": lagoon["ssh_host"],
+            "ansible_port": lagoon["ssh_port"],
+            "ansible_ssh_common_args": '-T -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"',
         }
 
-        if 'metadata' in project:
+        if "metadata" in project:
             # The Lagoon API sometimes returns a proper json structure as the
             # value - we need to cater for both.
-            lagoon_meta = project['metadata']
-            if type(project['metadata']) is not dict:
-                lagoon_meta = json.loads(project['metadata'])
+            lagoon_meta = project["metadata"]
+            if type(project["metadata"]) is not dict:
+                lagoon_meta = json.loads(project["metadata"])
             inventory_meta = {}
             for key, value in lagoon_meta.items():
                 try:
                     # Metadata can be inserted as valid JSON, the lagoon interpreter
                     # will convert this to a JSON string and will escape with single quotes.
                     value = ast.literal_eval(value)
-                except Exception as e: # noqa F841
+                except Exception as e:  # noqa F841
                     # We ignore an invalid decode - this will be a standard string value.
                     pass
 
                 inventory_meta[key] = value
 
-            host_vars['metadata'] = inventory_meta
+            host_vars["metadata"] = inventory_meta
 
         return host_vars
 
     def sanitised_name(self, name):
-        return re.sub(r'[\W_-]+', '-', name)
+        return re.sub(r"[\W_-]+", "-", name)
 
     def sanitised_for_query_alias(self, name):
-        return re.sub(r'[\W-]+', '_', name)
+        return re.sub(r"[\W-]+", "_", name)
 
     def fetch_lagoon_api_token(self, lagoon):
-        lagoon_ssh_private_key = self.get_var(lagoon, 'ssh_private_key')
-        lagoon_ssh_private_key_file = self.get_var(lagoon, 'ssh_private_key_file')
+        lagoon_ssh_private_key = self.get_var(lagoon, "ssh_private_key")
+        lagoon_ssh_private_key_file = self.get_var(lagoon, "ssh_private_key_file")
 
         if lagoon_ssh_private_key:
             if not lagoon_ssh_private_key_file:
-                lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
-            LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
+                lagoon_ssh_private_key_file = "/tmp/lagoon_ssh_private_key"
+            LagoonToken.write_ssh_key(
+                lagoon_ssh_private_key, lagoon_ssh_private_key_file
+            )
 
         rc, token, error = LagoonToken.fetch_token(
-            lagoon.get('ssh_host'),
-            lagoon.get('ssh_port'),
+            lagoon.get("ssh_host"),
+            lagoon.get("ssh_port"),
             "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
-            lagoon_ssh_private_key_file
+            lagoon_ssh_private_key_file,
         )
 
         if rc > 0:
-            raise AnsibleError("Failed to fetch Lagoon API token: %s (error code: %s) " % (error, rc))
+            raise AnsibleError(
+                "Failed to fetch Lagoon API token: %s (error code: %s) " % (error, rc)
+            )
 
-        return token['access_token'].strip()
+        return token["access_token"].strip()
 
-def intWhenStr(val: Union[str,any]) -> Union[int,any]:
+
+def intWhenStr(val: Union[str, any]) -> Union[int, any]:
     if isinstance(val, str):
         return int(val)
     return val

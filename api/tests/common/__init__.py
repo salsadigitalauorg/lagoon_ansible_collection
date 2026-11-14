@@ -8,26 +8,31 @@ from ...plugins.module_utils.gql import GqlClient
 
 script_dir = dirname(realpath(__file__))
 
+
 def load_schema() -> GraphQLSchema:
-    with open(f'{script_dir}/schema.graphql') as f:
+    with open(f"{script_dir}/schema.graphql") as f:
         schema_str = f.read()
         type_def_ast = parse(schema_str)
         schema = build_ast_schema(type_def_ast)
         return schema
 
+
 def dsl_field_query_field_to_str(query: DSLField) -> str:
     return print_ast(dsl_gql(DSLQuery(query)))
+
 
 def dsl_field_mutation_field_to_str(mutation: DSLField) -> str:
     return print_ast(dsl_gql(DSLMutation(mutation)))
 
+
 def dsl_exes_to_str(*exes: DSLExecutable) -> str:
     return print_ast(dsl_gql(*exes))
 
+
 def get_mock_gql_client(
-        query_return_value: any = None,
-        query_dynamic_return_value: any = None) -> GqlClient:
-    client = GqlClient('foo', 'bar')
+    query_return_value: any = None, query_dynamic_return_value: any = None
+) -> GqlClient:
+    client = GqlClient("foo", "bar")
 
     client.execute_query = MagicMock()
     if query_return_value:
