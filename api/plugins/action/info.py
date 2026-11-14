@@ -60,7 +60,7 @@ class ActionModule(LagoonActionBase):
             result["notFound"] = True
             return result
 
-        lagoonProject.withEnvironments(batch_size=50)
+        lagoonProject.withEnvironments()
         if len(lagoonProject.errors):
             self._display.warning(
                 f"The query partially succeeded, but the following errors were encountered:\n{lagoonProject.errors}"

@@ -12,36 +12,42 @@ class Metadata(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
+    def getForProject(self, project_name: str) -> dict:
+        """
+        Get the metadata for a single project.
+        """
+
+        resources = {}
+        with self.client as (_, ds):
+            # Build the main query. No alias: a single root field per request
+            # means the response is keyed by the query name itself.
+            field_query = ds.Query.projectByName.args(name=project_name)
+            field_query.select(ds.Project.metadata)
+
+            resources = self.queryResources(DSLQuery(field_query))
+
+        try:
+            metadata = resources["projectByName"]["metadata"]
+            if not isinstance(metadata, dict):
+                metadata = json.loads(metadata)
+            self.unpack(metadata)
+            return metadata
+        except (KeyError, TypeError, json.decoder.JSONDecodeError):
+            return None
+
     def get(self, project_names: List[str] = []) -> dict:
         res = {}
 
         if len(project_names) > 0:
-            resources = {}
-            with self.client as (_, ds):
-                field_queries = []
-                for pName in project_names:
-                    # Build the main query.
-                    field_query = ds.Query.projectByName.args(name=pName).alias(
-                        self.sanitiseForQueryAlias(pName)
-                    )
-                    field_query.select(ds.Project.metadata)
-                    field_queries.append(field_query)
+            total = len(project_names)
+            self.v(f"Fetching metadata for {total} projects")
 
-                resources = self.queryResources(DSLQuery(*field_queries))
-
-            for pName in project_names:
-                try:
-                    metadata = (
-                        resources.get(self.sanitiseForQueryAlias(pName))
-                        .get("projectByName", {})
-                        .get("metadata", None)
-                    )
-                    if not isinstance(metadata, dict):
-                        metadata = json.loads(metadata)
-                    self.unpack(metadata)
-                    res[pName] = metadata
-                except:
-                    res[pName] = None
+            # Hold a single session open for the whole loop so the underlying
+            # requests.Session - and therefore the HTTP connection - is reused.
+            with self.client:
+                for i, pName in enumerate(project_names):
+                    self.vv(f"Fetching metadata for {pName} ({i + 1}/{total})")
+                    res[pName] = self.getForProject(pName)
         else:
             resources = self.client.execute_query(
                 """

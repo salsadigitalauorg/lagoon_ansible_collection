@@ -35,30 +35,61 @@ class GqlMetadataTester(unittest.TestCase):
                 }"""
         ), f"got {query_args[0]}"
 
-    def test_get_with_fields(self):
+    def test_get_with_project_names_queries_one_project_per_request(self):
+        """
+        Batching was removed: each project must get its own request, carrying a
+        single un-aliased root field. A regression here would rebuild the
+        multi-alias query that the Lagoon API cannot handle.
+        """
         client = get_mock_gql_client()
         lagoonMetadata = Metadata(client)
         lagoonMetadata.get(project_names=["project-test-1", "project2"])
-        query_args = client.execute_query_dynamic.call_args.args
 
-        assert len(query_args) == 1, f"expected 1, got {len(query_args)}"
-        assert isinstance(query_args[0], DSLQuery), (
-            f"expected DSLQuery, got {type(query_args[0])}"
+        assert client.execute_query_dynamic.call_count == 2, (
+            f"expected 2 calls, got {client.execute_query_dynamic.call_count}"
         )
 
-        resulting_query = "\n" + dsl_exes_to_str(*query_args)
-        assert (
-            resulting_query
-            == """
+        expected = [
+            """
 {
-  project_test_1: projectByName(name: "project-test-1") {
+  projectByName(name: "project-test-1") {
     metadata
   }
-  project2: projectByName(name: "project2") {
+}""",
+            """
+{
+  projectByName(name: "project2") {
     metadata
   }
-}"""
-        ), f"got {resulting_query}"
+}""",
+        ]
+
+        for call, want in zip(client.execute_query_dynamic.call_args_list, expected):
+            query_args = call.args
+            assert len(query_args) == 1, f"expected 1, got {len(query_args)}"
+            assert isinstance(query_args[0], DSLQuery), (
+                f"expected DSLQuery, got {type(query_args[0])}"
+            )
+
+            resulting_query = "\n" + dsl_exes_to_str(*query_args)
+            assert resulting_query == want, f"got {resulting_query}"
+
+    def test_get_with_project_names_returns_decoded_metadata(self):
+        """
+        The previous aliased implementation read resources[alias]["projectByName"],
+        but the alias replaced that key - so this path always returned None.
+        """
+        client = get_mock_gql_client(
+            query_dynamic_return_value={
+                "projectByName": {"metadata": '{"type":"saas","version":"9"}'}
+            }
+        )
+        res = Metadata(client).get(project_names=["project-test-1", "project2"])
+
+        assert res == {
+            "project-test-1": {"type": "saas", "version": "9"},
+            "project2": {"type": "saas", "version": "9"},
+        }, f"got {res}"
 
     def test_get_string(self):
         """
