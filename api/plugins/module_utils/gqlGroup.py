@@ -10,9 +10,7 @@ class Group(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
-    def get(self, project_names: List[str], fields: List[str] = None) -> dict:
-        res = {}
-
+    def get(self, project_name: str, fields: List[str] = None) -> List[dict]:
         if not fields or not len(fields):
             fields = GROUPS_FIELDS
 
@@ -26,21 +24,14 @@ class Group(ResourceBase):
                 for f in fields[1:]:
                     groups_fields.select(getattr(ds.GroupInterface, f))
 
-            field_queries = []
-            for pName in project_names:
-                # Build the main query.
-                field_query = ds.Query.projectByName.args(name=pName).alias(
-                    self.sanitiseForQueryAlias(pName)
-                )
-                field_query.select(groups_fields)
-                field_queries.append(field_query)
+            # Build the main query. No alias: a single root field per request
+            # means the response is keyed by the query name itself.
+            field_query = ds.Query.projectByName.args(name=project_name)
+            field_query.select(groups_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for pName in project_names:
-            try:
-                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))["groups"]
-            except:
-                res[pName] = None
-
-        return res
+        try:
+            return resources["projectByName"]["groups"]
+        except (KeyError, TypeError):
+            return None

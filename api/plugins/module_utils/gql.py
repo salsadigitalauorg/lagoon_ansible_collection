@@ -72,6 +72,11 @@ class GqlClient(Display):
         # server API, so we set the relevant argument.
         self.client = Client(transport=transport, fetch_schema_from_transport=True)
 
+        # Depth counter for nested `with client:` blocks. See __enter__.
+        # Instance attribute, not class attribute: GetClientInstance() hands out
+        # a process-wide singleton, so a class attribute would be shared state.
+        self._session_depth = 0
+
         self.checkMode = checkMode
 
         # This value of display if deprecated - use the Display class instead.
@@ -83,15 +88,34 @@ class GqlClient(Display):
         See https://web.archive.org/web/20100702092526/http://effbot.org/zone/python-with-statement.htm
         for an explanation.
         In this case, we are simply calling the client's corresponding method, but
-        also augmenting it with the schema preloaded."""
+        also augmenting it with the schema preloaded.
 
-        self.client.__enter__()
+        Nesting is reference-counted so that a caller can hold one session open
+        across many queries while the individual query helpers still open the
+        client for standalone use.
+
+        This matters for performance, not just convenience. gql's
+        RequestsHTTPTransport.connect() raises TransportAlreadyConnected if the
+        transport is already connected, so a naive nested `with` would fail
+        outright. And its close() drops the underlying requests.Session, so
+        entering and exiting once per query would rebuild the session - and pay a
+        fresh TCP and TLS handshake - on every single request. Since queries are
+        now issued one resource at a time, that is thousands of handshakes per
+        inventory refresh.
+        """
+
+        if self._session_depth == 0:
+            self.client.__enter__()
+        self._session_depth += 1
+
         assert self.client.schema is not None
         self.ds = DSLSchema(self.client.schema)
         return self.client.session, self.ds
 
     def __exit__(self, *args):
-        self.client.__exit__(args)
+        self._session_depth -= 1
+        if self._session_depth == 0:
+            self.client.__exit__(args)
 
     def execute_query(
         self, query: str, variables: Optional[Dict[str, Any]] = {}

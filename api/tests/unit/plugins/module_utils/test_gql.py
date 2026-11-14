@@ -22,6 +22,66 @@ from .....plugins.module_utils.gql import (
 )
 
 
+class GqlClientSessionTester(unittest.TestCase):
+    """The session must be reference-counted across nested `with` blocks.
+
+    Queries are issued one resource at a time, and each query helper opens the
+    client so it can also be used standalone. Without reference counting, a
+    caller holding the session open around a loop would either hit
+    TransportAlreadyConnected on the nested enter, or - if the nesting were
+    removed - rebuild the underlying requests.Session on every request and pay
+    a fresh TCP and TLS handshake each time.
+    """
+
+    def mock_client(self):
+        client = GqlClient("foo", "bar")
+        client.client = MagicMock()
+        client.client.schema = load_schema()
+        return client
+
+    def test_nested_with_connects_and_closes_once(self):
+        client = self.mock_client()
+
+        with client:
+            assert client._session_depth == 1
+            with client:
+                assert client._session_depth == 2
+                with client:
+                    assert client._session_depth == 3
+                assert client._session_depth == 2
+            assert client._session_depth == 1
+
+        assert client._session_depth == 0
+        assert client.client.__enter__.call_count == 1, (
+            f"expected 1 connect, got {client.client.__enter__.call_count}"
+        )
+        assert client.client.__exit__.call_count == 1, (
+            f"expected 1 close, got {client.client.__exit__.call_count}"
+        )
+
+    def test_sequential_with_blocks_reconnect(self):
+        """Balanced blocks must still reconnect next time - not leak the count."""
+        client = self.mock_client()
+
+        with client:
+            pass
+        with client:
+            pass
+
+        assert client._session_depth == 0
+        assert client.client.__enter__.call_count == 2
+        assert client.client.__exit__.call_count == 2
+
+    def test_session_depth_is_per_instance(self):
+        """GetClientInstance hands out a singleton, so this must not be shared."""
+        a = self.mock_client()
+        b = self.mock_client()
+
+        with a:
+            assert a._session_depth == 1
+            assert b._session_depth == 0
+
+
 class GqlClientTester(unittest.TestCase):
     def test_client_constructor_missing_args(self):
         with self.assertRaises(TypeError):

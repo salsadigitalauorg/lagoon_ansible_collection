@@ -1,4 +1,4 @@
-from .gqlResourceBase import CLUSTER_FIELDS, DEFAULT_BATCH_SIZE
+from .gqlResourceBase import CLUSTER_FIELDS
 from .gqlResourceBase import ENVIRONMENTS_FIELDS
 from .gqlResourceBase import PROJECT_FIELDS, ResourceBase
 from .gql import GqlClient
@@ -64,149 +64,137 @@ class Project(ResourceBase):
             self.projects, "projectByName", "Project", args, fields
         )
 
-    def withCluster(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withCluster(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve cluster information for the projects.
+
+        One query per project - see warnIfBatchSize for why batching was removed.
         """
+
+        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self
 
-        project_names = [p["name"] for p in self.projects]
+        total = len(self.projects)
+        self.v(f"Fetching cluster for {total} projects")
 
-        batches = []
-        for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i : i + batch_size])
-
-        clusters = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching cluster for batch {i + 1}/{len(batches)}")
-            clusters.update(self.getCluster(b, fields))
-            self.raiseExceptionIfRequired("Error fetching project cluster")
-
-        for project in self.projects:
-            project["kubernetes"] = clusters.get(project["name"])
-            project["openshift"] = clusters.get(project["name"])
+        # Hold a single session open for the whole loop so the underlying
+        # requests.Session - and therefore the HTTP connection - is reused.
+        with self.client:
+            for i, project in enumerate(self.projects):
+                name = project["name"]
+                self.vv(f"Fetching cluster for {name} ({i + 1}/{total})")
+                cluster = self.getCluster(name, fields)
+                project["kubernetes"] = cluster
+                project["openshift"] = cluster
+                self.raiseExceptionIfRequired("Error fetching project cluster")
 
         return self
 
     def withEnvironments(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+        self, fields: List[str] = None, batch_size: int = None
     ) -> Self:
         """
         Retrieve the projects' environments.
         """
 
+        self.warnIfBatchSize(batch_size, "project")
+
         if not len(self.projects):
             return self
 
-        project_names = [p["name"] for p in self.projects]
+        total = len(self.projects)
+        self.v(f"Fetching environments for {total} projects")
 
-        batches = []
-        for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i : i + batch_size])
-
-        environments = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching environments for batch {i + 1}/{len(batches)}")
-            environments.update(self.getEnvironments(b, fields))
-            self.raiseExceptionIfRequired("Error fetching environments")
-
-        for project in self.projects:
-            project["environments"] = environments.get(project["name"])
+        with self.client:
+            for i, project in enumerate(self.projects):
+                name = project["name"]
+                self.vv(f"Fetching environments for {name} ({i + 1}/{total})")
+                project["environments"] = self.getEnvironments(name, fields)
+                self.raiseExceptionIfRequired("Error fetching environments")
 
         return self
 
     def withDeployTargetConfigs(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+        self, fields: List[str] = None, batch_size: int = None
     ) -> Self:
         """
         Retrieve the projects' deploy target configs.
         """
 
+        self.warnIfBatchSize(batch_size, "project")
+
         if not len(self.projects):
             return self
 
-        project_names = [p["name"] for p in self.projects]
+        total = len(self.projects)
+        self.v(f"Fetching deploy target configs for {total} projects")
 
-        batches = []
-        for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i : i + batch_size])
-
-        dtcs = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching deploy target configs for batch {i + 1}/{len(batches)}")
-            dtcs.update(self.getDeployTargetConfigs(b, fields))
-            self.raiseExceptionIfRequired("Error fetching deploy target configs")
-
-        for project in self.projects:
-            project["deployTargetConfigs"] = dtcs.get(project["name"])
+        with self.client:
+            for i, project in enumerate(self.projects):
+                name = project["name"]
+                self.vv(f"Fetching deploy target configs for {name} ({i + 1}/{total})")
+                project["deployTargetConfigs"] = self.getDeployTargetConfigs(
+                    name, fields
+                )
+                self.raiseExceptionIfRequired("Error fetching deploy target configs")
 
         return self
 
-    def withVariables(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withVariables(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve the projects' variables.
         """
 
+        self.warnIfBatchSize(batch_size, "project")
+
         if not len(self.projects):
             return self
 
-        project_names = [p["name"] for p in self.projects]
+        total = len(self.projects)
+        self.v(f"Fetching variables for {total} projects")
 
-        batches = []
-        for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i : i + batch_size])
-
-        projectVars = {}
         variables = Variable(self.client, self.options)
-        for i, b in enumerate(batches):
-            self.v(f"Fetching variables for batch {i + 1}/{len(batches)}")
-            projectVars.update(variables.getForProjects(b, fields))
-            self.raiseExceptionIfRequired("Error fetching project variables")
-
-        for project in self.projects:
-            project["envVariables"] = projectVars.get(project["name"])
+        with self.client:
+            for i, project in enumerate(self.projects):
+                name = project["name"]
+                self.vv(f"Fetching variables for {name} ({i + 1}/{total})")
+                project["envVariables"] = variables.getForProject(name, fields)
+                # Errors accumulate on the Variable instance, not this one.
+                self.errors.extend(variables.errors)
+                variables.errors.clear()
+                self.raiseExceptionIfRequired("Error fetching project variables")
 
         return self
 
-    def withGroups(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withGroups(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve the projects' groups.
         """
 
+        self.warnIfBatchSize(batch_size, "project")
+
         if not len(self.projects):
             return self
 
-        project_names = [p["name"] for p in self.projects]
+        total = len(self.projects)
+        self.v(f"Fetching groups for {total} projects")
 
-        batches = []
-        for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i : i + batch_size])
-
-        groups = {}
         grouper = Group(self.client, self.options)
-        for i, b in enumerate(batches):
-            self.v(f"Fetching groups for batch {i + 1}/{len(batches)}")
-            groups.update(grouper.get(b, fields))
-            self.raiseExceptionIfRequired("Error fetching groups")
-
-        for project in self.projects:
-            project["groups"] = groups.get(project["name"])
+        with self.client:
+            for i, project in enumerate(self.projects):
+                name = project["name"]
+                self.vv(f"Fetching groups for {name} ({i + 1}/{total})")
+                project["groups"] = grouper.get(name, fields)
+                # Errors accumulate on the Group instance, not this one.
+                self.errors.extend(grouper.errors)
+                grouper.errors.clear()
+                self.raiseExceptionIfRequired("Error fetching groups")
 
         return self
 
-    def getCluster(
-        self, project_names: List[str], fields: List[str] = None
-    ) -> List[dict]:
-        res = {}
-
+    def getCluster(self, project_name: str, fields: List[str] = None) -> dict:
         if not fields or not len(fields):
             fields = CLUSTER_FIELDS
 
@@ -220,32 +208,21 @@ class Project(ResourceBase):
                 for f in fields[1:]:
                     cluster_fields.select(getattr(ds.Kubernetes, f))
 
-            field_queries = []
-            for pName in project_names:
-                # Build the main query.
-                field_query = ds.Query.projectByName.args(name=pName).alias(
-                    self.sanitiseForQueryAlias(pName)
-                )
-                field_query.select(cluster_fields)
-                field_queries.append(field_query)
+            # Build the main query. No alias: a single root field per request
+            # means the response is keyed by the query name itself.
+            field_query = ds.Query.projectByName.args(name=project_name)
+            field_query.select(cluster_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for pName in project_names:
-            try:
-                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
-                    "kubernetes"
-                ]
-            except:
-                res[pName] = None
-
-        return res
+        try:
+            return resources["projectByName"]["kubernetes"]
+        except (KeyError, TypeError):
+            return None
 
     def getEnvironments(
-        self, project_names: List[str], fields: List[str] = None
+        self, project_name: str, fields: List[str] = None
     ) -> List[dict]:
-        res = {}
-
         if not fields or not len(fields):
             fields = ENVIRONMENTS_FIELDS
 
@@ -259,32 +236,20 @@ class Project(ResourceBase):
                 for f in fields[1:]:
                     env_fields.select(getattr(ds.Environment, f))
 
-            field_queries = []
-            for pName in project_names:
-                # Build the main query.
-                field_query = ds.Query.projectByName.args(name=pName).alias(
-                    self.sanitiseForQueryAlias(pName)
-                )
-                field_query.select(env_fields)
-                field_queries.append(field_query)
+            # Build the main query.
+            field_query = ds.Query.projectByName.args(name=project_name)
+            field_query.select(env_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for pName in project_names:
-            try:
-                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
-                    "environments"
-                ]
-            except:
-                res[pName] = None
-
-        return res
+        try:
+            return resources["projectByName"]["environments"]
+        except (KeyError, TypeError):
+            return None
 
     def getDeployTargetConfigs(
-        self, project_names: List[str], fields: List[str] = None
+        self, project_name: str, fields: List[str] = None
     ) -> List[dict]:
-        res = {}
-
         if not fields or not len(fields):
             fields = PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS
 
@@ -308,23 +273,13 @@ class Project(ResourceBase):
                         )
                     )
 
-            field_queries = []
-            for pName in project_names:
-                # Build the main query.
-                field_query = ds.Query.projectByName.args(name=pName).alias(
-                    self.sanitiseForQueryAlias(pName)
-                )
-                field_query.select(dtc_fields)
-                field_queries.append(field_query)
+            # Build the main query.
+            field_query = ds.Query.projectByName.args(name=project_name)
+            field_query.select(dtc_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for pName in project_names:
-            try:
-                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
-                    "deployTargetConfigs"
-                ]
-            except:
-                res[pName] = None
-
-        return res
+        try:
+            return resources["projectByName"]["deployTargetConfigs"]
+        except (KeyError, TypeError):
+            return None

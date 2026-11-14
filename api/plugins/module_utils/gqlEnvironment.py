@@ -1,6 +1,5 @@
 from .gqlResourceBase import (
     CLUSTER_FIELDS,
-    DEFAULT_BATCH_SIZE,
     DEPLOYMENTS_FIELDS,
     ENVIRONMENTS_FIELDS,
     PROJECT_FIELDS,
@@ -23,15 +22,15 @@ class Environment(ResourceBase):
         super().__init__(client, options)
         self.environments = []
 
-    def all(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def all(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Get a list of all environments, but only top level fields.
 
         This method first tries using the allEnvironments query, and if it fails
         due to lack of permissions, it fetches all projects instead.
         """
+
+        self.warnIfBatchSize(batch_size, "environment")
 
         if not fields:
             fields = ENVIRONMENTS_FIELDS
@@ -53,7 +52,7 @@ class Environment(ResourceBase):
                 e.errors[0]["message"]
                 == 'Unauthorized: You don\'t have permission to "viewAll" on "environment": {}'
             ):
-                return self.allThroughProjects(fields, batch_size)
+                return self.allThroughProjects(fields)
             elif e.data and isinstance(e.data["allEnvironments"], list):
                 self.environments.extend(e.data["allEnvironments"])
                 self.errors.extend(e.errors)
@@ -65,17 +64,16 @@ class Environment(ResourceBase):
         return self
 
     def allThroughProjects(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+        self, fields: List[str] = None, batch_size: int = None
     ) -> Self:
         """
         Get a list of all environments, but going through projects first.
         """
 
+        self.warnIfBatchSize(batch_size, "environment")
+
         projects = (
-            Project(self.client, self.options)
-            .all()
-            .withEnvironments(fields, batch_size)
-            .projects
+            Project(self.client, self.options).all().withEnvironments(fields).projects
         )
 
         for p in projects:
@@ -147,125 +145,102 @@ class Environment(ResourceBase):
 
         return self
 
-    def withCluster(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withCluster(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve cluster information for the environments.
+
+        One query per environment - see warnIfBatchSize for why batching was
+        removed.
         """
+
+        self.warnIfBatchSize(batch_size, "environment")
 
         if not len(self.environments):
             return self
 
-        env_names = [e["kubernetesNamespaceName"] for e in self.environments]
+        total = len(self.environments)
+        self.v(f"Fetching cluster for {total} environments")
 
-        batches = []
-        for i in range(0, len(env_names), batch_size):
-            batches.append(env_names[i : i + batch_size])
-
-        clusters = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching cluster for batch {i + 1}/{len(batches)}")
-            clusters.update(self.getCluster(b, fields))
-            self.raiseExceptionIfRequired("Error fetching environment cluster")
-
-        for environment in self.environments:
-            ns = environment["kubernetesNamespaceName"]
-            environment["kubernetes"] = clusters.get(ns)
-            environment["openshift"] = clusters.get(ns)
+        # Hold a single session open for the whole loop so the underlying
+        # requests.Session - and therefore the HTTP connection - is reused.
+        with self.client:
+            for i, environment in enumerate(self.environments):
+                ns = environment["kubernetesNamespaceName"]
+                self.vv(f"Fetching cluster for {ns} ({i + 1}/{total})")
+                cluster = self.getCluster(ns, fields)
+                environment["kubernetes"] = cluster
+                environment["openshift"] = cluster
+                self.raiseExceptionIfRequired("Error fetching environment cluster")
 
         return self
 
-    def withVariables(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withVariables(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve the environments' variables.
         """
 
+        self.warnIfBatchSize(batch_size, "environment")
+
         if not len(self.environments):
             return self
 
-        env_names = [e["kubernetesNamespaceName"] for e in self.environments]
+        total = len(self.environments)
+        self.v(f"Fetching variables for {total} environments")
 
-        batches = []
-        for i in range(0, len(env_names), batch_size):
-            batches.append(env_names[i : i + batch_size])
-
-        environmentVars = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching variables for batch {i + 1}/{len(batches)}")
-            environmentVars.update(self.getVariables(b, fields))
-            self.raiseExceptionIfRequired("Error fetching environment variables")
-
-        for environment in self.environments:
-            environment["envVariables"] = environmentVars.get(
-                environment["kubernetesNamespaceName"]
-            )
+        with self.client:
+            for i, environment in enumerate(self.environments):
+                ns = environment["kubernetesNamespaceName"]
+                self.vv(f"Fetching variables for {ns} ({i + 1}/{total})")
+                environment["envVariables"] = self.getVariables(ns, fields)
+                self.raiseExceptionIfRequired("Error fetching environment variables")
 
         return self
 
-    def withProject(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withProject(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve the environments' project.
         """
 
+        self.warnIfBatchSize(batch_size, "environment")
+
         if not len(self.environments):
             return self
 
-        env_names = [e["kubernetesNamespaceName"] for e in self.environments]
+        total = len(self.environments)
+        self.v(f"Fetching project for {total} environments")
 
-        batches = []
-        for i in range(0, len(env_names), batch_size):
-            batches.append(env_names[i : i + batch_size])
-
-        envProject = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching project for batch {i + 1}/{len(batches)}")
-            envProject.update(self.getProject(b, fields))
-            self.raiseExceptionIfRequired("Error fetching environment project")
-
-        for environment in self.environments:
-            environment["project"] = envProject.get(
-                environment["kubernetesNamespaceName"]
-            )
+        with self.client:
+            for i, environment in enumerate(self.environments):
+                ns = environment["kubernetesNamespaceName"]
+                self.vv(f"Fetching project for {ns} ({i + 1}/{total})")
+                environment["project"] = self.getProject(ns, fields)
+                self.raiseExceptionIfRequired("Error fetching environment project")
 
         return self
 
-    def withDeployments(
-        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
-    ) -> Self:
+    def withDeployments(self, fields: List[str] = None, batch_size: int = None) -> Self:
         """
         Retrieve the environments' deployments.
         """
 
+        self.warnIfBatchSize(batch_size, "environment")
+
         if not len(self.environments):
             return self
 
-        env_names = [e["kubernetesNamespaceName"] for e in self.environments]
+        total = len(self.environments)
+        self.v(f"Fetching deployments for {total} environments")
 
-        batches = []
-        for i in range(0, len(env_names), batch_size):
-            batches.append(env_names[i : i + batch_size])
-
-        envDeployments = {}
-        for i, b in enumerate(batches):
-            self.v(f"Fetching deployments for batch {i + 1}/{len(batches)}")
-            envDeployments.update(self.getDeployments(b, fields))
-            self.raiseExceptionIfRequired("Error fetching deployments")
-
-        for environment in self.environments:
-            environment["deployments"] = envDeployments.get(
-                environment["kubernetesNamespaceName"]
-            )
+        with self.client:
+            for i, environment in enumerate(self.environments):
+                ns = environment["kubernetesNamespaceName"]
+                self.vv(f"Fetching deployments for {ns} ({i + 1}/{total})")
+                environment["deployments"] = self.getDeployments(ns, fields)
+                self.raiseExceptionIfRequired("Error fetching deployments")
 
         return self
 
-    def getCluster(self, env_names: List[str], fields: List[str] = None) -> List[dict]:
-        res = {}
-
+    def getCluster(self, env_name: str, fields: List[str] = None) -> dict:
         if not fields or not len(fields):
             fields = CLUSTER_FIELDS
 
@@ -279,32 +254,21 @@ class Environment(ResourceBase):
                 for f in fields[1:]:
                     cluster_fields.select(getattr(ds.Kubernetes, f))
 
-            field_queries = []
-            for eName in env_names:
-                # Build the main query.
-                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=eName
-                ).alias(self.sanitiseForQueryAlias(eName))
-                field_query.select(cluster_fields)
-                field_queries.append(field_query)
+            # Build the main query. No alias: a single root field per request
+            # means the response is keyed by the query name itself.
+            field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                kubernetesNamespaceName=env_name
+            )
+            field_query.select(cluster_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for eName in env_names:
-            try:
-                res[eName] = resources.get(self.sanitiseForQueryAlias(eName))[
-                    "kubernetes"
-                ]
-            except:
-                res[eName] = None
+        try:
+            return resources["environmentByKubernetesNamespaceName"]["kubernetes"]
+        except (KeyError, TypeError):
+            return None
 
-        return res
-
-    def getVariables(
-        self, env_names: List[str], fields: List[str] = None
-    ) -> List[dict]:
-        res = {}
-
+    def getVariables(self, env_name: str, fields: List[str] = None) -> List[dict]:
         if not fields or not len(fields):
             fields = VARIABLES_FIELDS
 
@@ -318,35 +282,25 @@ class Environment(ResourceBase):
                 for f in fields[1:]:
                     var_fields.select(getattr(ds.EnvKeyValue, f))
 
-            field_queries = []
-            for eName in env_names:
-                # Build the main query.
-                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=eName
-                ).alias(self.sanitiseForQueryAlias(eName))
-                field_query.select(var_fields)
-                field_queries.append(field_query)
+            # Build the main query.
+            field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                kubernetesNamespaceName=env_name
+            )
+            field_query.select(var_fields)
 
-            # Read path: the response holds every variable value for every
-            # environment named, none of them known in advance, so redacting()
+            # Read path: the response holds every variable value for this
+            # environment, none of them known in advance, so redacting()
             # cannot mask them - this one has to stay muted. Do not "finish
             # the migration" to redacting() here.
             with self.client.silenced():
-                resources = self.queryResources(DSLQuery(*field_queries))
+                resources = self.queryResources(DSLQuery(field_query))
 
-        for eName in env_names:
-            try:
-                res[eName] = resources.get(self.sanitiseForQueryAlias(eName))[
-                    "envVariables"
-                ]
-            except:
-                res[eName] = None
+        try:
+            return resources["environmentByKubernetesNamespaceName"]["envVariables"]
+        except (KeyError, TypeError):
+            return None
 
-        return res
-
-    def getProject(self, env_names: List[str], fields: List[str] = None) -> List[dict]:
-        res = {}
-
+    def getProject(self, env_name: str, fields: List[str] = None) -> dict:
         if not fields or not len(fields):
             fields = PROJECT_FIELDS
 
@@ -360,30 +314,20 @@ class Environment(ResourceBase):
                 for f in fields[1:]:
                     project_fields.select(getattr(ds.Project, f))
 
-            field_queries = []
-            for eName in env_names:
-                # Build the main query.
-                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=eName
-                ).alias(self.sanitiseForQueryAlias(eName))
-                field_query.select(project_fields)
-                field_queries.append(field_query)
+            # Build the main query.
+            field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                kubernetesNamespaceName=env_name
+            )
+            field_query.select(project_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for eName in env_names:
-            try:
-                res[eName] = resources.get(self.sanitiseForQueryAlias(eName))["project"]
-            except:
-                res[eName] = None
+        try:
+            return resources["environmentByKubernetesNamespaceName"]["project"]
+        except (KeyError, TypeError):
+            return None
 
-        return res
-
-    def getDeployments(
-        self, env_names: List[str], fields: List[str] = None
-    ) -> List[dict]:
-        res = {}
-
+    def getDeployments(self, env_name: str, fields: List[str] = None) -> List[dict]:
         if not fields or not len(fields):
             fields = DEPLOYMENTS_FIELDS
 
@@ -397,26 +341,18 @@ class Environment(ResourceBase):
                 for f in fields[1:]:
                     deployment_fields.select(getattr(ds.Deployment, f))
 
-            field_queries = []
-            for eName in env_names:
-                # Build the main query.
-                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=eName
-                ).alias(self.sanitiseForQueryAlias(eName))
-                field_query.select(deployment_fields)
-                field_queries.append(field_query)
+            # Build the main query.
+            field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                kubernetesNamespaceName=env_name
+            )
+            field_query.select(deployment_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for eName in env_names:
-            try:
-                res[eName] = resources.get(self.sanitiseForQueryAlias(eName))[
-                    "deployments"
-                ]
-            except:
-                res[eName] = None
-
-        return res
+        try:
+            return resources["environmentByKubernetesNamespaceName"]["deployments"]
+        except (KeyError, TypeError):
+            return None
 
     def delete(self, project_name: str, environment_name: str) -> bool:
         res = self.client.execute_query(
@@ -502,7 +438,7 @@ class Environment(ResourceBase):
     ):
         sleep(delay)
 
-        deployments = self.getDeployments([env_ns])[env_ns]
+        deployments = self.getDeployments(env_ns)
 
         if not wait or (
             len(deployments)

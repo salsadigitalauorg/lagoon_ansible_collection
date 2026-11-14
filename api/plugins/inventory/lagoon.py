@@ -10,13 +10,21 @@ from ..module_utils import token as LagoonToken
 from ..module_utils.gql import GqlClient
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 
 DOCUMENTATION = """
     name: lagoon
     short_description: Builds an inventory of Lagoon projects and environments.
-    description: Builds an inventory of Lagoon projects and environments.
+    description:
+    - Builds an inventory of Lagoon projects and environments.
+    - The Lagoon GraphQL API degrades sharply on queries that carry many aliased
+      root fields, so subresources (environments, groups, variables, clusters)
+      are fetched one project or environment at a time. A full refresh therefore
+      issues several requests per project and per environment, and on a large
+      Lagoon can take many minutes.
+    - Enabling C(cache) is strongly recommended for anything beyond a handful of
+      projects. See the example below.
     plugin_type: inventory
     extends_documentation_fragment:
         - constructed
@@ -45,66 +53,6 @@ DOCUMENTATION = """
                 aliases: [ lagoon_api_token ]
                 env:
                 - name: LAGOON_API_TOKEN
-            api_batch_project_environments_size:
-                description:
-                - Create batches of this size when querying environments for
-                  projects.This allows for more efficient querying while making
-                  less calls to the API.
-                type: int
-                default: 100
-                aliases: [ lagoon_api_batch_project_environments_size ]
-                env:
-                - name: LAGOON_API_BATCH_PROJECT_ENVIRONMENTS_SIZE
-            api_batch_project_groups_size:
-                description:
-                - Create batches of this size when querying groups for
-                  projects.This allows for more efficient querying while making
-                  less calls to the API.
-                type: int
-                default: 100
-                aliases: [ lagoon_api_batch_project_groups_size ]
-                env:
-                - name: LAGOON_API_BATCH_PROJECT_GROUPS_SIZE
-            api_batch_project_variables_size:
-                description:
-                - Create batches of this size when querying variables for
-                  projects.This allows for more efficient querying while making
-                  less calls to the API.
-                type: int
-                default: 100
-                aliases: [ lagoon_api_batch_project_variables_size ]
-                env:
-                - name: LAGOON_API_BATCH_PROJECT_VARIABLES_SIZE
-            api_batch_environment_project_size:
-                description:
-                - Create batches of this size when querying the project for
-                  environments.This allows for more efficient querying while
-                  making less calls to the API.
-                type: int
-                default: 100
-                aliases: [ api_batch_environment_project_size ]
-                env:
-                - name: LAGOON_API_BATCH_ENVIRONMENT_PROJECT_SIZE
-            api_batch_environment_cluster_size:
-                description:
-                - Create batches of this size when querying the cluster for
-                  environments.This allows for more efficient querying while
-                  making less calls to the API.
-                type: int
-                default: 100
-                aliases: [ api_batch_environment_cluster_size ]
-                env:
-                - name: LAGOON_API_BATCH_ENVIRONMENT_CLUSTER_SIZE
-            api_batch_environment_variables_size:
-                description:
-                - Create batches of this size when querying variables for
-                  environments.This allows for more efficient querying while
-                  making less calls to the API.
-                type: int
-                default: 100
-                aliases: [ api_batch_environment_variables_size ]
-                env:
-                - name: LAGOON_API_BATCH_ENVIRONMENT_VARIABLES_SIZE
             headers:
               description: HTTP request headers
               type: dictionary
@@ -131,12 +79,6 @@ lagoons:
   -
     api_endpoint: 'http://localhost:4000'
     api_token: ''
-    api_batch_project_environments_size: 100
-    api_batch_project_groups_size: 100
-    api_batch_project_variables_size: 100
-    api_batch_environment_project_size: 100
-    api_batch_environment_cluster_size: 100
-    api_batch_environment_variables_size: 100
     transport: 'ssh'
     headers: {}
     filter_groups:
@@ -156,6 +98,20 @@ cache_timeout: 7200
 cache_connection: /tmp/lagoon_inventory
 cache_prefix: lagoon
 """
+
+
+# Batching was removed because the Lagoon GraphQL API degrades sharply on
+# queries carrying many aliased root fields. These options are still recognised
+# so that existing inventory files keep working, but they have no effect and
+# will be removed in a future major version.
+DEPRECATED_BATCH_OPTIONS = [
+    "api_batch_project_environments_size",
+    "api_batch_project_groups_size",
+    "api_batch_project_variables_size",
+    "api_batch_environment_project_size",
+    "api_batch_environment_cluster_size",
+    "api_batch_environment_variables_size",
+]
 
 
 class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
@@ -249,25 +205,19 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                     # Try fetching a fresh token.
                     lagoon_api_token = self.fetch_lagoon_api_token(lagoon)
 
-                # Batch sizes should be overridable by environment variables.
-                batch_project_environments_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_project_environments_size", 100)
-                )
-                batch_project_groups_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_project_groups_size", 100)
-                )
-                batch_project_variables_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_project_variables_size", 100)
-                )
-                batch_environment_project_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_environment_project_size", 100)
-                )
-                batch_environment_cluster_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_environment_cluster_size", 100)
-                )
-                batch_environment_variables_size = intWhenStr(
-                    self.get_var(lagoon, "api_batch_environment_variables_size", 100)
-                )
+                # get_var also resolves LAGOON_* environment variables and
+                # lagoon_* host vars, so this catches all three config routes.
+                stale_options = [
+                    o for o in DEPRECATED_BATCH_OPTIONS if self.get_var(lagoon, o)
+                ]
+                if stale_options:
+                    self.display.warning(
+                        "[DEPRECATION WARNING] These options are deprecated and "
+                        "have no effect; the Lagoon API is now queried one "
+                        "project/environment at a time: "
+                        f"{', '.join(stale_options)}. Remove them - they will be "
+                        "rejected in a future release."
+                    )
 
                 self.lagoon_api = GqlClient(
                     lagoon_api_endpoint,
@@ -317,19 +267,17 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                         "environmentType",
                         "route",
                         "routes",
-                    ],
-                    batch_project_environments_size,
-                ).withGroups(batch_size=batch_project_groups_size).withVariables(
-                    batch_size=batch_project_variables_size
-                )
+                    ]
+                ).withGroups().withVariables()
                 if len(lagoonProject.errors):
                     self.display.error(
                         f"Errors while fetching project subresources: {lagoonProject.errors}"
                     )
                     raise AnsibleError(
                         """Encountered errors while fetching project subresources.
-                        Errors at this stage may indicate that the query is too big and the API server
-                        cannot handle the load; try adjusting the batch levels and retry.""",
+                        Each project is queried individually, so the errors above name the
+                        projects that failed; re-run with -vvv to see the queries and
+                        responses involved.""",
                     )
 
                 for p in lagoonProject.projects:
@@ -340,20 +288,17 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                             continue
                         lagoonEnvironment.environments.append(e)
 
-                lagoonEnvironment.withProject(
-                    ["name"], batch_environment_project_size
-                ).withCluster(batch_size=batch_environment_cluster_size).withVariables(
-                    batch_size=batch_environment_variables_size
-                )
+                lagoonEnvironment.withProject(["name"]).withCluster().withVariables()
 
                 if len(lagoonEnvironment.errors):
                     self.display.error(
                         f"Errors while fetching environment subresources: {lagoonEnvironment.errors}"
                     )
                     raise AnsibleError(
-                        """Encountered errors while fetching project subresources.
-                        Errors at this stage may indicate that the query is too big and the API server
-                        cannot handle the load; try adjusting the batch levels and retry.""",
+                        """Encountered errors while fetching environment subresources.
+                        Each environment is queried individually, so the errors above name
+                        the environments that failed; re-run with -vvv to see the queries
+                        and responses involved.""",
                     )
 
                 for e in lagoonEnvironment.environments:
@@ -472,9 +417,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
     def sanitised_name(self, name):
         return re.sub(r"[\W_-]+", "-", name)
 
-    def sanitised_for_query_alias(self, name):
-        return re.sub(r"[\W-]+", "_", name)
-
     def fetch_lagoon_api_token(self, lagoon):
         lagoon_ssh_private_key = self.get_var(lagoon, "ssh_private_key")
         lagoon_ssh_private_key_file = self.get_var(lagoon, "ssh_private_key_file")
@@ -499,9 +441,3 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             )
 
         return token["access_token"].strip()
-
-
-def intWhenStr(val: Union[str, any]) -> Union[int, any]:
-    if isinstance(val, str):
-        return int(val)
-    return val

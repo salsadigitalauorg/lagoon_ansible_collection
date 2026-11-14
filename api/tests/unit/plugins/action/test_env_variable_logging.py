@@ -229,15 +229,16 @@ class GqlEnvironmentLoggingTester(unittest.TestCase):
     """
 
     def test_getVariables_does_not_emit_values(self):
-        # Same leak class as Variable.getForProjects: one result holds every
-        # variable for every environment named.
+        # Same leak class as Variable.getForProject: one result holds every
+        # variable for the environment named.
         client = GqlClient("foo", "bar")
         client.display = MagicMock()
         client.display.verbosity = 3
         ds = DSLSchema(load_schema())
         client.client = MagicMock()
+        # Keyed by the query name, not an alias: one root field per request.
         client.client.session.execute.return_value = {
-            "test_project_master": {
+            "environmentByKubernetesNamespaceName": {
                 "envVariables": [{"id": 1, "name": "SOME_VAR", "value": SENTINEL}]
             }
         }
@@ -246,7 +247,7 @@ class GqlEnvironmentLoggingTester(unittest.TestCase):
             patch.object(GqlClient, "__enter__", return_value=(MagicMock(), ds)),
             patch.object(GqlClient, "__exit__", return_value=False),
         ):
-            res = Environment(client).getVariables(["test-project-master"])
+            res = Environment(client).getVariables("test-project-master")
 
         output = "\n".join(
             str(c)
@@ -256,4 +257,4 @@ class GqlEnvironmentLoggingTester(unittest.TestCase):
 
         assert SENTINEL not in output
         # The caller still receives the real value.
-        assert res["test-project-master"][0]["value"] == SENTINEL
+        assert res[0]["value"] == SENTINEL

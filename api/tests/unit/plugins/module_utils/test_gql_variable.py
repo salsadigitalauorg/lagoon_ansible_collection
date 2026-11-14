@@ -72,14 +72,15 @@ class GqlVariableTester(unittest.TestCase):
         assert isinstance(query_args["value"], str)
         assert query_args["value"] == "50"
 
-    def test_getForProjects_does_not_emit_values(self):
+    def test_getForProject_does_not_emit_values(self):
         # The result holds every variable for the project, so an unmuted
         # query log leaks all of them, not just the one being managed.
         client = verbose_client()
         ds = DSLSchema(load_schema())
         client.client = MagicMock()
+        # Keyed by the query name, not an alias: one root field per request.
         client.client.session.execute.return_value = {
-            "projectname": {
+            "projectByName": {
                 "envVariables": [{"id": 1, "name": "SOME_VAR", "value": SENTINEL}]
             }
         }
@@ -88,11 +89,11 @@ class GqlVariableTester(unittest.TestCase):
             patch.object(GqlClient, "__enter__", return_value=(MagicMock(), ds)),
             patch.object(GqlClient, "__exit__", return_value=False),
         ):
-            res = Variable(client).getForProjects(["projectname"])
+            res = Variable(client).getForProject("projectname")
 
         assert SENTINEL not in emitted(client)
         # The caller still receives the real values.
-        assert res["projectname"][0]["value"] == SENTINEL
+        assert res[0]["value"] == SENTINEL
 
         # Guard against a vacuous pass: the same call unmuted does emit, so
         # the display mock and verbosity above are genuinely live.
