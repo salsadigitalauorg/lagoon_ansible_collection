@@ -296,7 +296,12 @@ class Environment(ResourceBase):
                 field_query.select(var_fields)
                 field_queries.append(field_query)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            # Read path: the response holds every variable value for every
+            # environment named, none of them known in advance, so redacting()
+            # cannot mask them - this one has to stay muted. Do not "finish
+            # the migration" to redacting() here.
+            with self.client.silenced():
+                resources = self.queryResources(DSLQuery(*field_queries))
 
         for eName in env_names:
             try:

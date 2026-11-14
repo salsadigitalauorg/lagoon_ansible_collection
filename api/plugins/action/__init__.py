@@ -3,7 +3,15 @@ from __future__ import annotations
 import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
-from ..module_utils.display import Display
+from ..module_utils.display import (
+  Display,
+  REDACTED,
+  SENSITIVE_FIELD_NAMES,
+  collect_no_log_values,
+  redact_keys,
+  redact_value,
+  redacting,
+)
 from ..module_utils.gql import GetClientInstance, ProxyLookup, input_args_to_field_list
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
@@ -15,6 +23,10 @@ from typing import List
 
 class LagoonActionBase(ActionBase):
 
+  # Names of task arguments whose values must never reach verbose output.
+  # Subclasses that handle secrets override this.
+  _sensitive_task_args: List[str] = []
+
   def run(self, tmp=None, task_vars=None):
     if task_vars is None:
       task_vars = dict()
@@ -22,7 +34,12 @@ class LagoonActionBase(ActionBase):
     result = super(LagoonActionBase, self).run(tmp, task_vars)
     del tmp
 
-    self._display.v("Task args: %s\n\n" % self._task.args)
+    args = self._task.args
+    if self._sensitive_task_args:
+      args = {k: REDACTED if k in self._sensitive_task_args else v
+              for k, v in args.items()}
+
+    self._display.v("Task args: %s\n\n" % args)
     return result
 
   def createClient(self, task_vars):
@@ -165,13 +182,15 @@ class MutationActionConfig:
     if not pluginConfig.diffCompareFields:
       return False
 
-    Display().vvv(f"Diffing existing record: {record} with input keys ({inputArgs.keys()}) and compareFields: {pluginConfig.diffCompareFields}\n\n")
+    Display().vvv(f"Diffing existing record: {redact_keys(record)} with input keys ({inputArgs.keys()}) and compareFields: {pluginConfig.diffCompareFields}\n\n")
     for field in pluginConfig.diffCompareFields:
       if field not in record or field not in inputArgs:
         continue
 
       if valueDiffers(record[field], inputArgs[field]):
-        Display().vvv(f"Field {field} differs: {record[field]} != {inputArgs[field]}\n\n")
+        Display().vvv(
+          f"Field {field} differs: {redact_value(field, record[field])} != "
+          f"{redact_value(field, inputArgs[field])}\n\n")
         return True
 
     return False
@@ -182,16 +201,20 @@ def valueDiffers(val1: any, val2: any) -> bool:
       if key not in val2:
         continue
       if valueDiffers(val1[key], val2[key]):
-        Display().vvv(f"Field {key} differs: {val1[key]} != {val2[key]}\n\n")
+        Display().vvv(
+          f"Field {key} differs: {redact_value(key, val1[key])} != "
+          f"{redact_value(key, val2[key])}\n\n")
         return True
     return False
   elif isinstance(val1, list) and isinstance(val2, list):
     if len(val1) != len(val2):
-      Display().vvv(f"Lists differ: {val1} != {val2}\n\n")
+      Display().vvv(
+        f"Lists differ: {redact_keys(val1)} != {redact_keys(val2)}\n\n")
       return True
     for i in range(len(val1)):
       if valueDiffers(val1[i], val2[i]):
-        Display().vvv(f"List item differs: {val1[i]} != {val2[i]}\n\n")
+        Display().vvv(
+          f"List item differs: {redact_keys(val1[i])} != {redact_keys(val2[i])}\n\n")
         return True
     return False
   else:
@@ -208,6 +231,11 @@ class LagoonMutationActionBase(LagoonActionBase):
   All args for the plugin are inferred from the GraphQL schema, and
   the actionConfig must be filled with all relevant information.
   """
+
+  # LagoonActionBase.run logs task args before the client, and so before
+  # the schema-derived argspec, exists - so that one log line has to be
+  # masked by key name rather than by value.
+  _sensitive_task_args = sorted(SENSITIVE_FIELD_NAMES)
 
   # The main config for the plugin, and drives the whole process.
   actionConfig : MutationActionConfig
@@ -268,34 +296,56 @@ class LagoonMutationActionBase(LagoonActionBase):
       self._display.vvv(f"Generated argspec: {self.argSpec}\n\n")
 
       # Validate the arguments.
-      _, moduleArgs = self.validate_argument_spec(self.argSpec)
+      validationResult, moduleArgs = self.validate_argument_spec(self.argSpec)
 
       # Filter out None arguments.
       moduleArgs = {k: v for k, v in moduleArgs.items() if v is not None}
-
-      self._display.vvv(f"Validated module args: {moduleArgs}\n\n")
       self.moduleArgs = moduleArgs
 
-      # Find if there's an existing record.
-      self._display.vvv(f"Finding existing record for action: {self.action}")
-      record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
-      if record is not None:
-        self._display.vvv(f"Existing record found: {record}\n\n")
-        changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
-        if not changed:
-          result['changed'] = False
-          result['result'] = record
-          return result
-      else:
-        self._display.vvv("Existing record not found\n")
+      # build_dynamic_mutation inlines values into the mutation AST, and gql
+      # prints that AST through info() in check mode, which isn't verbosity
+      # gated - so everything below can leak argument values at -v0.
+      # Redact by value rather than mute, so errors stay visible (ISM-1911)
+      # while the values stay hidden (ISM-2052).
+      with redacting(self._noLogValues(validationResult)):
+        # Use module_utils Display, not self._display, so the no-log
+        # scrubbing above applies. Both write to the same underlying
+        # singleton.
+        Display().vvv(f"Validated module args: {moduleArgs}\n\n")
 
-      self.buildMutationObj(record)
+        Display().vvv(f"Finding existing record for action: {self.action}")
+        record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
+        if record is not None:
+          # Key-redacted too: a value from the API isn't in the no-log set,
+          # so redacting() alone can't mask it.
+          Display().vvv(f"Existing record found: {redact_keys(record)}\n\n")
+          changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
+          if not changed:
+            result['changed'] = False
+            result['result'] = record
+            return result
+        else:
+          Display().vvv("Existing record not found\n")
 
-      res = self.client.execute_query_dynamic(self.mutationObj)
-      result['result'] = res[pluginConfig.field] if record is None else res[pluginConfig.updateField]
-      result['changed'] = True
+        self.buildMutationObj(record)
+
+        res = self.client.execute_query_dynamic(self.mutationObj)
+        result['result'] = res[pluginConfig.field] if record is None else res[pluginConfig.updateField]
+        result['changed'] = True
 
     return result
+
+  def _noLogValues(self, validationResult) -> set:
+    """The values to scrub from output, from the argspec's no_log flags.
+
+    ValidationResult._no_log_values is private and may disappear in a future
+    ansible-core, so fall back to recomputing it rather than silently
+    logging secrets. Tests pin both paths.
+    """
+    values = getattr(validationResult, '_no_log_values', None)
+    if values is None:
+      return collect_no_log_values(self.argSpec, self.moduleArgs)
+    return values
 
   def validatePluginConfig(self):
     if (self.actionConfig is None or
