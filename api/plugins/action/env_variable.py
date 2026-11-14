@@ -6,7 +6,20 @@ from ansible.errors import AnsibleError
 from time import sleep
 
 
+def variable_names(env_vars):
+    """The variable names only.
+
+    Variable values are routinely secrets - database credentials, API tokens,
+    container registry passwords - so they must never reach verbose output.
+    """
+    if not env_vars:
+        return env_vars
+    return [v['name'] for v in env_vars]
+
+
 class ActionModule(LagoonActionBase):
+
+    _sensitive_task_args = ['value']
 
     def run(self, tmp=None, task_vars=None):
 
@@ -15,8 +28,6 @@ class ActionModule(LagoonActionBase):
 
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
-
-        self._display.v("Task args: %s" % self._task.args)
 
         name = self._task.args.get('name')
         type = self._task.args.get('type')
@@ -50,10 +61,12 @@ class ActionModule(LagoonActionBase):
                 raise AnsibleError("Project not found.")
 
             lagoonProject.withVariables()
-            self._display.v(f"project: {lagoonProject.projects[0]}")
+            self._display.v("project: id=%s name=%s" % (
+                lagoonProject.projects[0]['id'],
+                lagoonProject.projects[0]['name']))
             type_id = lagoonProject.projects[0]['id']
             env_vars = lagoonProject.projects[0]['envVariables']
-            self._display.v("Project variables: %s" % env_vars)
+            self._display.v("Project variables: %s" % variable_names(env_vars))
             lagoon_project_name = type_name
         elif (type == 'ENVIRONMENT'):
             lagoonEnvironment.byNs(
@@ -62,12 +75,17 @@ class ActionModule(LagoonActionBase):
                 raise AnsibleError("Environment not found.")
 
             lagoonEnvironment.withVariables()
-            self._display.v(f"environment: {lagoonEnvironment.environments[0]}")
+            self._display.v("environment: id=%s name=%s ns=%s project=%s" % (
+                lagoonEnvironment.environments[0]['id'],
+                lagoonEnvironment.environments[0]['name'],
+                lagoonEnvironment.environments[0]['kubernetesNamespaceName'],
+                lagoonEnvironment.environments[0]['project']['name']))
             type_id = lagoonEnvironment.environments[0]['id']
             env_vars = lagoonEnvironment.environments[0]['envVariables']
             lagoon_environment_name = lagoonEnvironment.environments[0]['name']
             lagoon_project_name = lagoonEnvironment.environments[0]['project']['name']
-            self._display.v("Environment variables: %s" % env_vars)
+            self._display.v(
+                "Environment variables: %s" % variable_names(env_vars))
         if env_vars == None:
             raise AnsibleError(
                 "Incorrect variable type: %s. Should be PROJECT or ENVIRONMENT." % type)
@@ -79,7 +97,9 @@ class ActionModule(LagoonActionBase):
             existing_var = var
 
         if existing_var:
-            self._display.v("Existing variable: %s" % existing_var)
+            self._display.v("Existing variable: id=%s name=%s scope=%s" % (
+                existing_var['id'], existing_var['name'],
+                existing_var['scope']))
 
             if state == 'absent':
                 result['changed'] = lagoonVariable.delete(existing_var['id'])

@@ -34,6 +34,9 @@ options:
     description:
       - The variable value.
       - Required when state is present.
+      - Treated as sensitive. The value is masked in verbose output, but it is
+        still templated in the playbook, so set C(no_log) on any task that
+        passes a secret here.
     type: str
   scope:
     description:

@@ -1,3 +1,4 @@
+from .display import SENSITIVE_FIELD_NAMES
 from .gql import DSLSchema
 from gql.dsl import DSLField
 from graphql import (
@@ -30,6 +31,23 @@ def auth_argument_spec(spec=None) -> dict:
     arg_spec.update(spec)
   return arg_spec
 
+def mark_no_log(fieldName: str, fieldSpec: dict) -> dict:
+  """Flag a sensitive string field so its value can be scrubbed from output.
+
+  LagoonMutationActionBase reads the flag back via
+  ValidationResult._no_log_values to build the redaction set.
+
+  Only applied to type='str': flagging an Int field would put its stringified
+  value (e.g. "42") into the no-log set and star out that substring
+  everywhere, including unrelated IDs.
+
+  SENSITIVE_FIELD_NAMES is matched exactly, not by substring, so 'token'/'key'
+  don't catch the booleans deployTokenInjection and projectKeyInjection.
+  """
+  if fieldName in SENSITIVE_FIELD_NAMES and fieldSpec.get('type') == 'str':
+    fieldSpec['no_log'] = True
+  return fieldSpec
+
 def generate_argspec_from_mutation(
     ds: DSLSchema, mutation: str,
     additionalArgs: dict = {}, aliases: dict = {}) -> dict:
@@ -38,7 +56,8 @@ def generate_argspec_from_mutation(
   argSpec = dict()
   arg: GraphQLArgument
   for fieldName, arg in mutationField.field.args.items():
-    argSpec[fieldName] = generate_argspec_for_input_type(arg.type, aliases)
+    argSpec[fieldName] = mark_no_log(
+      fieldName, generate_argspec_for_input_type(arg.type, aliases))
 
   if 'input' in argSpec and additionalArgs:
     argSpec['input']['options'].update(additionalArgs)
@@ -53,7 +72,8 @@ def generate_argspec_from_input_object_type(
   fields = objType.fields
   field: GraphQLInputField
   for fieldName, field in fields.items():
-    argSpec[fieldName] = generate_argspec_for_input_type(field.type, aliases)
+    argSpec[fieldName] = mark_no_log(
+      fieldName, generate_argspec_for_input_type(field.type, aliases))
     if aliases and fieldName in aliases:
       argSpec[fieldName]['aliases'] = aliases[fieldName]
   return argSpec
