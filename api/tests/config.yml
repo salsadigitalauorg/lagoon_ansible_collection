@@ -1,0 +1,9 @@
+# ansible-test configuration for this collection.
+# Must live at tests/config.yml relative to the collection root.
+# Supported since ansible-core 2.12; the test image ships 2.16.3.
+
+modules:
+  # modules/module_utils support Python 3.9+. 3.8 was dropped in 05f5ec2.
+  # Unit tests are skipped on any version excluded here, which keeps the local
+  # `ansible-test units` run aligned with the 3.9/3.10/3.11 CI matrix.
+  python_requires: '>=3.9'
