@@ -7,16 +7,10 @@ from ..module_utils.gqlTaskDefinition import TaskDefinition
 from ansible.errors import AnsibleError, AnsibleOptionsError
 
 
-SUPPORTED_RESOURCES = [
-    "project",
-    "environment",
-    "task_definition",
-    "task"
-]
+SUPPORTED_RESOURCES = ["project", "environment", "task_definition", "task"]
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         self._display.v("Task args: %s" % self._task.args)
@@ -31,15 +25,16 @@ class ActionModule(LagoonActionBase):
 
         self.createClient(task_vars)
 
-        resource = self._task.args.get('resource')
-        batch_size = self._task.args.get('batch_size', DEFAULT_BATCH_SIZE)
-        environment = self._task.args.get('environment')
+        resource = self._task.args.get("resource")
+        batch_size = self._task.args.get("batch_size", DEFAULT_BATCH_SIZE)
+        environment = self._task.args.get("environment")
 
         if resource not in SUPPORTED_RESOURCES:
-            result['failed'] = True
+            result["failed"] = True
             supported_resources_str = ", ".join(SUPPORTED_RESOURCES)
             self._display.v(
-                f"Resource {resource} is not currently supported - supported resources are {supported_resources_str}")
+                f"Resource {resource} is not currently supported - supported resources are {supported_resources_str}"
+            )
             return result
 
         if resource == "project":
@@ -63,25 +58,28 @@ class ActionModule(LagoonActionBase):
         lagoonProject.withEnvironments(batch_size=batch_size)
         if len(lagoonProject.errors):
             self._display.warning(
-                f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
+                f"The query partially succeeded, but the following errors were encountered:\n{lagoonProject.errors}"
+            )
 
-        result['result'] = lagoonProject.projects
+        result["result"] = lagoonProject.projects
 
     def fetch_environments(self, result: dict, batch_size: int):
         lagoonEnvironment = Environment(self.client).all(batch_size=batch_size)
         if not len(lagoonEnvironment.environments):
             raise AnsibleError(f"Unable to get environments.")
 
-        lagoonEnvironment.withCluster(
-            batch_size=batch_size).withProject(batch_size=batch_size)
+        lagoonEnvironment.withCluster(batch_size=batch_size).withProject(
+            batch_size=batch_size
+        )
         if len(lagoonEnvironment.errors):
             self._display.warning(
-                f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
+                f"The query partially succeeded, but the following errors were encountered:\n{lagoonEnvironment.errors}"
+            )
 
-        result['result'] = lagoonEnvironment.environments
+        result["result"] = lagoonEnvironment.environments
 
     def fetch_task_definitions(self, result: dict):
-        result['result'] = TaskDefinition(self.client).get_definitions()
+        result["result"] = TaskDefinition(self.client).get_definitions()
 
     def fetch_tasks(self, result: dict, environment: str):
-        result['result'] = Task(self.client).get([environment])
+        result["result"] = Task(self.client).get([environment])

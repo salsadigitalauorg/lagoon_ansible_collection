@@ -1,0 +1,20 @@
+# Formats and lints Python before a commit is created, so CI never fails on
+# something a developer could not see locally.
+#
+# Install once:
+#   python3 -m pip install pre-commit && pre-commit install
+#
+# Ruff config lives in /ruff.toml. The version below must match
+# .github/workflows/lint.yml and docker-compose.yml.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.5
+    hooks:
+      # Formats in place, then fails the commit so the result can be reviewed
+      # and re-staged rather than being committed unseen.
+      - id: ruff-format
+
+      # Advisory in CI, but auto-fixable findings are worth fixing at the point
+      # of writing. Only safe fixes are applied by default.
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]

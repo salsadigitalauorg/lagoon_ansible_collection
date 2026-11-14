@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: project_group
 description: Manage the groups for a project
 short_description: Manage the groups for a project
@@ -17,13 +17,13 @@ options:
     type: list
     required: true
     elements: str
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Ensure project is in group
   lagoon.api.project_group:
     state: present
     project: "{{ project_name }}"
     groups:
       - my_group_name
-'''
+"""

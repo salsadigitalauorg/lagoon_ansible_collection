@@ -59,8 +59,8 @@ EXAMPLES = """
 from ansible_collections.lagoon.api.plugins.module_utils.gqlTask import Task
 from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
 
-class LookupModule(LagoonLookupBase):
 
+class LookupModule(LagoonLookupBase):
     def run(self, terms, variables=None, **kwargs):
         ret = []
         self.set_options(var_options=variables, direct=kwargs)
@@ -76,7 +76,8 @@ class LookupModule(LagoonLookupBase):
                     task = Task(self.client).byTaskName(term)
             else:
                 raise AnsibleError(
-                    f"Unable to fetch Lagoon task by {term}; only task ID (int) or name (str) is accepted.")
+                    f"Unable to fetch Lagoon task by {term}; only task ID (int) or name (str) is accepted."
+                )
             ret.append(task)
 
         return ret

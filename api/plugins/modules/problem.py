@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: problem
 short_description: Manage problems for an environment.
 description:
@@ -69,9 +69,9 @@ options:
     type: str
     default: present
     choices: [ absent, present ]
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add a problem to a Lagoon project
   lagoon.api.problem:
     environment_id: 1
@@ -79,4 +79,4 @@ EXAMPLES = r'''
     data: import configuration
     description: Users should not be able to import configuration.
     source: drupal
-'''
+"""

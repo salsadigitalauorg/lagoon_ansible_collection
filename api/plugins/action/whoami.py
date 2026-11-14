@@ -3,7 +3,6 @@ from ansible.errors import AnsibleError
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -29,9 +28,10 @@ class ActionModule(LagoonActionBase):
                         type
                     }
                 }
-            }""")
+            }"""
+        )
         self._display.v(f"GraphQL query result: {res}")
-        if res['me'] == None:
+        if res["me"] == None:
             raise AnsibleError(f"Unable to get user information.")
-        result['result'] = res['me']
+        result["result"] = res["me"]
         return result

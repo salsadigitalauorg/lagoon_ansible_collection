@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: lagoon.api.cmdb_diff
 short_description: Compare local and remote Lagoon configuration states
 description:
@@ -39,9 +39,9 @@ options:
     required: false
     type: list
     elements: str
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 # Example of using lagoon.api.cmdb_diff in strict mode to ensure complete configuration alignment
 - name: Ensure complete parity between local and Lagoon configurations
   lagoon.api.cmdb_diff:
@@ -56,4 +56,4 @@ EXAMPLES = r'''
     base: "{{ remote_config }}"
     mode: "key"
     keys: ["name", "value"]
-'''
+"""

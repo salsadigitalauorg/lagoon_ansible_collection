@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: last_deploy
 short_description: Check the status of the last deployment
 description:
@@ -32,9 +32,9 @@ options:
       - Number of times to check for deployment status before returning.
     type: int
     default: 30
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Trigger a deployment
   lagoon.api.last_deploy:
     project: test-project
@@ -42,4 +42,4 @@ EXAMPLES = r'''
     stagger: 5
     retries: 60
     wait: true
-'''
+"""

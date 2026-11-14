@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: metadata
 short_description: Manage a project's metadata
 description:
@@ -28,9 +28,9 @@ options:
       - The metadata values - can be a dict or a list of dicts.
     type: list
     default: []
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add project metadata (dict)
   lagoon.api.metadata:
     state: present
@@ -68,4 +68,4 @@ EXAMPLES = r'''
         value: rock
     project_id: 7
     project_name: project-pheonix
-'''
+"""

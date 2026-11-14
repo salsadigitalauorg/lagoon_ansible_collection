@@ -4,12 +4,19 @@ from .gqlResourceBase import ResourceBase
 
 DEFAULT_DEPLOY_TARGET_WEIGHT = 0
 
-class DeployTargetConfig(ResourceBase):
 
+class DeployTargetConfig(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
-    def add(self, project: int, branches: str, target: int, pullrequests: str, weight: int = DEFAULT_DEPLOY_TARGET_WEIGHT) -> bool:
+    def add(
+        self,
+        project: int,
+        branches: str,
+        target: int,
+        pullrequests: str,
+        weight: int = DEFAULT_DEPLOY_TARGET_WEIGHT,
+    ) -> bool:
         res = self.client.execute_query(
             """
             mutation addDeployTargetConfig(
@@ -35,8 +42,8 @@ class DeployTargetConfig(ResourceBase):
                 "branches": branches,
                 "target": int(target),
                 "pullrequests": pullrequests,
-                "weight": int(weight)
-            }
+                "weight": int(weight),
+            },
         )
 
         try:
@@ -57,10 +64,7 @@ class DeployTargetConfig(ResourceBase):
                 })
             }
             """,
-            {
-                "project": project,
-                "id": id
-            }
+            {"project": project, "id": id},
         )
 
         try:

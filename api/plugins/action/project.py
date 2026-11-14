@@ -16,9 +16,7 @@ def has_project(client: GqlClient, project):
             }
         }
         """,
-        {
-            "name": project
-        }
+        {"name": project},
     )
 
     display.v(f"GraphQL query result: {res}")
@@ -39,9 +37,7 @@ def delete_project(client: GqlClient, project):
             })
         }
         """,
-        {
-            "name": project
-        }
+        {"name": project},
     )
 
     try:
@@ -64,7 +60,7 @@ def add_project(
     autoIdle=1,
     developmentEnvironmentsLimit=5,
     problemsUi=0,
-    factsUi=0
+    factsUi=0,
 ):
 
     # Excluded inputs:
@@ -131,14 +127,14 @@ def add_project(
             "branches": branches,
             "pullrequests": pullrequests,
             "openshift": int(openshift),
-            "organization": int(organization),  
+            "organization": int(organization),
             "productionEnvironment": productionEnvironment,
             "standbyProductionEnvironment": standbyProductionEnvironment,
             "autoIdle": int(autoIdle),
             "developmentEnvironmentsLimit": int(developmentEnvironmentsLimit),
             "problemsUi": int(problemsUi),
-            "factsUi": int(factsUi)
-        }
+            "factsUi": int(factsUi),
+        },
     )
 
     display.v(f"GraphQL mutation result: {res}")
@@ -146,7 +142,6 @@ def add_project(
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -160,7 +155,7 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
 
         # Modifier.
-        state = self._task.args.get('state', 'present')
+        state = self._task.args.get("state", "present")
 
         name = self._task.args.get("name")
         gitUrl = self._task.args.get("git_url")
@@ -170,9 +165,13 @@ class ActionModule(LagoonActionBase):
         openshift = self._task.args.get("openshift")
         organization = self._task.args.get("organization")
         productionEnvironment = self._task.args.get("production_environment")
-        standbyProductionEnvironment = self._task.args.get("standby_production_environment")
+        standbyProductionEnvironment = self._task.args.get(
+            "standby_production_environment"
+        )
         autoIdle = self._task.args.get("auto_idle", True)
-        developmentEnvironmentsLimit = self._task.args.get("development_environments_limit", 5)
+        developmentEnvironmentsLimit = self._task.args.get(
+            "development_environments_limit", 5
+        )
         problemsUi = self._task.args.get("problems_ui", False)
         factsUi = self._task.args.get("facts_ui", False)
 
@@ -201,7 +200,7 @@ class ActionModule(LagoonActionBase):
                 autoIdle,
                 developmentEnvironmentsLimit,
                 problemsUi,
-                factsUi
+                factsUi,
             )
 
         return result

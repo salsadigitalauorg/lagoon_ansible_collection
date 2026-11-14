@@ -204,9 +204,7 @@ class MutationLoggingTester(unittest.TestCase):
         with captured(module, ds, sink):
             module.run(task_vars={})
 
-        task_arg_calls = [
-            str(c) for c in sink.mock_calls if "Task args" in str(c)
-        ]
+        task_arg_calls = [str(c) for c in sink.mock_calls if "Task args" in str(c)]
         assert len(task_arg_calls) == 1
         assert SENTINEL not in task_arg_calls[0]
         assert REDACTED in task_arg_calls[0]
@@ -299,10 +297,11 @@ class MutationMaskingBackendTester(unittest.TestCase):
         sink = make_sink(verbosity=0)
         module, _, ds = make_module(TASK_ARGS, sink, check_mode=True)
 
-        with captured(module, ds, sink), \
-                patch.object(display_module, "HAS_NATIVE_SECRETS", native), \
-                patch.object(display_module, "HAS_REMOVE_VALUES",
-                             remove_values):
+        with (
+            captured(module, ds, sink),
+            patch.object(display_module, "HAS_NATIVE_SECRETS", native),
+            patch.object(display_module, "HAS_REMOVE_VALUES", remove_values),
+        ):
             module.run(task_vars={})
 
         return emitted(sink)

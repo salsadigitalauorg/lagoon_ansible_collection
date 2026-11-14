@@ -19,9 +19,7 @@ def has_group(client: GqlClient, project, group):
             }
         }
         """,
-        {
-            "name": project
-        }
+        {"name": project},
     )
 
     display.v(f"GraphQL query result: {res}")
@@ -49,10 +47,7 @@ def remove_groups_from_project(client: GqlClient, project, groups):
             }
         }
         """,
-        {
-            "name": project,
-            "groups": groups
-        }
+        {"name": project, "groups": groups},
     )
 
     try:
@@ -73,10 +68,7 @@ def add_project_group(client: GqlClient, project, groups):
                 id
             }
         }""",
-        {
-            "name": project,
-            "groups": groups
-        }
+        {"name": project, "groups": groups},
     )
 
     display.v(f"GraphQL mutation result: {res}")
@@ -84,7 +76,6 @@ def add_project_group(client: GqlClient, project, groups):
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -98,7 +89,7 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
 
         # Modifier.
-        state = self._task.args.get('state', 'present')
+        state = self._task.args.get("state", "present")
 
         project = self._task.args.get("project")
         groups = self._task.args.get("groups", [])
@@ -112,7 +103,9 @@ class ActionModule(LagoonActionBase):
                 op_groups.append({"name": g})
 
         self._display.v("Groups args: %s" % op_groups)
-        method = "remove_groups_from_project" if state == "absent" else "add_project_group"
+        method = (
+            "remove_groups_from_project" if state == "absent" else "add_project_group"
+        )
 
         if len(op_groups) == 0:
             result["changed"] = False

@@ -4,12 +4,14 @@ from .display import Display
 from ansible.module_utils.errors import AnsibleValidationError
 from gql import Client, gql
 from gql.dsl import (
-  DSLExecutable,
-  DSLField,
-  DSLInlineFragment,
-  DSLMutation, DSLQuery,
-  DSLSchema, DSLType,
-  dsl_gql
+    DSLExecutable,
+    DSLField,
+    DSLInlineFragment,
+    DSLMutation,
+    DSLQuery,
+    DSLSchema,
+    DSLType,
+    dsl_gql,
 )
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.requests import RequestsHTTPTransport
@@ -31,23 +33,30 @@ from graphql.type.definition import (
 from random import randint
 from typing import Any, Dict, List, Optional, Union, cast
 
+
 class GqlClient(Display):
-    """ This client aims to facilitate the usage of the gql package, based on
+    """This client aims to facilitate the usage of the gql package, based on
     the docs at https://gql.readthedocs.io/en/latest/advanced/dsl_module.html.
     The goal is to allow developers to run queries and mutations using the awesome
-    package while reducing boilerplate code. """
+    package while reducing boilerplate code."""
 
     checkMode: bool = False
 
-    def __init__(self, endpoint: str, token: str, headers: dict = {},
-                 display: Display = None, checkMode: bool = False) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        token: str,
+        headers: dict = {},
+        display: Display = None,
+        checkMode: bool = False,
+    ) -> None:
         super().__init__()
 
         if not isinstance(headers, dict):
             raise AnsibleValidationError("Expecting client headers to be dictionary.")
 
-        headers['Content-Type'] = 'application/json'
-        headers['Authorization'] = f"Bearer {token}"
+        headers["Content-Type"] = "application/json"
+        headers["Authorization"] = f"Bearer {token}"
 
         # There's not much reason to do async requests in the Ansible context,
         # so we're defaulting to RequestsHTTPTransport.
@@ -61,10 +70,7 @@ class GqlClient(Display):
 
         # gql has the ability to fetch the schema directly from the GraphQL
         # server API, so we set the relevant argument.
-        self.client = Client(
-            transport=transport,
-            fetch_schema_from_transport=True
-        )
+        self.client = Client(transport=transport, fetch_schema_from_transport=True)
 
         self.checkMode = checkMode
 
@@ -87,15 +93,16 @@ class GqlClient(Display):
     def __exit__(self, *args):
         self.client.__exit__(args)
 
-    def execute_query(self, query: str, variables: Optional[Dict[str, Any]]={}) -> Dict[str, Any]:
-        """Executes a query using the graphql string provided.
-        """
+    def execute_query(
+        self, query: str, variables: Optional[Dict[str, Any]] = {}
+    ) -> Dict[str, Any]:
+        """Executes a query using the graphql string provided."""
         query_ast = gql(query)
         self.vvv(f"GraphQL built query: \n{print_ast(query_ast)}")
         self.vvv(f"GraphQL query variables: \n{variables}")
 
         if self.checkMode:
-            return {'checkMode': True}
+            return {"checkMode": True}
 
         try:
             res = self.client.execute(query_ast, variable_values=variables)
@@ -105,10 +112,10 @@ class GqlClient(Display):
             # In some cases (groupByName), an error is returned when not found,
             # whereas in others it's just an empty result (projectByName).
             # Let's keep it consistent.
-            if 'not found' in str(e):
+            if "not found" in str(e):
                 return e.data
             self.vvv(f"GraphQL TransportQueryError: {e}\n\n")
-            return {'error': e}
+            return {"error": e}
 
     def execute_query_dynamic(self, *operations: DSLExecutable) -> Dict[str, Any]:
         """Executes a dynamic query with the open session.
@@ -128,11 +135,13 @@ class GqlClient(Display):
 
         opName = operations[0].selection_set.selections[0].name.value
         if self.checkMode and isinstance(operations[0], DSLMutation):
-            self.info(f"Check mode enabled, skipping query execution. Query to execute: \n{print_ast(full_query)}")
-            if opName.startswith('delete'):
-                res = {opName: 'success'}
+            self.info(
+                f"Check mode enabled, skipping query execution. Query to execute: \n{print_ast(full_query)}"
+            )
+            if opName.startswith("delete"):
+                res = {opName: "success"}
             else:
-                res = {opName: {'id': -1 * randint(1, 1000)}}
+                res = {opName: {"id": -1 * randint(1, 1000)}}
         else:
             try:
                 res = self.client.session.execute(full_query)
@@ -140,20 +149,21 @@ class GqlClient(Display):
                 # In some cases (groupByName), an error is returned when
                 # not found, whereas in others it's just an empty result
                 # (projectByName). Let's keep it consistent.
-                if 'not found' in str(e):
+                if "not found" in str(e):
                     return e.data
                 raise e
 
         self.vvv(f"GraphQL query result: {res}\n\n")
         return res
 
-    def build_dynamic_query(self,
-                            query: str,
-                            mainType: str = "",
-                            args: Optional[Dict[str, Any]] = {},
-                            fields: List[str] = [],
-                            subFieldsMap: Optional[Dict[str, List[str]]] = {},
-                            ) -> DSLField:
+    def build_dynamic_query(
+        self,
+        query: str,
+        mainType: str = "",
+        args: Optional[Dict[str, Any]] = {},
+        fields: List[str] = [],
+        subFieldsMap: Optional[Dict[str, List[str]]] = {},
+    ) -> DSLField:
         """
         Dynamically build a query against the Lagoon API.
 
@@ -209,18 +219,19 @@ class GqlClient(Display):
         # Nested fields (one level only).
         for field, subFieldsNType in subFieldsMap.items():
             subFieldSelector: DSLField = getattr(mainTypeObj, field)
-            subFieldTypeObj: DSLType = getattr(self.ds, subFieldsNType['type'])
-            for f in subFieldsNType['fields']:
+            subFieldTypeObj: DSLType = getattr(self.ds, subFieldsNType["type"])
+            for f in subFieldsNType["fields"]:
                 subFieldSelector.select(getattr(subFieldTypeObj, f))
             queryObj.select(subFieldSelector)
 
         return queryObj
 
-    def build_dynamic_mutation(self,
-                               mutation: str,
-                               inputArgs: Dict[str, Any],
-                               returnFields: List[str] = ['id'],
-                               ) -> DSLField:
+    def build_dynamic_mutation(
+        self,
+        mutation: str,
+        inputArgs: Dict[str, Any],
+        returnFields: List[str] = ["id"],
+    ) -> DSLField:
         """
         Dynamically build a mutation against the Lagoon API.
 
@@ -256,56 +267,70 @@ class GqlClient(Display):
         # Build the main query with top-level fields if any.
         mutationField: DSLField = getattr(self.ds.Mutation, mutation)
         mutationField = field_selector(
-            self.ds, mutationField, mutationField.field.type, returnFields)
-        self.mutation_field_add_args(
-            mutationField,
-            mutationField.field.type,
-            inputArgs)
+            self.ds, mutationField, mutationField.field.type, returnFields
+        )
+        self.mutation_field_add_args(mutationField, mutationField.field.type, inputArgs)
 
         return mutationField
 
-    def mutation_field_add_args(self,
-                               mutationField: DSLField,
-                               outputType: GraphQLOutputType,
-                               inputArgs: Dict[str, Any]):
+    def mutation_field_add_args(
+        self,
+        mutationField: DSLField,
+        outputType: GraphQLOutputType,
+        inputArgs: Dict[str, Any],
+    ):
 
         if not isinstance(mutationField, DSLField):
-            raise TypeError(f"mutationField must be of type DSLField, got {type(mutationField)}.")
+            raise TypeError(
+                f"mutationField must be of type DSLField, got {type(mutationField)}."
+            )
 
         if not is_output_type(outputType):
-            raise TypeError(f"outputType must be of type GraphQLOutputType, got {type(outputType)}.")
+            raise TypeError(
+                f"outputType must be of type GraphQLOutputType, got {type(outputType)}."
+            )
 
         if not isinstance(inputArgs, dict):
             raise TypeError(f"inputArgs must be of type dict, got {type(inputArgs)}.")
 
         if len(inputArgs) == 0:
-            raise AnsibleValidationError("inputArgs must have at least one key-value pair.")
+            raise AnsibleValidationError(
+                "inputArgs must have at least one key-value pair."
+            )
 
         if is_scalar_type(outputType):
             argsIntersect = list(
-                set(mutationField.field.args.keys()) &
-                set(inputArgs.keys()))
+                set(mutationField.field.args.keys()) & set(inputArgs.keys())
+            )
             if len(argsIntersect):
                 mutationField.args(**{argsIntersect[0]: inputArgs[argsIntersect[0]]})
-        elif is_union_type(outputType) or is_object_type(outputType) or is_interface_type(outputType):
+        elif (
+            is_union_type(outputType)
+            or is_object_type(outputType)
+            or is_interface_type(outputType)
+        ):
             mutationField.args(**inputArgs)
         elif is_list_type(outputType):
             listObj = cast(GraphQLList, outputType)
-            self.mutation_field_add_args(
-                mutationField,
-                listObj.of_type,
-                inputArgs)
+            self.mutation_field_add_args(mutationField, listObj.of_type, inputArgs)
         else:
-            raise Exception(f"Unsupported field type {outputType} ({type(outputType)}) found when generating mutation field")
+            raise Exception(
+                f"Unsupported field type {outputType} ({type(outputType)}) found when generating mutation field"
+            )
+
 
 globalClient: GqlClient = None
-def GetClientInstance(endpoint: str, token: str, headers: dict = {},
-                      checkMode: bool = False) -> GqlClient:
+
+
+def GetClientInstance(
+    endpoint: str, token: str, headers: dict = {}, checkMode: bool = False
+) -> GqlClient:
 
     global globalClient
     if not globalClient:
         globalClient = GqlClient(endpoint, token, headers, checkMode=checkMode)
     return globalClient
+
 
 class ProxyLookup(Display):
     """This class aims to facilitate the lookup of records in the Lagoon API
@@ -323,8 +348,12 @@ class ProxyLookup(Display):
 
     qryField: DSLField
 
-    def __init__(self, query: str, inputArgFields: Dict[str, str] = {},
-                 selectFields: List[str] = None):
+    def __init__(
+        self,
+        query: str,
+        inputArgFields: Dict[str, str] = {},
+        selectFields: List[str] = None,
+    ):
 
         super().__init__()
         self.query = query
@@ -355,35 +384,47 @@ class ProxyLookup(Display):
 
         return True
 
-    def execute(self, inputArgs: dict,
-                lookupCompareFields: List[str]) -> Dict[str, Any]|None:
+    def execute(
+        self, inputArgs: dict, lookupCompareFields: List[str]
+    ) -> Dict[str, Any] | None:
 
         if not isinstance(inputArgs, dict):
-            raise TypeError(
-                f"inputArgs must be of type dict, got {type(inputArgs)}.")
+            raise TypeError(f"inputArgs must be of type dict, got {type(inputArgs)}.")
 
         if not isinstance(lookupCompareFields, list):
             raise TypeError(
-                f"lookupCompareFields must be of type list, got {type(lookupCompareFields)}.")
+                f"lookupCompareFields must be of type list, got {type(lookupCompareFields)}."
+            )
 
         if not len(inputArgs):
-            raise AnsibleValidationError("inputArgs must have at least one key-value pair.")
+            raise AnsibleValidationError(
+                "inputArgs must have at least one key-value pair."
+            )
 
         if not len(lookupCompareFields):
-            raise AnsibleValidationError("lookupCompareFields must have at least one field.")
+            raise AnsibleValidationError(
+                "lookupCompareFields must have at least one field."
+            )
 
         leafQueryFields = input_args_to_field_list(inputArgs)
-        leafQueryFields.extend(x for x in lookupCompareFields if x not in leafQueryFields)
+        leafQueryFields.extend(
+            x for x in lookupCompareFields if x not in leafQueryFields
+        )
 
         if self.selectFields and len(self.selectFields):
             typeObj: DSLType = getattr(self.client().ds, self.qryField.field.type.name)
             self.qryField.select(
                 nested_field_selector(
-                    self.client().ds, typeObj, self.selectFields, leafQueryFields))
+                    self.client().ds, typeObj, self.selectFields, leafQueryFields
+                )
+            )
         else:
             self.qryField = field_selector(
-                self.client().ds, self.qryField, self.qryField.field.type,
-                leafQueryFields)
+                self.client().ds,
+                self.qryField,
+                self.qryField.field.type,
+                leafQueryFields,
+            )
 
         results = self.client().execute_query_dynamic(DSLQuery(self.qryField))
         results = results[self.query]
@@ -423,7 +464,7 @@ class ProxyLookup(Display):
         return matchedRecord
 
 
-def input_args_to_field_list(inputArgs: dict) -> List[str|dict]:
+def input_args_to_field_list(inputArgs: dict) -> List[str | dict]:
     fieldList = []
     for k, v in inputArgs.items():
         if isinstance(v, dict):
@@ -439,15 +480,18 @@ def input_args_to_field_list(inputArgs: dict) -> List[str|dict]:
         else:
             fieldList.append(k)
 
-    if 'id' not in fieldList:
-        fieldList.append('id')
+    if "id" not in fieldList:
+        fieldList.append("id")
 
     return fieldList
 
-def field_selector(ds: DSLSchema,
-                   selector: DSLField,
-                   selectorType: GraphQLOutputType,
-                   selectFields: List[str] = []) -> DSLField:
+
+def field_selector(
+    ds: DSLSchema,
+    selector: DSLField,
+    selectorType: GraphQLOutputType,
+    selectFields: List[str] = [],
+) -> DSLField:
     """Recursively build a field selector for a given field & type."""
 
     if not isinstance(ds, DSLSchema):
@@ -457,13 +501,18 @@ def field_selector(ds: DSLSchema,
         raise TypeError(f"selector must be of type DSLField, got {type(selector)}.")
 
     if not is_output_type(selectorType):
-        raise TypeError(f"selectorType must be of type GraphQLOutputType, got {type(selectorType)}.")
+        raise TypeError(
+            f"selectorType must be of type GraphQLOutputType, got {type(selectorType)}."
+        )
 
     if not isinstance(selectFields, list):
         raise TypeError(f"selectFields must be of type list, got {type(selectFields)}.")
 
-    if (not is_scalar_type(selectorType) and
-        not is_enum_type(selectorType) and len(selectFields) == 0):
+    if (
+        not is_scalar_type(selectorType)
+        and not is_enum_type(selectorType)
+        and len(selectFields) == 0
+    ):
         raise AnsibleValidationError("selectFields must have at least one field.")
 
     if is_scalar_type(selectorType) or is_enum_type(selectorType):
@@ -489,8 +538,14 @@ def field_selector(ds: DSLSchema,
                         continue
 
                     inlineFragmentField: DSLField = getattr(inlineFragmentType, f0)
-                    inlineFragment.select(field_selector(
-                        ds, inlineFragmentField, inlineFragmentField.field.type, f[f0]))
+                    inlineFragment.select(
+                        field_selector(
+                            ds,
+                            inlineFragmentField,
+                            inlineFragmentField.field.type,
+                            f[f0],
+                        )
+                    )
                     continue
 
                 if not hasattr(inlineFragmentType, f):
@@ -499,15 +554,16 @@ def field_selector(ds: DSLSchema,
                 inlineFragment.select(getattr(inlineFragmentType, f))
             selector.select(inlineFragment)
     else:
-        raise Exception(f"Unsupported field type {selectorType} ({type(selectorType)}) found when generating field selector")
+        raise Exception(
+            f"Unsupported field type {selectorType} ({type(selectorType)}) found when generating field selector"
+        )
 
     return selector
 
+
 def nested_field_selector(
-        ds: DSLSchema,
-        parentType: DSLType,
-        selectFields: List[str],
-        leafFields: List[str]) -> Union[DSLType, DSLField]:
+    ds: DSLSchema, parentType: DSLType, selectFields: List[str], leafFields: List[str]
+) -> Union[DSLType, DSLField]:
 
     if not isinstance(ds, DSLSchema):
         raise TypeError(f"ds must be of type DSLSchema, got {type(ds)}.")
@@ -535,7 +591,7 @@ def nested_field_selector(
         selectorType: DSLType = getattr(ds, selector.field.type.name)
 
     selector.select(
-        nested_field_selector(
-            ds, selectorType, selectFields[1:], leafFields))
+        nested_field_selector(ds, selectorType, selectFields[1:], leafFields)
+    )
 
     return selector

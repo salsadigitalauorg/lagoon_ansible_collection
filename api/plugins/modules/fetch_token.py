@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: fetch_token
 description: Fetches a Lagoon token using ssh
 short_description: Fetches a Lagoon token using ssh
@@ -11,9 +11,9 @@ options:
       - Return the full grant token object, with expiry & refresh token.
     type: bool
     default: false
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Fetch a Lagoon token.
   lagoon.api.fetch_token:
     ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
@@ -27,4 +27,4 @@ EXAMPLES = r'''
     lagoon_api_token: "{{ token.token }}"
   register: whoami
 - debug: var=whoami
-'''
+"""

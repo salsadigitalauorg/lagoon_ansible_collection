@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: project_update
 short_description: Update the values for a project
 description:
@@ -17,12 +17,12 @@ options:
       - The project values.
     type: dict
     default: {}
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Update project environment limit.
   lagoon.api.project_update:
     project: test-project
     values:
         developmentEnvironmentsLimit: 10
-'''
+"""

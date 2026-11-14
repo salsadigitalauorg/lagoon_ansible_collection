@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: list
 short_description: List Lagoon resources
 description:
@@ -18,9 +18,9 @@ options:
       - The resource name.
     type: str
     required: true
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: List projects.
   lagoon.api.list:
     type: project
@@ -29,4 +29,4 @@ EXAMPLES = r'''
   lagoon.api.list:
     resource: environment
   register: environments
-'''
+"""

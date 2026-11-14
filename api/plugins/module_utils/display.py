@@ -2,6 +2,7 @@ from contextlib import contextmanager
 
 try:
     from ansible.utils.display import Display as OrigDisplay
+
     HAS_DISPLAY = True
 except:
     HAS_DISPLAY = False
@@ -18,6 +19,7 @@ except:
 # given backend by patching the flag alone, on any ansible-core version.
 try:
     from ansible.module_utils.secrets import mask_secrets, register_secret
+
     HAS_NATIVE_SECRETS = True
 except ImportError:
     HAS_NATIVE_SECRETS = False
@@ -32,8 +34,10 @@ except ImportError:
             value = value.replace(secret, "*" * 8)
         return value
 
+
 try:
     from ansible.module_utils.common.parameters import remove_values
+
     HAS_REMOVE_VALUES = True
 except ImportError:
     HAS_REMOVE_VALUES = False
@@ -43,6 +47,7 @@ except ImportError:
             value = value.replace(str(secret), "*" * 8)
         return value
 
+
 REDACTED = "VALUE_REDACTED"
 
 # Exact GraphQL input field names whose values must never reach output.
@@ -51,17 +56,19 @@ REDACTED = "VALUE_REDACTED"
 #
 # Lives here, not in argspec.py, to avoid a circular import: argspec.py
 # imports gql.py, which imports this module.
-SENSITIVE_FIELD_NAMES = frozenset({
-    "value",
-    "command",
-    "webhook",
-    "keyValue",
-    "privateKey",
-    "token",
-    "password",
-    "newPassword",
-    "secret",
-})
+SENSITIVE_FIELD_NAMES = frozenset(
+    {
+        "value",
+        "command",
+        "webhook",
+        "keyValue",
+        "privateKey",
+        "token",
+        "password",
+        "newPassword",
+        "secret",
+    }
+)
 
 # Secret values to scrub from every Display instance's output. Module-scoped,
 # not per-instance, because callers construct Display() on demand with no
@@ -133,8 +140,9 @@ def redact_keys(obj, names=SENSITIVE_FIELD_NAMES):
     see SENSITIVE_FIELD_NAMES.
     """
     if isinstance(obj, dict):
-        return {k: REDACTED if k in names else redact_keys(v, names)
-                for k, v in obj.items()}
+        return {
+            k: REDACTED if k in names else redact_keys(v, names) for k, v in obj.items()
+        }
     if isinstance(obj, list):
         return [redact_keys(i, names) for i in obj]
     if isinstance(obj, tuple):
@@ -183,15 +191,22 @@ def collect_no_log_values(argSpec, args):
 
 
 class Display:
-
     def __init__(self) -> None:
         self.display = OrigDisplay() if HAS_DISPLAY else None
 
-    def info(self, msg, color=None, stderr=False, screen_only=False,
-             log_only=False, newline=True):
+    def info(
+        self,
+        msg,
+        color=None,
+        stderr=False,
+        screen_only=False,
+        log_only=False,
+        newline=True,
+    ):
         if self.display:
-            self.display.display(scrub(msg), color, stderr,
-                                 screen_only, log_only, newline)
+            self.display.display(
+                scrub(msg), color, stderr, screen_only, log_only, newline
+            )
 
     def v(self, msg, host=None):
         return self.verbose(msg, host=host, caplevel=0)
