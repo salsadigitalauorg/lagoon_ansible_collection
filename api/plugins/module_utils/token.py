@@ -22,6 +22,22 @@ _FAILURE_HINTS = [
     ("UNPROTECTED PRIVATE KEY FILE", "key file permissions must be 0600"),
 ]
 
+# Forwarding and terminal allocation are disabled on every token fetch. A
+# passwordless ssh login must not carry the agent, ports or X11 to the remote
+# end, and `grant` is a single non-interactive command that needs none of them.
+# ClearAllForwardings covers -L/-R/-D from a config file; agent forwarding is
+# separate and needs its own option.
+HARDENED_SSH_OPTIONS = [
+    "-o",
+    "ForwardAgent=no",
+    "-o",
+    "ClearAllForwardings=yes",
+    "-o",
+    "ForwardX11=no",
+    "-o",
+    "RequestTTY=no",
+]
+
 
 def write_ssh_key(key_content: str, key_path: str):
     """Helper function for writing a private key to a file."""
@@ -83,6 +99,16 @@ def fetch_token(
     raises for an ssh/parsing failure - only for programming errors.
     """
     ssh_command = ["ssh", "-p", f"{ssh_port}"]
+
+    # Fetching a grant needs no forwarding, no X11 and no terminal. Passed
+    # first because ssh takes the first value it is given for these keywords,
+    # so a caller's ssh_options cannot relax them - deliberately unlike host
+    # key checking, which is left to the machine's own ssh configuration.
+    ssh_command.extend(HARDENED_SSH_OPTIONS)
+
+    if key_path:
+        # Use only the key supplied, not the first thing the agent offers.
+        ssh_command.extend(["-o", "IdentitiesOnly=yes"])
 
     # Add options.
     if isinstance(ssh_options, str):
