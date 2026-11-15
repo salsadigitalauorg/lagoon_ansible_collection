@@ -17,6 +17,45 @@ The following variables are required in the playbook:
 * lagoon_api_endpoint
 * lagoon_api_token
 
+`lagoon_api_token` is optional for the inventory plugin: when omitted, a token is
+minted over SSH on first use from `ssh_private_key`, `ssh_private_key_file`, or
+the machine's own SSH configuration and agent.
+
+## Breaking change: SSH host key verification
+
+Up to and including 2.3.3, fetching an API token over SSH always passed
+`-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`. That disabled host
+key verification on the one call that hands over a bearer token, so any
+machine-in-the-middle could present its own host key and capture the token.
+
+Those options are **no longer passed by default**. The machine's own
+`~/.ssh/config`, identities and `known_hosts` now apply, and host key
+verification is yours to configure.
+
+If token fetching starts failing with `Host key verification failed`, add the
+Lagoon SSH host to `known_hosts`:
+
+```sh
+ssh-keyscan -p 32222 ssh.lagoon.amazeeio.cloud >> ~/.ssh/known_hosts
+```
+
+To restore the old behaviour instead, request it explicitly per Lagoon in your
+inventory:
+
+```yaml
+lagoons:
+  - api_endpoint: 'https://api.lagoon.amazeeio.cloud/graphql'
+    ssh_options:
+      - -o
+      - UserKnownHostsFile=/dev/null
+      - -o
+      - StrictHostKeyChecking=no
+```
+
+Agent, port and X11 forwarding and terminal allocation are always disabled on
+this call and cannot be re-enabled through `ssh_options`; `grant` is a single
+non-interactive command that needs none of them.
+
 ## Testing
 
 Updating the schema:
