@@ -209,6 +209,9 @@ class GqlClient(Display):
         # Nested fields (one level only).
         for field, subFieldsNType in subFieldsMap.items():
             subFieldSelector: DSLField = getattr(mainTypeObj, field)
+            if len(subFieldsNType["args"]):
+                subFieldSelector.args(**subFieldsNType["args"])
+
             subFieldTypeObj: DSLType = getattr(self.ds, subFieldsNType['type'])
             for f in subFieldsNType['fields']:
                 subFieldSelector.select(getattr(subFieldTypeObj, f))
