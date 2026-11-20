@@ -1,6 +1,6 @@
 namespace: lagoon
 name: api
-version: 1.3.0
+version: 2.3.2
 readme: README.md
 
 authors:
