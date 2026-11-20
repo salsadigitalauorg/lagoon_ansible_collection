@@ -76,13 +76,22 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -euo pipefail
           python -m pip install ansible pytest pytest-forked
           python -m pip install -r tests/unit/requirements.txt
+          # --requirements normally installs these pytest plugins (xdist
+          # provides the -n flag ansible-test invokes pytest with). Read
+          # the list from the installed package instead of hardcoding it,
+          # so it can't drift from ansible-core.
+          units_reqs=$(python -c "import importlib.util, pathlib; s = importlib.util.find_spec('ansible_test'); print(pathlib.Path(s.origin).parent / '_data' / 'requirements' / 'units.txt')")
+          test -f "$units_reqs" || { echo "ansible-test units requirements not found at $units_reqs"; exit 1; }
+          python -m pip install -r "$units_reqs"
+          # Last: tests/unit/requirements.txt pins gql<4 deliberately.
           python -m pip install 'gql[requests]>=4,<5'
         working-directory: ./ansible_collections/lagoon/api
 
-      - name: Show resolved gql version
-        run: python -m pip show gql
+      - name: Verify gql 4 is installed
+        run: python -c "import gql, sys; v = gql.__version__; print('gql', v); sys.exit(0 if v.split('.')[0] == '4' else 1)"
         working-directory: ./ansible_collections/lagoon/api
 
       - name: Run unit tests
