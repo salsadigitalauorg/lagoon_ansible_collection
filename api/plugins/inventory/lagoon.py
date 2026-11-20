@@ -469,17 +469,45 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 lagoon_ssh_private_key_file = '/tmp/lagoon_ssh_private_key'
             LagoonToken.write_ssh_key(lagoon_ssh_private_key, lagoon_ssh_private_key_file)
 
+        ssh_host = lagoon.get('ssh_host')
+        ssh_port = lagoon.get('ssh_port')
+        lagoon_name = lagoon.get('name', ssh_host)
+
+        self.display.v(f"Fetching Lagoon API token for '{lagoon_name}' via {ssh_host}:{ssh_port}")
+
         rc, token, error = LagoonToken.fetch_token(
-            lagoon.get('ssh_host'),
-            lagoon.get('ssh_port'),
-            "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no",
+            ssh_host,
+            ssh_port,
+            self._ssh_options(),
             lagoon_ssh_private_key_file
         )
 
         if rc > 0:
-            raise AnsibleError("Failed to fetch Lagoon API token: %s (error code: %s) " % (error, rc))
+            raise AnsibleError(
+                f"Failed to fetch Lagoon API token for '{lagoon_name}' ({ssh_host}:{ssh_port}):\n{error}"
+            )
+
+        if not isinstance(token, dict) or not token.get('access_token'):
+            raise AnsibleError(
+                f"Lagoon API token response for '{lagoon_name}' did not contain an access_token"
+            )
 
         return token['access_token'].strip()
+
+    def _ssh_options(self):
+        """ssh options for the token grant call.
+
+        No -q: it suppresses the ssh diagnostics (auth/connection/host key
+        failures) needed to explain a failure. Verbosity is mapped onto
+        Ansible's so -vvv/-vvvv also surfaces ssh's own -v/-vv output.
+        """
+        options = ['-o', 'UserKnownHostsFile=/dev/null', '-o', 'StrictHostKeyChecking=no']
+        verbosity = getattr(self.display, 'verbosity', 0)
+        if verbosity >= 4:
+            options.append('-vv')
+        elif verbosity >= 3:
+            options.append('-v')
+        return options
 
 def intWhenStr(val: Union[str,any]) -> Union[int,any]:
     if isinstance(val, str):

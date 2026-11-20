@@ -29,15 +29,22 @@ class ActionModule(ActionBase):
                 result['error'] = e
                 return result
 
+        ssh_host = self._templar.template(task_vars.get('lagoon_ssh_host'))
+        ssh_port = self._templar.template(task_vars.get('lagoon_ssh_port'))
         self._display.vvvv(f"lagoon_ssh_private_key_file: {lagoon_ssh_private_key_file}")
+        self._display.vvvv(f"lagoon ssh host/port: {ssh_host}:{ssh_port}")
+
         rc, grant_token, result['error'] = LagoonToken.fetch_token(
-            self._templar.template(task_vars.get('lagoon_ssh_host')),
-            self._templar.template(task_vars.get('lagoon_ssh_port')),
+            ssh_host,
+            ssh_port,
             self._task.args.get('ssh_options', ""),
             lagoon_ssh_private_key_file
         )
+        result['rc'] = rc
+
         if rc > 0:
             result['failed'] = True
+            result['msg'] = result['error']
         elif grant:
             grant_token['expiry_time'] = time.time() + grant_token['expires_in']
             result['token'] = grant_token
