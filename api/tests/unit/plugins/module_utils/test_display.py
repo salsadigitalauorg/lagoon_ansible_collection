@@ -55,6 +55,34 @@ class DisplayTester(unittest.TestCase):
 
         assert display.display is original
 
+    def test_verbose_does_not_call_lazy_msg_below_threshold(self):
+        # A callable passed to vvv() must not be invoked when verbosity is
+        # too low to emit - this is what defers expensive formatting (e.g.
+        # printing a GraphQL AST) until it's actually needed.
+        display = Display()
+        display.display = MagicMock()
+        display.display.verbosity = 1
+
+        def boom():
+            raise AssertionError("lazy message was evaluated despite low verbosity")
+
+        display.vvv(boom)
+
+        assert display.display.verbose.call_count == 0
+
+    def test_verbose_calls_lazy_msg_above_threshold(self):
+        display = Display()
+        display.display = MagicMock()
+        display.display.verbosity = 3
+
+        with redacting({SENTINEL}):
+            display.vvv(lambda: f"built {SENTINEL}")
+
+        assert display.display.verbose.call_count == 1
+        emitted = display.display.verbose.call_args.args[0]
+        assert SENTINEL not in emitted
+        assert "built" in emitted
+
 
 class RedactingTester(unittest.TestCase):
     """redacting() scrubs by value, across every output method."""

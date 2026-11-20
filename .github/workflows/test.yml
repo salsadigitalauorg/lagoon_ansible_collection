@@ -50,3 +50,65 @@ jobs:
           path: ansible_collections/lagoon/api/tests/output/junit/*.xml
         # Use always() to publish test results even when there are failures.
         if: ${{ always() }}
+
+  # gql 4 changed gql()/dsl_gql() to return a GraphQLRequest instead of a
+  # DocumentNode. Runs separately from ansible-test because gql 4.4 dropped
+  # Python 3.9, which the main matrix still covers, and because it must skip
+  # --requirements so it isn't silently downgraded back to the gql<4 pin in
+  # tests/unit/requirements.txt.
+  ansible-test-gql4:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        python-version: [ '3.11' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: 'ansible_collections/lagoon'
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install ansible pytest pytest-forked
+          python -m pip install -r tests/unit/requirements.txt
+          # --requirements normally installs these pytest plugins (xdist
+          # provides the -n flag ansible-test invokes pytest with). Read
+          # the list from the installed package instead of hardcoding it,
+          # so it can't drift from ansible-core.
+          units_reqs=$(python -c "import importlib.util, pathlib; s = importlib.util.find_spec('ansible_test'); print(pathlib.Path(s.origin).parent / '_data' / 'requirements' / 'units.txt')")
+          test -f "$units_reqs" || { echo "ansible-test units requirements not found at $units_reqs"; exit 1; }
+          python -m pip install -r "$units_reqs"
+          # Last: tests/unit/requirements.txt pins gql<4 deliberately.
+          python -m pip install 'gql[requests]>=4,<5'
+        working-directory: ./ansible_collections/lagoon/api
+
+      - name: Verify gql 4 is installed
+        run: python -c "import gql, sys; v = gql.__version__; print('gql', v); sys.exit(0 if v.split('.')[0] == '4' else 1)"
+        working-directory: ./ansible_collections/lagoon/api
+
+      - name: Run unit tests
+        run: ansible-test units -v --python ${{ matrix.python-version }}
+        working-directory: ./ansible_collections/lagoon/api
+
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v3
+        if: always()
+        with:
+          check_name: ansible-test-gql4 (${{ matrix.python-version }}) results
+          report_paths: 'ansible_collections/lagoon/api/tests/output/junit/*.xml'
+          detailed_summary: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-gql4-${{ matrix.python-version }}
+          path: ansible_collections/lagoon/api/tests/output/junit/*.xml
+        if: ${{ always() }}
