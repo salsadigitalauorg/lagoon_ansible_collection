@@ -120,9 +120,9 @@ cache_timeout: 7200
 cache_connection: /tmp/lagoon_inventory
 cache_prefix: lagoon
 
-# Restoring the pre-2.4.0 ssh behaviour.
+# Restoring the pre-3.0.0 ssh behaviour.
 #
-# Until 2.4.0 the token fetch always passed
+# Until 3.0.0 the token fetch always passed
 # `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`, which disabled
 # host key verification on the one call that hands over a bearer token. That is
 # no longer the default. Preferably add the Lagoon ssh host to known_hosts:
@@ -141,19 +141,6 @@ lagoons:
       - StrictHostKeyChecking=no
 """
 
-
-# Batching was removed because the Lagoon GraphQL API degrades sharply on
-# queries carrying many aliased root fields. These options are still recognised
-# so that existing inventory files keep working, but they have no effect and
-# will be removed in a future major version.
-DEPRECATED_BATCH_OPTIONS = [
-    "api_batch_project_environments_size",
-    "api_batch_project_groups_size",
-    "api_batch_project_variables_size",
-    "api_batch_environment_project_size",
-    "api_batch_environment_cluster_size",
-    "api_batch_environment_variables_size",
-]
 
 # What the inventory itself reads off an environment, which is narrower than
 # the client's default environment selection. Pinned here rather than taking
@@ -256,20 +243,6 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
             if not lagoon_api_endpoint:
                 raise AnsibleError("Expecting lagoon_api_endpoint.")
-
-            # get_var also resolves LAGOON_* environment variables and
-            # lagoon_* host vars, so this catches all three config routes.
-            stale_options = [
-                o for o in DEPRECATED_BATCH_OPTIONS if self.get_var(lagoon, o)
-            ]
-            if stale_options:
-                self.display.warning(
-                    "[DEPRECATION WARNING] These options are deprecated and "
-                    "have no effect; the Lagoon API is now queried one "
-                    "project/environment at a time: "
-                    f"{', '.join(stale_options)}. Remove them - they will be "
-                    "rejected in a future release."
-                )
 
             # No token is fetched here: the client mints one lazily from
             # whichever credentials are present, falling back to the machine's
