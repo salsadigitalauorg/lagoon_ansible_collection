@@ -1,0 +1,60 @@
+# Ruff configuration - formatting and linting for the lagoon Ansible collection.
+# Docs: https://docs.astral.sh/ruff/
+#
+# Kept at the repository root rather than in api/ because api/galaxy.yml sets
+# build_ignore: [], so everything under api/ ships in the published Galaxy
+# tarball. Ruff walks up from each file to find this config, so running ruff
+# from inside api/ still picks it up.
+#
+# Ruff version is pinned in .github/workflows/lint.yml,
+# .pre-commit-config.yaml and docker-compose.yml. Update them together.
+
+# Lowest Python version the collection supports.
+#
+# 3.8 was dropped from the CI matrix in 05f5ec2 (2025-05-06). The floor is 3.9,
+# matching .github/workflows/test.yml and api/tests/config.yml.
+#
+# Keep this in step with both of those. At py39 the formatter emits
+# parenthesised context managers, which Python 3.8 silently turns into a tuple
+# rather than entering - so lowering the floor again would need this raised too.
+target-version = "py39"
+
+line-length = 88
+indent-width = 4
+
+extend-exclude = [
+    ".docker",
+    "api/tests/output",
+    "built-docs",
+    "docsbuild",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = false
+
+[lint]
+# Conservative starting set. Advisory only in CI until the backlog is cleared.
+#   E/W - pycodestyle    F  - pyflakes
+#   I   - import sorting UP - pyupgrade
+select = ["E", "W", "F", "I", "UP"]
+
+# Handled by the formatter; enabling these fights it.
+ignore = [
+    "E501", # line-too-long - the formatter decides wrapping
+    "W191", # tab indentation
+]
+
+[lint.per-file-ignores]
+# Ansible plugin entry points re-export names for the plugin loader.
+"api/plugins/**/__init__.py" = ["F401"]
+# Ansible modules declare DOCUMENTATION/EXAMPLES/RETURN before imports by convention.
+"api/plugins/modules/*.py" = ["E402"]
+# Test fixtures and mocks tolerate unused imports and star imports.
+"api/tests/**" = ["F401", "F403", "F405"]
+
+[lint.isort]
+known-first-party = ["ansible_collections"]

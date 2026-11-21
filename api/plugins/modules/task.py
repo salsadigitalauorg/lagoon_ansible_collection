@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: task
 description: Invoke a task on an environment.
 short_description: Invoke a task on an environment.
@@ -36,9 +36,9 @@ options:
         required: true
         type: string
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Invoke a task
   lagoon.api.task:
     environment: test-shipshape-master
@@ -51,4 +51,4 @@ EXAMPLES = r'''
   register: task_result
 - name: Display the task id
   debug: var=task_result.task_id
-'''
+"""

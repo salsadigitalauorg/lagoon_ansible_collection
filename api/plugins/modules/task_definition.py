@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: task_definition
 short_description: Manage custom task definitions.
 description:
@@ -93,9 +93,9 @@ options:
     type: str
     default: present
     choices: [ absent, present ]
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add task definition.
   lagoon.api.task_definition:
     name: "AUDIT - Run shipshape"
@@ -112,4 +112,4 @@ EXAMPLES = r'''
     name: "AUDIT - Run shipshape"
     project: "test-shipshape"
     state: absent
-'''
+"""

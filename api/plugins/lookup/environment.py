@@ -1,5 +1,7 @@
 from ansible.errors import AnsibleError
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import (
+    Environment,
+)
 from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
 
 DOCUMENTATION = """
@@ -52,7 +54,6 @@ EXAMPLES = """
 
 
 class LookupModule(LagoonLookupBase):
-
     def run(self, terms, variables=None, **kwargs):
 
         ret = []
@@ -68,14 +69,16 @@ class LookupModule(LagoonLookupBase):
             if not len(lagoonEnvironment.environments):
                 if len(lagoonEnvironment.errors):
                     raise AnsibleError(
-                        f"Unable to fetch environment {term}; encountered the following errors: {lagoonEnvironment.errors}")
+                        f"Unable to fetch environment {term}; encountered the following errors: {lagoonEnvironment.errors}"
+                    )
                 return ret
 
             lagoonEnvironment.withCluster().withVariables()
             lagoonEnvironment.withProject().withDeployments()
             if len(lagoonEnvironment.errors):
                 self._display.warning(
-                    f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
+                    f"The query partially succeeded, but the following errors were encountered:\n{lagoonEnvironment.errors}"
+                )
             ret.extend(lagoonEnvironment.environments)
 
         return ret

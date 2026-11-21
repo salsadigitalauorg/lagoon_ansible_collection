@@ -4,7 +4,6 @@ from ..module_utils.gqlDeployTargetConfig import DeployTargetConfig
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
         if task_vars is None:
             task_vars = dict()
@@ -13,22 +12,24 @@ class ActionModule(LagoonActionBase):
         del tmp  # tmp no longer has any effect
 
         result = {}
-        result['result'] = []
+        result["result"] = []
 
         self.createClient(task_vars)
 
         self._display.vvv(f"With: {self._task.args}")
-        lagoonProject = Project(self.client).byName(
-            self._task.args.get('project'),
-            ['id', 'name']).withDeployTargetConfigs()
+        lagoonProject = (
+            Project(self.client)
+            .byName(self._task.args.get("project"), ["id", "name"])
+            .withDeployTargetConfigs()
+        )
 
         if len(lagoonProject.errors) > 0:
-            result['failed'] = True
+            result["failed"] = True
             return result
 
-        state = self._task.args.get('state', 'present')
-        replace = self._task.args.get('replace', False)
-        configs = self._task.args.get('configs', [])
+        state = self._task.args.get("state", "present")
+        replace = self._task.args.get("replace", False)
+        configs = self._task.args.get("configs", [])
 
         for project in lagoonProject.projects:
             if state == "present":
@@ -36,67 +37,72 @@ class ActionModule(LagoonActionBase):
                     project["deployTargetConfigs"],
                     configs,
                 )
-                result['changed'] = False
+                result["changed"] = False
 
                 # Handle deletions for deletion_required IDs
                 if replace and len(deletion_required) > 0:
                     for config_id in deletion_required:
                         self._display.vvvv(f"deleting config with ID {config_id}")
-                        DeployTargetConfig(self.client).delete(project['id'], config_id)
-                        result['changed'] = True
+                        DeployTargetConfig(self.client).delete(project["id"], config_id)
+                        result["changed"] = True
 
                 # Process additions and updates
                 if len(addition_required) > 0:
                     for config in addition_required:
-                        if replace and config.get('_existing_id'):
+                        if replace and config.get("_existing_id"):
                             self._display.vvvv(f"deleting config {config}")
                             DeployTargetConfig(self.client).delete(
-                                project['id'], config['_existing_id'])
+                                project["id"], config["_existing_id"]
+                            )
 
                         self._display.vvvv(f"adding config {config}")
                         addResult = DeployTargetConfig(self.client).add(
-                            int(project['id']),
-                            config['branches'],
-                            int(config['deployTarget']),
-                            config['pullrequests'],
-                            int(config['weight']) if 'weight' in config.keys() else 0
+                            int(project["id"]),
+                            config["branches"],
+                            int(config["deployTarget"]),
+                            config["pullrequests"],
+                            int(config["weight"]) if "weight" in config.keys() else 0,
                         )
                         if addResult:
-                            config['id'] = addResult['id']
+                            config["id"] = addResult["id"]
                         else:
-                            config['failed'] = True
-                        result['result'].append(config)
-                    result['changed'] = True
+                            config["failed"] = True
+                        result["result"].append(config)
+                    result["changed"] = True
             elif state == "absent":
-                result['changed'] = False
+                result["changed"] = False
                 for c in project["deployTargetConfigs"]:
                     delete_desired = False
                     for given_config in configs:
-                        if given_config['branches'] != c['branches']:
+                        if given_config["branches"] != c["branches"]:
                             continue
-                        if given_config['pullrequests'] != c['pullrequests']:
+                        if given_config["pullrequests"] != c["pullrequests"]:
                             continue
-                        if str(given_config['deployTarget']) != str(c['deployTarget']['id']):
+                        if str(given_config["deployTarget"]) != str(
+                            c["deployTarget"]["id"]
+                        ):
                             continue
-                        if str(given_config['weight']) != str(c['weight']):
+                        if str(given_config["weight"]) != str(c["weight"]):
                             continue
                         delete_desired = True
                         self._display.vvvv(f"deleting config {c}")
                         break
-                    if delete_desired and DeployTargetConfig(self.client).delete(project['id'], c['id']):
-                        result['result'].append(c['id'])
-                        result['changed'] = True
+                    if delete_desired and DeployTargetConfig(self.client).delete(
+                        project["id"], c["id"]
+                    ):
+                        result["result"].append(c["id"])
+                        result["changed"] = True
 
         return result
 
+
 def determine_required_updates(existing_configs, desired_configs):
-    addition_required = []  
+    addition_required = []
     deletion_required = [
-        config['id']
+        config["id"]
         for config in existing_configs
         if not any(
-            config['branches'] == desired['branches']
-            for desired in desired_configs
+            config["branches"] == desired["branches"] for desired in desired_configs
         )
     ]
 
@@ -104,17 +110,20 @@ def determine_required_updates(existing_configs, desired_configs):
         found = False
         uptodate = True
         for existing_config in existing_configs:
-            if existing_config['branches'] != desired['branches']:
+            if existing_config["branches"] != desired["branches"]:
                 continue
 
-            desired['_existing_id'] = existing_config['id']
+            desired["_existing_id"] = existing_config["id"]
             found = True
 
             # Mark for update (or in this context, addition) if there are discrepancies in any key property
-            if (existing_config['pullrequests'] != desired['pullrequests'] or
-                    str(existing_config['deployTarget']['id']) != str(desired['deployTarget']) or
-                    str(existing_config['weight']) != str(desired['weight'])):
-                desired['_existing_id'] = existing_config['id']
+            if (
+                existing_config["pullrequests"] != desired["pullrequests"]
+                or str(existing_config["deployTarget"]["id"])
+                != str(desired["deployTarget"])
+                or str(existing_config["weight"]) != str(desired["weight"])
+            ):
+                desired["_existing_id"] = existing_config["id"]
                 uptodate = False
                 break
 

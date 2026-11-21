@@ -19,9 +19,7 @@ def get_facts(client: GqlClient, environment_id):
                 }
             }
         }""",
-        {
-            "environment_id": environment_id
-        }
+        {"environment_id": environment_id},
     )
 
     try:
@@ -44,10 +42,7 @@ def delete_fact(client: GqlClient, environment_id, name):
                 name: $name
             })
         }""",
-        {
-            "environment_id": environment_id,
-            "name": name
-        }
+        {"environment_id": environment_id, "name": name},
     )
 
     try:
@@ -56,7 +51,16 @@ def delete_fact(client: GqlClient, environment_id, name):
         return False
 
 
-def add_fact(client: GqlClient, environment_id, name, category, value, source="ansible", type="TEXT", description="Provided by Lagoon Ansible collection") -> dict:
+def add_fact(
+    client: GqlClient,
+    environment_id,
+    name,
+    category,
+    value,
+    source="ansible",
+    type="TEXT",
+    description="Provided by Lagoon Ansible collection",
+) -> dict:
 
     if type is None:
         type = "TEXT"
@@ -101,15 +105,14 @@ def add_fact(client: GqlClient, environment_id, name, category, value, source="a
             "value": value,
             "source": source,
             "type": type,
-            "description": description
-        }
+            "description": description,
+        },
     )
 
     return res["addFact"]
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -131,7 +134,7 @@ class ActionModule(LagoonActionBase):
         category = self._task.args.get("category", None)
 
         # modifiers
-        state = self._task.args.get('state', None)
+        state = self._task.args.get("state", None)
 
         found_fact = False
 
@@ -153,12 +156,28 @@ class ActionModule(LagoonActionBase):
                 result["changed"] = True
                 delete_fact(self.client, environment_id, name)
                 result["result"] = add_fact(
-                    self.client, environment_id, name, category, value, source, type, description)
+                    self.client,
+                    environment_id,
+                    name,
+                    category,
+                    value,
+                    source,
+                    type,
+                    description,
+                )
             else:
                 result["changed"] = False
         else:
             result["changed"] = True
             result["result"] = add_fact(
-                self.client, environment_id, name, category, value, source, type, description)
+                self.client,
+                environment_id,
+                name,
+                category,
+                value,
+                source,
+                type,
+                description,
+            )
 
         return result

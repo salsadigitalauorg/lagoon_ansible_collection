@@ -7,22 +7,24 @@ from typing import List
 
 
 TASK_FIELDS_COMMON = [
-    'id',
-    'name',
-    'taskName',
-    'service',
-    'status',
-    'created',
-    'started',
-    'completed',
+    "id",
+    "name",
+    "taskName",
+    "service",
+    "status",
+    "created",
+    "started",
+    "completed",
 ]
 
-class Task(ResourceBase):
 
+class Task(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
-    def get(self, env_names: List[str], fields: List[str] = None, limit: int = 50) -> dict:
+    def get(
+        self, env_names: List[str], fields: List[str] = None, limit: int = 50
+    ) -> dict:
 
         if not fields or not len(fields):
             fields = TASK_FIELDS_COMMON
@@ -32,25 +34,29 @@ class Task(ResourceBase):
         with self.client as (_, ds):
             # Build the fragment.
             fragment_fields = ds.Environment.tasks(limit=limit).select(
-                getattr(ds.Task, fields[0]))
+                getattr(ds.Task, fields[0])
+            )
             if len(fields) > 1:
                 for f in fields[1:]:
-                    if f == 'files':
+                    if f == "files":
                         continue
                     fragment_fields.select(getattr(ds.Task, f))
 
-                if 'files' in fields:
-                    fragment_fields.select(ds.Task.files.select(
-                        ds.File.id,
-                        ds.File.filename,
-                        ds.File.download,
-                    ))
+                if "files" in fields:
+                    fragment_fields.select(
+                        ds.Task.files.select(
+                            ds.File.id,
+                            ds.File.filename,
+                            ds.File.download,
+                        )
+                    )
 
             field_queries = []
             for ns in env_names:
                 # Build the main query.
                 field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=ns).alias(self.sanitiseForQueryAlias(ns))
+                    kubernetesNamespaceName=ns
+                ).alias(self.sanitiseForQueryAlias(ns))
                 field_query.select(fragment_fields)
                 field_queries.append(field_query)
 
@@ -58,8 +64,7 @@ class Task(ResourceBase):
 
         for ns in env_names:
             try:
-                res[ns] = resources.get(
-                    self.sanitiseForQueryAlias(ns))['tasks']
+                res[ns] = resources.get(self.sanitiseForQueryAlias(ns))["tasks"]
             except:
                 res[ns] = None
 
@@ -76,14 +81,14 @@ class Task(ResourceBase):
         joined_fields = "\n        ".join(fields)
 
         query = f"""query {{
-    taskById (id: { id }) {{
-        { joined_fields }
+    taskById (id: {id}) {{
+        {joined_fields}
     }}
 }}"""
 
         res = self.client.execute_query(query)
-        if res['taskById'] != None:
-            return res['taskById']
+        if res["taskById"] != None:
+            return res["taskById"]
 
         return res
 
@@ -98,14 +103,14 @@ class Task(ResourceBase):
         joined_fields = "\n        ".join(fields)
 
         query = f"""query {{
-    taskByTaskName (taskName: "{ task_name }") {{
-        { joined_fields }
+    taskByTaskName (taskName: "{task_name}") {{
+        {joined_fields}
     }}
 }}"""
 
         res = self.client.execute_query(query)
-        if res['taskByTaskName'] != None:
-            return res['taskByTaskName']
+        if res["taskByTaskName"] != None:
+            return res["taskByTaskName"]
 
         return res
 
@@ -127,7 +132,6 @@ class Task(ResourceBase):
                 "env_id": env_id,
                 "task_id": task_id,
                 "task_arguments": task_arguments,
-            }
+            },
         )
-        return res['invokeRegisteredTask']['id']
-
+        return res["invokeRegisteredTask"]["id"]

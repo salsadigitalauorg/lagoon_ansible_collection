@@ -53,19 +53,18 @@ EXAMPLES = """
 
 
 class LookupModule(LookupBase):
+    def run(self, terms, variables=None, **kwargs):
 
-  def run(self, terms, variables=None, **kwargs):
+        ret = []
 
-    ret = []
+        self.set_options(var_options=variables, direct=kwargs)
+        lagoon = ApiClient(
+            self._templar.template(self.get_option("lagoon_api_endpoint")),
+            self._templar.template(self.get_option("lagoon_api_token")),
+            {"headers": self.get_option("headers", {})},
+        )
 
-    self.set_options(var_options=variables, direct=kwargs)
-    lagoon = ApiClient(
-        self._templar.template(self.get_option('lagoon_api_endpoint')),
-        self._templar.template(self.get_option('lagoon_api_token')),
-        {'headers': self.get_option('headers', {})}
-    )
+        for term in terms:
+            ret.append(lagoon.group(term))
 
-    for term in terms:
-        ret.append(lagoon.group(term))
-
-    return ret
+        return ret

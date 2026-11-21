@@ -4,13 +4,13 @@ import re
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
 from ..module_utils.display import (
-  Display,
-  REDACTED,
-  SENSITIVE_FIELD_NAMES,
-  collect_no_log_values,
-  redact_keys,
-  redact_value,
-  redacting,
+    Display,
+    REDACTED,
+    SENSITIVE_FIELD_NAMES,
+    collect_no_log_values,
+    redact_keys,
+    redact_value,
+    redacting,
 )
 from ..module_utils.gql import GetClientInstance, ProxyLookup, input_args_to_field_list
 from ..module_utils.gqlEnvironment import Environment
@@ -22,228 +22,239 @@ from typing import List
 
 
 class LagoonActionBase(ActionBase):
+    # Names of task arguments whose values must never reach verbose output.
+    # Subclasses that handle secrets override this.
+    _sensitive_task_args: List[str] = []
 
-  # Names of task arguments whose values must never reach verbose output.
-  # Subclasses that handle secrets override this.
-  _sensitive_task_args: List[str] = []
+    def run(self, tmp=None, task_vars=None):
+        if task_vars is None:
+            task_vars = dict()
 
-  def run(self, tmp=None, task_vars=None):
-    if task_vars is None:
-      task_vars = dict()
+        result = super(LagoonActionBase, self).run(tmp, task_vars)
+        del tmp
 
-    result = super(LagoonActionBase, self).run(tmp, task_vars)
-    del tmp
+        args = self._task.args
+        if self._sensitive_task_args:
+            args = {
+                k: REDACTED if k in self._sensitive_task_args else v
+                for k, v in args.items()
+            }
 
-    args = self._task.args
-    if self._sensitive_task_args:
-      args = {k: REDACTED if k in self._sensitive_task_args else v
-              for k, v in args.items()}
+        self._display.v("Task args: %s\n\n" % args)
+        return result
 
-    self._display.v("Task args: %s\n\n" % args)
-    return result
+    def createClient(self, task_vars):
+        if not task_vars.get("lagoon_api_endpoint"):
+            raise AnsibleError("lagoon_api_endpoint is required")
+        if not task_vars.get("lagoon_api_token"):
+            raise AnsibleError("lagoon_api_token is required")
 
-  def createClient(self, task_vars):
-    if not task_vars.get('lagoon_api_endpoint'):
-      raise AnsibleError("lagoon_api_endpoint is required")
-    if not task_vars.get('lagoon_api_token'):
-      raise AnsibleError("lagoon_api_token is required")
+        self.client = GetClientInstance(
+            self._templar.template(task_vars.get("lagoon_api_endpoint")).strip(),
+            self._templar.template(task_vars.get("lagoon_api_token")).strip(),
+            self._task.args.get("headers", {}),
+            self._task.check_mode,
+        )
 
-    self.client = GetClientInstance(
-      self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-      self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-      self._task.args.get('headers', {}),
-      self._task.check_mode
-    )
+    def sanitiseName(self, name: str) -> str:
+        return re.sub(r"[\W_-]+", "-", name)
 
-  def sanitiseName(self, name: str) -> str:
-    return re.sub(r'[\W_-]+', '-', name)
+    def getProjectIdFromName(self, name: str) -> int:
+        lagoonProject = Project(self.client).byName(name, ["id"])
+        if len(lagoonProject.errors):
+            raise AnsibleError("Error fetching project: %s" % lagoonProject.errors)
+        if not len(lagoonProject.projects):
+            raise AnsibleError(f"Project '{name}' not found")
+        return lagoonProject.projects[0]["id"]
 
-  def getProjectIdFromName(self, name: str) -> int:
-    lagoonProject = Project(self.client).byName(name, ["id"])
-    if len(lagoonProject.errors):
-      raise AnsibleError("Error fetching project: %s" % lagoonProject.errors)
-    if not len(lagoonProject.projects):
-      raise AnsibleError(f"Project '{name}' not found")
-    return lagoonProject.projects[0]["id"]
-
-  def getEnvironmentIdFromNs(self, ns: str) -> int:
-    lagoonEnvironment = Environment(self.client).byNs(ns, ["id"])
-    if len(lagoonEnvironment.errors):
-      raise AnsibleError("Error fetching environment: %s" %
-                         lagoonEnvironment.errors)
-    if not len(lagoonEnvironment.environments):
-      raise AnsibleError(f"Environment '{ns}' not found")
-    return lagoonEnvironment.environments[0]["id"]
+    def getEnvironmentIdFromNs(self, ns: str) -> int:
+        lagoonEnvironment = Environment(self.client).byNs(ns, ["id"])
+        if len(lagoonEnvironment.errors):
+            raise AnsibleError(
+                "Error fetching environment: %s" % lagoonEnvironment.errors
+            )
+        if not len(lagoonEnvironment.environments):
+            raise AnsibleError(f"Environment '{ns}' not found")
+        return lagoonEnvironment.environments[0]["id"]
 
 
 class MutationConfig:
+    # The name of the mutation field, e.g, addAdvancedTaskDefinition.
+    field: str
 
-  # The name of the mutation field, e.g, addAdvancedTaskDefinition.
-  field: str
+    # The name of the mutation field to update an
+    # existing record, e.g, updateAdvancedTaskDefinition.
+    updateField: str
 
-  # The name of the mutation field to update an
-  # existing record, e.g, updateAdvancedTaskDefinition.
-  updateField: str
+    # Additional argspec map to process the action plugin input.
+    # E.g: dict(project_name=dict(type="str")) will add a project_name
+    # argument to the action plugin. This could then ben used to query
+    # the GraphQL API for the project ID, for example, in the proxyLookups.
+    inputFieldAdditionalArgs: dict
 
-  # Additional argspec map to process the action plugin input.
-  # E.g: dict(project_name=dict(type="str")) will add a project_name
-  # argument to the action plugin. This could then ben used to query
-  # the GraphQL API for the project ID, for example, in the proxyLookups.
-  inputFieldAdditionalArgs: dict
+    # Aliases for the input field arguments, e.g, dict(type=["task_type"])
+    # will allow the task_type argument to be passed as type.
+    inputFieldArgsAliases: dict
 
-  # Aliases for the input field arguments, e.g, dict(type=["task_type"])
-  # will allow the task_type argument to be passed as type.
-  inputFieldArgsAliases: dict
+    # Proxy lookups to find existing records. The plugin will use the
+    # input arguments to query the GraphQL API and find an existing record.
+    # The first matching lookup will be used.
+    proxyLookups: List[ProxyLookup]
 
-  # Proxy lookups to find existing records. The plugin will use the
-  # input arguments to query the GraphQL API and find an existing record.
-  # The first matching lookup will be used.
-  proxyLookups: List[ProxyLookup]
+    # Fields to compare when looking for an existing record.
+    lookupCompareFields: List[str]
 
-  # Fields to compare when looking for an existing record.
-  lookupCompareFields: List[str]
+    # Fields to compare when checking if an existing record is the same as the
+    # desired record. If any of these fields differ, the record will be updated.
+    diffCompareFields: List[str]
 
-  # Fields to compare when checking if an existing record is the same as the
-  # desired record. If any of these fields differ, the record will be updated.
-  diffCompareFields: List[str]
+    def __init__(
+        self,
+        field: str,
+        updateField: str = None,
+        inputFieldAdditionalArgs: dict = None,
+        inputFieldArgsAliases: dict = None,
+        proxyLookups: List[ProxyLookup] = None,
+        lookupCompareFields: List[str] = None,
+        diffCompareFields: List[str] = None,
+    ) -> None:
 
-  def __init__(self, field: str, updateField: str = None,
-               inputFieldAdditionalArgs: dict = None,
-               inputFieldArgsAliases: dict = None,
-               proxyLookups: List[ProxyLookup] = None,
-               lookupCompareFields: List[str] = None,
-               diffCompareFields: List[str] = None) -> None:
-
-    self.field = field
-    self.updateField = updateField
-    self.inputFieldAdditionalArgs = inputFieldAdditionalArgs
-    self.inputFieldArgsAliases = inputFieldArgsAliases
-    self.proxyLookups = proxyLookups
-    self.lookupCompareFields = lookupCompareFields
-    self.diffCompareFields = diffCompareFields
+        self.field = field
+        self.updateField = updateField
+        self.inputFieldAdditionalArgs = inputFieldAdditionalArgs
+        self.inputFieldArgsAliases = inputFieldArgsAliases
+        self.proxyLookups = proxyLookups
+        self.lookupCompareFields = lookupCompareFields
+        self.diffCompareFields = diffCompareFields
 
 
 class MutationActionConfig:
+    # The name of the action, e.g, task_definition.
+    # Not used anywhere at the moment.
+    name: str
 
-  # The name of the action, e.g, task_definition.
-  # Not used anywhere at the moment.
-  name: str
+    # The configuration for the create mutation.
+    add: MutationConfig
 
-  # The configuration for the create mutation.
-  add: MutationConfig
+    # The configuration for the delete mutation.
+    delete: MutationConfig
 
-  # The configuration for the delete mutation.
-  delete: MutationConfig
+    # Whether the action plugin should have the common Ansible state field with
+    # 'present' and 'absent' choices. This depends on which of the add or delete
+    # mutation configurations are set.
+    hasStateField: bool = False
 
-  # Whether the action plugin should have the common Ansible state field with
-  # 'present' and 'absent' choices. This depends on which of the add or delete
-  # mutation configurations are set.
-  hasStateField: bool = False
+    def __init__(self, name: str, add: MutationConfig, delete: MutationConfig) -> None:
+        self.name = name
+        self.add = add
+        self.delete = delete
 
-  def __init__(self, name: str, add: MutationConfig, delete: MutationConfig) -> None:
-    self.name = name
-    self.add = add
-    self.delete = delete
+    def validate(self):
+        if self.add is None and self.delete is None:
+            raise AnsibleError("No mutation configuration found")
 
-  def validate(self):
-    if self.add is None and self.delete is None:
-      raise AnsibleError("No mutation configuration found")
+        if self.add is not None and self.delete is not None:
+            self.hasStateField = True
 
-    if self.add is not None and self.delete is not None:
-      self.hasStateField = True
+    def fromState(self, state: str) -> MutationConfig:
+        if state == "add":
+            return self.add
+        elif state == "delete":
+            return self.delete
+        raise AnsibleError(f"Unknown state: {state}")
 
-  def fromState(self, state: str) -> MutationConfig:
-    if state == "add":
-      return self.add
-    elif state == "delete":
-      return self.delete
-    raise AnsibleError(f"Unknown state: {state}")
+    def findExistingRecord(self, action: str, inputArgs: dict) -> dict | None:
+        pluginConfig = self.fromState(action)
 
-  def findExistingRecord(self, action: str, inputArgs: dict) -> dict|None:
-    pluginConfig = self.fromState(action)
+        if not pluginConfig.proxyLookups or not pluginConfig.lookupCompareFields:
+            return None
 
-    if not pluginConfig.proxyLookups or not pluginConfig.lookupCompareFields:
-      return None
+        foundLookup: ProxyLookup = None
+        for lookup in pluginConfig.proxyLookups:
+            if not lookup.hasInputArgs(inputArgs):
+                continue
+            foundLookup = lookup
 
-    foundLookup: ProxyLookup = None
-    for lookup in pluginConfig.proxyLookups:
-      if not lookup.hasInputArgs(inputArgs):
-        continue
-      foundLookup = lookup
+        if foundLookup == None:
+            return None
 
-    if foundLookup == None:
-      return None
+        return foundLookup.execute(inputArgs, pluginConfig.lookupCompareFields)
 
-    return foundLookup.execute(inputArgs, pluginConfig.lookupCompareFields)
+    def diffExistingRecord(self, record: dict, inputArgs: dict) -> bool:
+        pluginConfig = self.fromState("add")
 
-  def diffExistingRecord(self, record: dict, inputArgs: dict) -> bool:
-    pluginConfig = self.fromState('add')
+        if not pluginConfig.diffCompareFields:
+            return False
 
-    if not pluginConfig.diffCompareFields:
-      return False
-
-    Display().vvv(f"Diffing existing record: {redact_keys(record)} with input keys ({inputArgs.keys()}) and compareFields: {pluginConfig.diffCompareFields}\n\n")
-    for field in pluginConfig.diffCompareFields:
-      if field not in record or field not in inputArgs:
-        continue
-
-      if valueDiffers(record[field], inputArgs[field]):
         Display().vvv(
-          f"Field {field} differs: {redact_value(field, record[field])} != "
-          f"{redact_value(field, inputArgs[field])}\n\n")
-        return True
+            f"Diffing existing record: {redact_keys(record)} with input keys ({inputArgs.keys()}) and compareFields: {pluginConfig.diffCompareFields}\n\n"
+        )
+        for field in pluginConfig.diffCompareFields:
+            if field not in record or field not in inputArgs:
+                continue
 
-    return False
+            if valueDiffers(record[field], inputArgs[field]):
+                Display().vvv(
+                    f"Field {field} differs: {redact_value(field, record[field])} != "
+                    f"{redact_value(field, inputArgs[field])}\n\n"
+                )
+                return True
+
+        return False
+
 
 def valueDiffers(val1: any, val2: any) -> bool:
-  if isinstance(val1, dict) and isinstance(val2, dict):
-    for key in val1.keys():
-      if key not in val2:
-        continue
-      if valueDiffers(val1[key], val2[key]):
-        Display().vvv(
-          f"Field {key} differs: {redact_value(key, val1[key])} != "
-          f"{redact_value(key, val2[key])}\n\n")
-        return True
-    return False
-  elif isinstance(val1, list) and isinstance(val2, list):
-    if len(val1) != len(val2):
-      Display().vvv(
-        f"Lists differ: {redact_keys(val1)} != {redact_keys(val2)}\n\n")
-      return True
-    for i in range(len(val1)):
-      if valueDiffers(val1[i], val2[i]):
-        Display().vvv(
-          f"List item differs: {redact_keys(val1[i])} != {redact_keys(val2[i])}\n\n")
-        return True
-    return False
-  else:
-    return val1 != val2
+    if isinstance(val1, dict) and isinstance(val2, dict):
+        for key in val1.keys():
+            if key not in val2:
+                continue
+            if valueDiffers(val1[key], val2[key]):
+                Display().vvv(
+                    f"Field {key} differs: {redact_value(key, val1[key])} != "
+                    f"{redact_value(key, val2[key])}\n\n"
+                )
+                return True
+        return False
+    elif isinstance(val1, list) and isinstance(val2, list):
+        if len(val1) != len(val2):
+            Display().vvv(
+                f"Lists differ: {redact_keys(val1)} != {redact_keys(val2)}\n\n"
+            )
+            return True
+        for i in range(len(val1)):
+            if valueDiffers(val1[i], val2[i]):
+                Display().vvv(
+                    f"List item differs: {redact_keys(val1[i])} != {redact_keys(val2[i])}\n\n"
+                )
+                return True
+        return False
+    else:
+        return val1 != val2
 
 
 class LagoonMutationActionBase(LagoonActionBase):
-  """Action plugins base class for Lagoon mutations.
+    """Action plugins base class for Lagoon mutations.
 
-  Base class for Lagoon actions that perform mutations, providing the
-  ability to first verify existence, delete & recreate, or create if
-  missing.
+    Base class for Lagoon actions that perform mutations, providing the
+    ability to first verify existence, delete & recreate, or create if
+    missing.
 
-  All args for the plugin are inferred from the GraphQL schema, and
-  the actionConfig must be filled with all relevant information.
-  """
+    All args for the plugin are inferred from the GraphQL schema, and
+    the actionConfig must be filled with all relevant information.
+    """
 
-  # LagoonActionBase.run logs task args before the client, and so before
-  # the schema-derived argspec, exists - so that one log line has to be
-  # masked by key name rather than by value.
-  _sensitive_task_args = sorted(SENSITIVE_FIELD_NAMES)
+    # LagoonActionBase.run logs task args before the client, and so before
+    # the schema-derived argspec, exists - so that one log line has to be
+    # masked by key name rather than by value.
+    _sensitive_task_args = sorted(SENSITIVE_FIELD_NAMES)
 
-  # The main config for the plugin, and drives the whole process.
-  actionConfig : MutationActionConfig
+    # The main config for the plugin, and drives the whole process.
+    actionConfig: MutationActionConfig
 
-  # The generated argspec from the GraphQL schema.
-  argSpec : dict = dict()
+    # The generated argspec from the GraphQL schema.
+    argSpec: dict = dict()
 
-  """Whether the mutation has an 'input' wrapper, as in the following:
+    """Whether the mutation has an 'input' wrapper, as in the following:
     mutation {
       addAdvancedTaskDefinition (
         input: {
@@ -256,142 +267,151 @@ class LagoonMutationActionBase(LagoonActionBase):
     the rest of the arguments to be passed as is. Then it will wrap the args
     in the 'input' key when building the mutation object.
   """
-  hasInputWrapper : bool = False
+    hasInputWrapper: bool = False
 
-  # The module args after validation.
-  moduleArgs : dict = dict()
+    # The module args after validation.
+    moduleArgs: dict = dict()
 
-  # The action to perform, either 'add' or 'delete'.
-  action : str = None
+    # The action to perform, either 'add' or 'delete'.
+    action: str = None
 
-  # The mutation object to execute, after being built from
-  # the schema, MutationConfig's and the module args.
-  mutationObj : DSLMutation = None
+    # The mutation object to execute, after being built from
+    # the schema, MutationConfig's and the module args.
+    mutationObj: DSLMutation = None
 
-  def run(self, tmp=None, task_vars=None):
-    result = super(LagoonMutationActionBase, self).run(tmp, task_vars)
+    def run(self, tmp=None, task_vars=None):
+        result = super(LagoonMutationActionBase, self).run(tmp, task_vars)
 
-    self.validatePluginConfig()
+        self.validatePluginConfig()
 
-    self.createClient(task_vars)
+        self.createClient(task_vars)
 
-    # Common auth arguments.
-    self.argSpec = auth_argument_spec()
+        # Common auth arguments.
+        self.argSpec = auth_argument_spec()
 
-    self.determineAction()
-    pluginConfig = self.actionConfig.fromState(self.action)
+        self.determineAction()
+        pluginConfig = self.actionConfig.fromState(self.action)
 
-    with self.client as (_, ds):
-      # Generate the argspec from the schema.
-      genArgSpec = generate_argspec_from_mutation(
-        ds,
-        pluginConfig.field,
-        pluginConfig.inputFieldAdditionalArgs,
-        pluginConfig.inputFieldArgsAliases,
-      )
-      if len(genArgSpec) == 1 and 'input' in genArgSpec:
-        self.hasInputWrapper = True
-        genArgSpec = genArgSpec['input']['options']
-      self.argSpec.update(genArgSpec)
-      self._display.vvv(f"Generated argspec: {self.argSpec}\n\n")
+        with self.client as (_, ds):
+            # Generate the argspec from the schema.
+            genArgSpec = generate_argspec_from_mutation(
+                ds,
+                pluginConfig.field,
+                pluginConfig.inputFieldAdditionalArgs,
+                pluginConfig.inputFieldArgsAliases,
+            )
+            if len(genArgSpec) == 1 and "input" in genArgSpec:
+                self.hasInputWrapper = True
+                genArgSpec = genArgSpec["input"]["options"]
+            self.argSpec.update(genArgSpec)
+            self._display.vvv(f"Generated argspec: {self.argSpec}\n\n")
 
-      # Validate the arguments.
-      validationResult, moduleArgs = self.validate_argument_spec(self.argSpec)
+            # Validate the arguments.
+            validationResult, moduleArgs = self.validate_argument_spec(self.argSpec)
 
-      # Filter out None arguments.
-      moduleArgs = {k: v for k, v in moduleArgs.items() if v is not None}
-      self.moduleArgs = moduleArgs
+            # Filter out None arguments.
+            moduleArgs = {k: v for k, v in moduleArgs.items() if v is not None}
+            self.moduleArgs = moduleArgs
 
-      # build_dynamic_mutation inlines values into the mutation AST, and gql
-      # prints that AST through info() in check mode, which isn't verbosity
-      # gated - so everything below can leak argument values at -v0.
-      # Redact by value rather than mute, so errors stay visible (ISM-1911)
-      # while the values stay hidden (ISM-2052).
-      with redacting(self._noLogValues(validationResult)):
-        # Use module_utils Display, not self._display, so the no-log
-        # scrubbing above applies. Both write to the same underlying
-        # singleton.
-        Display().vvv(f"Validated module args: {moduleArgs}\n\n")
+            # build_dynamic_mutation inlines values into the mutation AST, and gql
+            # prints that AST through info() in check mode, which isn't verbosity
+            # gated - so everything below can leak argument values at -v0.
+            # Redact by value rather than mute, so errors stay visible (ISM-1911)
+            # while the values stay hidden (ISM-2052).
+            with redacting(self._noLogValues(validationResult)):
+                # Use module_utils Display, not self._display, so the no-log
+                # scrubbing above applies. Both write to the same underlying
+                # singleton.
+                Display().vvv(f"Validated module args: {moduleArgs}\n\n")
 
-        Display().vvv(f"Finding existing record for action: {self.action}")
-        record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
-        if record is not None:
-          # Key-redacted too: a value from the API isn't in the no-log set,
-          # so redacting() alone can't mask it.
-          Display().vvv(f"Existing record found: {redact_keys(record)}\n\n")
-          changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
-          if not changed:
-            result['changed'] = False
-            result['result'] = record
-            return result
-        else:
-          Display().vvv("Existing record not found\n")
+                Display().vvv(f"Finding existing record for action: {self.action}")
+                record = self.actionConfig.findExistingRecord(self.action, moduleArgs)
+                if record is not None:
+                    # Key-redacted too: a value from the API isn't in the no-log set,
+                    # so redacting() alone can't mask it.
+                    Display().vvv(f"Existing record found: {redact_keys(record)}\n\n")
+                    changed = self.actionConfig.diffExistingRecord(record, moduleArgs)
+                    if not changed:
+                        result["changed"] = False
+                        result["result"] = record
+                        return result
+                else:
+                    Display().vvv("Existing record not found\n")
 
-        self.buildMutationObj(record)
+                self.buildMutationObj(record)
 
-        res = self.client.execute_query_dynamic(self.mutationObj)
-        result['result'] = res[pluginConfig.field] if record is None else res[pluginConfig.updateField]
-        result['changed'] = True
+                res = self.client.execute_query_dynamic(self.mutationObj)
+                result["result"] = (
+                    res[pluginConfig.field]
+                    if record is None
+                    else res[pluginConfig.updateField]
+                )
+                result["changed"] = True
 
-    return result
+        return result
 
-  def _noLogValues(self, validationResult) -> set:
-    """The values to scrub from output, from the argspec's no_log flags.
+    def _noLogValues(self, validationResult) -> set:
+        """The values to scrub from output, from the argspec's no_log flags.
 
-    ValidationResult._no_log_values is private and may disappear in a future
-    ansible-core, so fall back to recomputing it rather than silently
-    logging secrets. Tests pin both paths.
-    """
-    values = getattr(validationResult, '_no_log_values', None)
-    if values is None:
-      return collect_no_log_values(self.argSpec, self.moduleArgs)
-    return values
+        ValidationResult._no_log_values is private and may disappear in a future
+        ansible-core, so fall back to recomputing it rather than silently
+        logging secrets. Tests pin both paths.
+        """
+        values = getattr(validationResult, "_no_log_values", None)
+        if values is None:
+            return collect_no_log_values(self.argSpec, self.moduleArgs)
+        return values
 
-  def validatePluginConfig(self):
-    if (self.actionConfig is None or
-      not isinstance(self.actionConfig, MutationActionConfig)):
-      raise AnsibleError("Invalid mutation plugin configuration")
+    def validatePluginConfig(self):
+        if self.actionConfig is None or not isinstance(
+            self.actionConfig, MutationActionConfig
+        ):
+            raise AnsibleError("Invalid mutation plugin configuration")
 
-    self.actionConfig.validate()
+        self.actionConfig.validate()
 
-  def determineAction(self):
-    self.action = 'add'
-    if self.actionConfig.hasStateField:
-      self.argSpec['state'] = dict(
-        type='str',
-        default='present',
-        choices=['absent', 'present'],
-      )
+    def determineAction(self):
+        self.action = "add"
+        if self.actionConfig.hasStateField:
+            self.argSpec["state"] = dict(
+                type="str",
+                default="present",
+                choices=["absent", "present"],
+            )
 
-      if self._task.args.get('state', 'present') == 'absent':
-        self.action = 'delete'
+            if self._task.args.get("state", "present") == "absent":
+                self.action = "delete"
 
-  def buildMutationObj(self, existingRecord: dict|None):
-    mutationFieldName = self.actionConfig.fromState(self.action).field
-    args = self.moduleArgs
+    def buildMutationObj(self, existingRecord: dict | None):
+        mutationFieldName = self.actionConfig.fromState(self.action).field
+        args = self.moduleArgs
 
-    returnFields = input_args_to_field_list(args)
+        returnFields = input_args_to_field_list(args)
 
-    if (self.action == 'add' and existingRecord is not None and
-        self.actionConfig.fromState(self.action).updateField is not None):
-      mutationFieldName = self.actionConfig.fromState(self.action).updateField
+        if (
+            self.action == "add"
+            and existingRecord is not None
+            and self.actionConfig.fromState(self.action).updateField is not None
+        ):
+            mutationFieldName = self.actionConfig.fromState(self.action).updateField
 
-      # Generate the update mutation argspec from the schema.
-      updateArgSpec = generate_argspec_from_mutation(
-        self.client.ds,
-        mutationFieldName)
+            # Generate the update mutation argspec from the schema.
+            updateArgSpec = generate_argspec_from_mutation(
+                self.client.ds, mutationFieldName
+            )
 
-      if len(updateArgSpec) == 1 and 'input' in updateArgSpec:
-        if ('id' in updateArgSpec['input']['options'] and
-            'patch' in updateArgSpec['input']['options']):
-          args = {'input': {
-            'id': existingRecord['id'],
-            'patch': args}}
+            if len(updateArgSpec) == 1 and "input" in updateArgSpec:
+                if (
+                    "id" in updateArgSpec["input"]["options"]
+                    and "patch" in updateArgSpec["input"]["options"]
+                ):
+                    args = {"input": {"id": existingRecord["id"], "patch": args}}
 
-    elif self.hasInputWrapper:
-      args = {'input': args}
+        elif self.hasInputWrapper:
+            args = {"input": args}
 
-    mutationField = self.client.build_dynamic_mutation(
-      mutationFieldName, args, returnFields)
+        mutationField = self.client.build_dynamic_mutation(
+            mutationFieldName, args, returnFields
+        )
 
-    self.mutationObj = DSLMutation(mutationField)
+        self.mutationObj = DSLMutation(mutationField)

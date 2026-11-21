@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: environment_update
 short_description: Update a project environment's values
 description:
@@ -22,12 +22,12 @@ options:
       - The environment values.
     type: dict
     default: {}
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Set environment deployment cluster.
   lagoon.api.environment_update:
     environment: test-project-master
     values:
       kubernetes: 10
-'''
+"""

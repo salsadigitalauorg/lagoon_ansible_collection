@@ -1,9 +1,9 @@
-ansible-core ; python_version >= '3.8'
+ansible-core ; python_version >= '3.9'
 # Pinned below 4 deliberately so this matrix stays a gql-3.x regression
 # leg. The separate gql-4 CI job overrides this with gql>=4,<5.
-gql<4,>=3.5.3 ; python_version >= '3.8'
+gql<4,>=3.5.3 ; python_version >= '3.9'
 # Locking requests-toolbet and urllib3 to fix failing tests.
 # See https://stackoverflow.com/questions/76175487
-requests-toolbelt==0.10.1 ; python_version >= '3.8'
-urllib3==1.26.19 ; python_version >= '3.8'
-requests<3,>=2.26 ; python_version >= '3.8'
+requests-toolbelt==0.10.1 ; python_version >= '3.9'
+urllib3==1.26.19 ; python_version >= '3.9'
+requests<3,>=2.26 ; python_version >= '3.9'

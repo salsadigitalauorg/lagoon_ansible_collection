@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: env_variable
 short_description: Manage variables for a project or environment
 description:
@@ -51,9 +51,9 @@ options:
       - and recreated with the value specified.
     type: bool
     default: False
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Update Lagoon variable definition
   lagoon.api.env_variable:
     state: present
@@ -63,4 +63,4 @@ EXAMPLES = r'''
     value: bar
     replace_existing: true
     scope: RUNTIME
-'''
+"""

@@ -4,7 +4,6 @@ from time import sleep
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -18,19 +17,19 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
         lagoonEnvironment = Environment(self.client)
 
-        result['deploy_status'] = lagoonEnvironment.deployBranch(
-            self._task.args.get('project'),
-            self._task.args.get('branch'),
-            self._task.args.get('bulkId'),
-            self._task.args.get('bulkName'),
-            self._task.args.get('wait', False),
-            self._task.args.get('delay', 60),
-            self._task.args.get('retries', 30)
+        result["deploy_status"] = lagoonEnvironment.deployBranch(
+            self._task.args.get("project"),
+            self._task.args.get("branch"),
+            self._task.args.get("bulkId"),
+            self._task.args.get("bulkName"),
+            self._task.args.get("wait", False),
+            self._task.args.get("delay", 60),
+            self._task.args.get("retries", 30),
         )
-        self._display.v("Deploy status: %s" % result['deploy_status'])
+        self._display.v("Deploy status: %s" % result["deploy_status"])
 
         # This is a way to delay concurrent deployments to Lagoon.
-        stagger = self._task.args.get('stagger', 0)
+        stagger = self._task.args.get("stagger", 0)
         if stagger > 0:
             sleep(stagger)
 

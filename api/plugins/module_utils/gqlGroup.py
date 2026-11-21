@@ -7,7 +7,6 @@ from typing import List
 
 
 class Group(ResourceBase):
-
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
@@ -21,7 +20,8 @@ class Group(ResourceBase):
         with self.client as (_, ds):
             # Build the fragment.
             groups_fields = ds.Project.groups.select(
-                getattr(ds.GroupInterface, fields[0]))
+                getattr(ds.GroupInterface, fields[0])
+            )
             if len(fields) > 1:
                 for f in fields[1:]:
                     groups_fields.select(getattr(ds.GroupInterface, f))
@@ -29,8 +29,9 @@ class Group(ResourceBase):
             field_queries = []
             for pName in project_names:
                 # Build the main query.
-                field_query = ds.Query.projectByName.args(
-                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query = ds.Query.projectByName.args(name=pName).alias(
+                    self.sanitiseForQueryAlias(pName)
+                )
                 field_query.select(groups_fields)
                 field_queries.append(field_query)
 
@@ -38,8 +39,7 @@ class Group(ResourceBase):
 
         for pName in project_names:
             try:
-                res[pName] = resources.get(
-                    self.sanitiseForQueryAlias(pName))['groups']
+                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))["groups"]
             except:
                 res[pName] = None
 

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: deploy_bulk
 short_description: Start a Lagoon bulk deployment
 description:
@@ -24,9 +24,9 @@ options:
     type: list
     elements: dict
     required: true
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Bulk deployment trigger by environment id.
   lagoon.api.deploy_bulk:
     name: Trigger by Ansible
@@ -46,4 +46,4 @@ EXAMPLES = r'''
     build_vars:
       - name: build_var_name
         value: build_var_value
-'''
+"""
