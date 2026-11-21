@@ -1,5 +1,7 @@
 from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import (
+    Environment,
+)
 from ansible.errors import AnsibleError
 
 DOCUMENTATION = """
@@ -49,26 +51,27 @@ EXAMPLES = """
 
 
 class LookupModule(LagoonLookupBase):
+    def run(self, _, variables=None, **kwargs):
 
-  def run(self, _, variables=None, **kwargs):
+        ret = []
 
-    ret = []
+        self.set_options(var_options=variables, direct=kwargs)
 
-    self.set_options(var_options=variables, direct=kwargs)
+        self.createClient()
 
-    self.createClient()
+        lagoonEnvironment = Environment(self.client).all()
+        if not len(lagoonEnvironment.environments):
+            if len(lagoonEnvironment.errors):
+                raise AnsibleError(
+                    f"Unable to fetch environments; encountered the following errors: {lagoonEnvironment.errors}"
+                )
+            return ret
 
-    lagoonEnvironment = Environment(self.client).all()
-    if not len(lagoonEnvironment.environments):
-      if len(lagoonEnvironment.errors):
-        raise AnsibleError(
-            f"Unable to fetch environments; encountered the following errors: {lagoonEnvironment.errors}")
-      return ret
+        lagoonEnvironment.withCluster(batch_size=50).withVariables(batch_size=50)
+        if len(lagoonEnvironment.errors):
+            self._display.warning(
+                f"The query partially succeeded, but the following errors were encountered:\n{lagoonEnvironment.errors}"
+            )
+        ret = lagoonEnvironment.environments
 
-    lagoonEnvironment.withCluster(batch_size=50).withVariables(batch_size=50)
-    if len(lagoonEnvironment.errors):
-      self._display.warning(
-          f"The query partially succeeded, but the following errors were encountered:\n{ lagoonEnvironment.errors }")
-    ret = lagoonEnvironment.environments
-
-    return ret
+        return ret

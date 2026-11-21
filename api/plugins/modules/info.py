@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: info
 short_description: Fetches Lagoon resource information
 description:
@@ -18,9 +18,9 @@ options:
       - The resource name.
     type: str
     required: true
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Get a project.
   lagoon.api.info:
     resource: project
@@ -31,4 +31,4 @@ EXAMPLES = r'''
     resource: environment
     name: test-environment
   register: env_info
-'''
+"""

@@ -9,93 +9,99 @@ from gql.transport.exceptions import TransportQueryError
 from typing import Dict, List
 
 PROJECT_FIELDS = [
-    'autoIdle',
-    'availability',
-    'branches',
-    'created',
-    'deploymentsDisabled',
-    'developmentBuildPriority',
-    'developmentEnvironmentsLimit',
-    'gitUrl',
-    'id',
-    'metadata',
-    'name',
-    'openshiftProjectName',
-    'openshiftProjectPattern',
-    'productionAlias',
-    'productionBuildPriority',
-    'productionEnvironment',
-    'productionRoutes',
-    'pullrequests',
-    'routerPattern',
-    'standbyAlias',
-    'standbyProductionEnvironment',
-    'standbyRoutes',
+    "autoIdle",
+    "availability",
+    "branches",
+    "created",
+    "deploymentsDisabled",
+    "developmentBuildPriority",
+    "developmentEnvironmentsLimit",
+    "gitUrl",
+    "id",
+    "metadata",
+    "name",
+    "openshiftProjectName",
+    "openshiftProjectPattern",
+    "productionAlias",
+    "productionBuildPriority",
+    "productionEnvironment",
+    "productionRoutes",
+    "pullrequests",
+    "routerPattern",
+    "standbyAlias",
+    "standbyProductionEnvironment",
+    "standbyRoutes",
 ]
 
 VARIABLES_FIELDS = [
-    'id',
-    'name',
-    'value',
-    'scope',
+    "id",
+    "name",
+    "value",
+    "scope",
 ]
 
 CLUSTER_FIELDS = [
-    'id',
-    'name',
+    "id",
+    "name",
 ]
 
 ENVIRONMENTS_FIELDS = [
-    'autoIdle',
-    'created',
-    'environmentType',
-    'id',
-    'kubernetesNamespaceName',
-    'name',
-    'route',
-    'routes',
-    'updated',
+    "autoIdle",
+    "created",
+    "environmentType",
+    "id",
+    "kubernetesNamespaceName",
+    "name",
+    "route",
+    "routes",
+    "updated",
 ]
 
 DEPLOYMENTS_FIELDS = [
-    'bulkId',
-    'bulkName',
-    'completed',
-    'created',
-    'id',
-    'name',
-    'started',
-    'status',
-    'uiLink',
+    "bulkId",
+    "bulkName",
+    "completed",
+    "created",
+    "id",
+    "name",
+    "started",
+    "status",
+    "uiLink",
 ]
 
 GROUPS_FIELDS = [
-    'id',
-    'name',
-    'type',
+    "id",
+    "name",
+    "type",
 ]
 
 DEFAULT_BATCH_SIZE = 100
 
 
 class ResourceBase(Display):
-
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__()
         self.client = client
         self.errors = []
         self.options = options
 
-        if self.options.get('exitOnError') == None:
-            self.options['exitOnError'] = False
+        if self.options.get("exitOnError") == None:
+            self.options["exitOnError"] = False
 
     def sanitisedName(self, name):
-        return re.sub(r'[\W_-]+', '-', name)
+        return re.sub(r"[\W_-]+", "-", name)
 
     def sanitiseForQueryAlias(self, name):
-        return re.sub(r'[\W-]+', '_', name)
+        return re.sub(r"[\W-]+", "_", name)
 
-    def queryTopLevelFields(self, resList: list, query: str, qryType: str, args: Dict[str, any] = {}, fields: List[str] = []):
+    def queryTopLevelFields(
+        self,
+        resList: list,
+        query: str,
+        qryType: str,
+        args: Dict[str, any] = {},
+        fields: List[str] = [],
+    ):
         with self.client:
             queryObj = self.client.build_dynamic_query(query, qryType, args, fields)
             try:
@@ -141,7 +147,7 @@ class ResourceBase(Display):
         Determines whether we should exit due to errors.
         """
 
-        return self.options.get('exitOnError') == True and len(self.errors) > 0
+        return self.options.get("exitOnError") == True and len(self.errors) > 0
 
     def raiseExceptionIfRequired(self, message: str = ""):
         """

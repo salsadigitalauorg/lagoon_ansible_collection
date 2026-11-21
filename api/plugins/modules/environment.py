@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: environment
 
 short_description: Manage a project's environments.
@@ -65,12 +65,12 @@ extends_documentation_fragment:
 author:
     - Yusuf Hasan Miyan (@yusufhm)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Delete Lagoon environment.
   lagoon.api.environment:
     project: 'foobar'
     environment: 'feature/baz'
     state: absent
-'''
+"""

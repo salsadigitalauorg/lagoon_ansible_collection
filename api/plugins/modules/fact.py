@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: fact
 short_description: Manage facts for an environment.
 description:
@@ -45,9 +45,9 @@ options:
       - A description of the fact.
       - Required when state is present.
     type: str
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add a fact to a Lagoon project
   lagoon.api.fact:
     environment: 1
@@ -57,4 +57,4 @@ EXAMPLES = r'''
     type: SEMVER
     category: fact
     service: php
-'''
+"""

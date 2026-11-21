@@ -10,16 +10,15 @@ from typing import List
 from typing_extensions import Self
 
 PROJECT_DEPLOY_TARGET_CONFIGS_FIELDS = [
-    'id',
-    'weight',
-    'branches',
-    'pullrequests',
-    'deployTarget',
+    "id",
+    "weight",
+    "branches",
+    "pullrequests",
+    "deployTarget",
 ]
 
 
 class Project(ResourceBase):
-
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
         self.projects = []
@@ -36,7 +35,8 @@ class Project(ResourceBase):
             fields = PROJECT_FIELDS
 
         return self.queryTopLevelFields(
-            self.projects, 'allProjects', 'Project', fields=fields)
+            self.projects, "allProjects", "Project", fields=fields
+        )
 
     def allInGroup(self, group: str, fields: List[str] = None) -> Self:
         """
@@ -48,7 +48,8 @@ class Project(ResourceBase):
 
         args = {"input": {"name": group}}
         return self.queryTopLevelFields(
-            self.projects, 'allProjectsInGroup', 'Project', args, fields)
+            self.projects, "allProjectsInGroup", "Project", args, fields
+        )
 
     def byName(self, name: str, fields: List[str] = None) -> Self:
         """
@@ -60,9 +61,12 @@ class Project(ResourceBase):
 
         args = {"name": name}
         return self.queryTopLevelFields(
-            self.projects, 'projectByName', 'Project', args, fields)
+            self.projects, "projectByName", "Project", args, fields
+        )
 
-    def withCluster(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
+    def withCluster(
+        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> Self:
         """
         Retrieve cluster information for the projects.
         """
@@ -70,25 +74,27 @@ class Project(ResourceBase):
         if not len(self.projects):
             return self
 
-        project_names = [p['name'] for p in self.projects]
+        project_names = [p["name"] for p in self.projects]
 
         batches = []
         for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i:i+batch_size])
+            batches.append(project_names[i : i + batch_size])
 
         clusters = {}
         for i, b in enumerate(batches):
-            self.v(f"Fetching cluster for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching cluster for batch {i + 1}/{len(batches)}")
             clusters.update(self.getCluster(b, fields))
             self.raiseExceptionIfRequired("Error fetching project cluster")
 
         for project in self.projects:
-            project['kubernetes'] = clusters.get(project['name'])
-            project['openshift'] = clusters.get(project['name'])
+            project["kubernetes"] = clusters.get(project["name"])
+            project["openshift"] = clusters.get(project["name"])
 
         return self
 
-    def withEnvironments(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
+    def withEnvironments(
+        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> Self:
         """
         Retrieve the projects' environments.
         """
@@ -96,24 +102,26 @@ class Project(ResourceBase):
         if not len(self.projects):
             return self
 
-        project_names = [p['name'] for p in self.projects]
+        project_names = [p["name"] for p in self.projects]
 
         batches = []
         for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i:i+batch_size])
+            batches.append(project_names[i : i + batch_size])
 
         environments = {}
         for i, b in enumerate(batches):
-            self.v(f"Fetching environments for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching environments for batch {i + 1}/{len(batches)}")
             environments.update(self.getEnvironments(b, fields))
             self.raiseExceptionIfRequired("Error fetching environments")
 
         for project in self.projects:
-            project['environments'] = environments.get(project['name'])
+            project["environments"] = environments.get(project["name"])
 
         return self
 
-    def withDeployTargetConfigs(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
+    def withDeployTargetConfigs(
+        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> Self:
         """
         Retrieve the projects' deploy target configs.
         """
@@ -121,24 +129,26 @@ class Project(ResourceBase):
         if not len(self.projects):
             return self
 
-        project_names = [p['name'] for p in self.projects]
+        project_names = [p["name"] for p in self.projects]
 
         batches = []
         for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i:i+batch_size])
+            batches.append(project_names[i : i + batch_size])
 
         dtcs = {}
         for i, b in enumerate(batches):
-            self.v(f"Fetching deploy target configs for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching deploy target configs for batch {i + 1}/{len(batches)}")
             dtcs.update(self.getDeployTargetConfigs(b, fields))
             self.raiseExceptionIfRequired("Error fetching deploy target configs")
 
         for project in self.projects:
-            project['deployTargetConfigs'] = dtcs.get(project['name'])
+            project["deployTargetConfigs"] = dtcs.get(project["name"])
 
         return self
 
-    def withVariables(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
+    def withVariables(
+        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> Self:
         """
         Retrieve the projects' variables.
         """
@@ -146,25 +156,27 @@ class Project(ResourceBase):
         if not len(self.projects):
             return self
 
-        project_names = [p['name'] for p in self.projects]
+        project_names = [p["name"] for p in self.projects]
 
         batches = []
         for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i:i+batch_size])
+            batches.append(project_names[i : i + batch_size])
 
         projectVars = {}
         variables = Variable(self.client, self.options)
         for i, b in enumerate(batches):
-            self.v(f"Fetching variables for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching variables for batch {i + 1}/{len(batches)}")
             projectVars.update(variables.getForProjects(b, fields))
             self.raiseExceptionIfRequired("Error fetching project variables")
 
         for project in self.projects:
-            project['envVariables'] = projectVars.get(project['name'])
+            project["envVariables"] = projectVars.get(project["name"])
 
         return self
 
-    def withGroups(self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE) -> Self:
+    def withGroups(
+        self, fields: List[str] = None, batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> Self:
         """
         Retrieve the projects' groups.
         """
@@ -172,25 +184,27 @@ class Project(ResourceBase):
         if not len(self.projects):
             return self
 
-        project_names = [p['name'] for p in self.projects]
+        project_names = [p["name"] for p in self.projects]
 
         batches = []
         for i in range(0, len(project_names), batch_size):
-            batches.append(project_names[i:i+batch_size])
+            batches.append(project_names[i : i + batch_size])
 
         groups = {}
         grouper = Group(self.client, self.options)
         for i, b in enumerate(batches):
-            self.v(f"Fetching groups for batch {i+1}/{len(batches)}")
+            self.v(f"Fetching groups for batch {i + 1}/{len(batches)}")
             groups.update(grouper.get(b, fields))
             self.raiseExceptionIfRequired("Error fetching groups")
 
         for project in self.projects:
-            project['groups'] = groups.get(project['name'])
+            project["groups"] = groups.get(project["name"])
 
         return self
 
-    def getCluster(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getCluster(
+        self, project_names: List[str], fields: List[str] = None
+    ) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -200,7 +214,8 @@ class Project(ResourceBase):
         with self.client as (_, ds):
             # Build the fragment.
             cluster_fields = ds.Project.kubernetes.select(
-                getattr(ds.Kubernetes, fields[0]))
+                getattr(ds.Kubernetes, fields[0])
+            )
             if len(fields) > 1:
                 for f in fields[1:]:
                     cluster_fields.select(getattr(ds.Kubernetes, f))
@@ -208,8 +223,9 @@ class Project(ResourceBase):
             field_queries = []
             for pName in project_names:
                 # Build the main query.
-                field_query = ds.Query.projectByName.args(
-                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query = ds.Query.projectByName.args(name=pName).alias(
+                    self.sanitiseForQueryAlias(pName)
+                )
                 field_query.select(cluster_fields)
                 field_queries.append(field_query)
 
@@ -217,14 +233,17 @@ class Project(ResourceBase):
 
         for pName in project_names:
             try:
-                res[pName] = resources.get(
-                    self.sanitiseForQueryAlias(pName))['kubernetes']
+                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
+                    "kubernetes"
+                ]
             except:
                 res[pName] = None
 
         return res
 
-    def getEnvironments(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getEnvironments(
+        self, project_names: List[str], fields: List[str] = None
+    ) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -234,7 +253,8 @@ class Project(ResourceBase):
         with self.client as (_, ds):
             # Build the fragment.
             env_fields = ds.Project.environments.select(
-                getattr(ds.Environment, fields[0]))
+                getattr(ds.Environment, fields[0])
+            )
             if len(fields) > 1:
                 for f in fields[1:]:
                     env_fields.select(getattr(ds.Environment, f))
@@ -242,8 +262,9 @@ class Project(ResourceBase):
             field_queries = []
             for pName in project_names:
                 # Build the main query.
-                field_query = ds.Query.projectByName.args(
-                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query = ds.Query.projectByName.args(name=pName).alias(
+                    self.sanitiseForQueryAlias(pName)
+                )
                 field_query.select(env_fields)
                 field_queries.append(field_query)
 
@@ -251,14 +272,17 @@ class Project(ResourceBase):
 
         for pName in project_names:
             try:
-                res[pName] = resources.get(
-                    self.sanitiseForQueryAlias(pName))['environments']
+                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
+                    "environments"
+                ]
             except:
                 res[pName] = None
 
         return res
 
-    def getDeployTargetConfigs(self, project_names: List[str], fields: List[str] = None) -> List[dict]:
+    def getDeployTargetConfigs(
+        self, project_names: List[str], fields: List[str] = None
+    ) -> List[dict]:
         res = {}
 
         if not fields or not len(fields):
@@ -268,24 +292,28 @@ class Project(ResourceBase):
         with self.client as (_, ds):
             # Build the fragment.
             dtc_fields = ds.Project.deployTargetConfigs.select(
-                getattr(ds.DeployTargetConfig, fields[0]))
+                getattr(ds.DeployTargetConfig, fields[0])
+            )
             if len(fields) > 1:
                 for f in fields[1:]:
-                    if f == 'deployTarget':
+                    if f == "deployTarget":
                         continue
                     dtc_fields.select(getattr(ds.DeployTargetConfig, f))
 
-                if 'deployTarget' in fields:
-                    dtc_fields.select(ds.DeployTargetConfig.deployTarget.select(
-                        ds.Kubernetes.id,
-                        ds.Kubernetes.name,
-                    ))
+                if "deployTarget" in fields:
+                    dtc_fields.select(
+                        ds.DeployTargetConfig.deployTarget.select(
+                            ds.Kubernetes.id,
+                            ds.Kubernetes.name,
+                        )
+                    )
 
             field_queries = []
             for pName in project_names:
                 # Build the main query.
-                field_query = ds.Query.projectByName.args(
-                    name=pName).alias(self.sanitiseForQueryAlias(pName))
+                field_query = ds.Query.projectByName.args(name=pName).alias(
+                    self.sanitiseForQueryAlias(pName)
+                )
                 field_query.select(dtc_fields)
                 field_queries.append(field_query)
 
@@ -293,8 +321,9 @@ class Project(ResourceBase):
 
         for pName in project_names:
             try:
-                res[pName] = resources.get(
-                    self.sanitiseForQueryAlias(pName))['deployTargetConfigs']
+                res[pName] = resources.get(self.sanitiseForQueryAlias(pName))[
+                    "deployTargetConfigs"
+                ]
             except:
                 res[pName] = None
 

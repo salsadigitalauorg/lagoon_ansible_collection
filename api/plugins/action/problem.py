@@ -6,11 +6,10 @@ from ansible.utils.display import Display
 
 display = Display()
 
-SEVERITY_VALUES = ["NONE", "UNKNOWN", "NEGLIGIBLE",
-                   "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+SEVERITY_VALUES = ["NONE", "UNKNOWN", "NEGLIGIBLE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -24,28 +23,28 @@ class ActionModule(LagoonActionBase):
         self.createClient(task_vars)
 
         problemInput = {
-          'associatedPackage': self._task.args.get("associatedPackage"),
-          'data': self._task.args.get("data"),
-          'description': self._task.args.get("description", None),
-          'environment': int(self._task.args.get("environment")),
-          'fixedVersion': self._task.args.get("fixedVersion"),
-          'identifier': self._task.args.get("identifier"),
-          'links': self._task.args.get("links"),
-          'service': self._task.args.get("service"),
-          'severity': self._task.args.get("severity", "NONE"),
-          'severityScore': self._task.args.get("severityScore", 0),
-          'source': self._task.args.get("source", None),
-          'version': self._task.args.get("version", None),
+            "associatedPackage": self._task.args.get("associatedPackage"),
+            "data": self._task.args.get("data"),
+            "description": self._task.args.get("description", None),
+            "environment": int(self._task.args.get("environment")),
+            "fixedVersion": self._task.args.get("fixedVersion"),
+            "identifier": self._task.args.get("identifier"),
+            "links": self._task.args.get("links"),
+            "service": self._task.args.get("service"),
+            "severity": self._task.args.get("severity", "NONE"),
+            "severityScore": self._task.args.get("severityScore", 0),
+            "source": self._task.args.get("source", None),
+            "version": self._task.args.get("version", None),
         }
 
         # modifiers
-        state = self._task.args.get('state', None)
+        state = self._task.args.get("state", None)
 
         found_problem = False
 
-        problems = self.get_problems(problemInput['environment'])
+        problems = self.get_problems(problemInput["environment"])
         for problem in problems:
-            if problem["identifier"] == problemInput['identifier']:
+            if problem["identifier"] == problemInput["identifier"]:
                 found_problem = problem
 
         if not found_problem and state == "absent":
@@ -53,12 +52,14 @@ class ActionModule(LagoonActionBase):
         elif found_problem and state == "absent":
             result["changed"] = True
             result["result"] = self.delete_problem(
-                problemInput['environment'], problemInput['identifier'])
+                problemInput["environment"], problemInput["identifier"]
+            )
         elif found_problem:
-            if problemInput['data'] != found_problem["data"]:
+            if problemInput["data"] != found_problem["data"]:
                 result["changed"] = True
                 self.delete_problem(
-                    problemInput['environment'], problemInput['identifier'])
+                    problemInput["environment"], problemInput["identifier"]
+                )
                 result["result"] = self.add_problem(problemInput)
             else:
                 result["changed"] = False
@@ -67,7 +68,6 @@ class ActionModule(LagoonActionBase):
             result["result"] = self.add_problem(problemInput)
 
         return result
-
 
     def get_problems(self, environment_id):
         res = self.client.execute_query(
@@ -82,9 +82,7 @@ class ActionModule(LagoonActionBase):
                     }
                 }
             }""",
-            {
-                "environment_id": environment_id
-            }
+            {"environment_id": environment_id},
         )
 
         try:
@@ -109,10 +107,7 @@ class ActionModule(LagoonActionBase):
                     identifier: $identifier
                 })
             }""",
-            {
-                "environment_id": environment_id,
-                "identifier": name
-            }
+            {"environment_id": environment_id, "identifier": name},
         )
 
         try:
@@ -122,15 +117,15 @@ class ActionModule(LagoonActionBase):
 
     def add_problem(self, addProblemInputProvided: dict) -> dict:
         addProblemInput = {
-            'associatedPackage': "",
-            'description': "Provided by Lagoon Ansible collection",
-            'fixedVersion': "",
-            'links': "",
-            'service': "",
-            'severity': "NONE",
-            'severityScore': 0,
-            'source': "ansible",
-            'version': "",
+            "associatedPackage": "",
+            "description": "Provided by Lagoon Ansible collection",
+            "fixedVersion": "",
+            "links": "",
+            "service": "",
+            "severity": "NONE",
+            "severityScore": 0,
+            "source": "ansible",
+            "version": "",
         }
         addProblemInput.update(addProblemInputProvided)
 
@@ -138,22 +133,31 @@ class ActionModule(LagoonActionBase):
             if required not in addProblemInput:
                 raise AnsibleError(f"Missing required argument: {required}")
 
-        if not isinstance(addProblemInput['environment'], int):
+        if not isinstance(addProblemInput["environment"], int):
             raise AnsibleError(
-                f"Invalid problem environment {addProblemInput['environment']}, must be an integer")
+                f"Invalid problem environment {addProblemInput['environment']}, must be an integer"
+            )
 
-        if not isinstance(addProblemInput['data'], dict) and not isinstance(addProblemInput['data'], list):
+        if not isinstance(addProblemInput["data"], dict) and not isinstance(
+            addProblemInput["data"], list
+        ):
             raise AnsibleError(
-                f"Invalid problem data '{addProblemInput['data']}', must be a dict or list, to be JSON encoded")
-        addProblemInput['data'] = json.dumps(addProblemInput['data'])
+                f"Invalid problem data '{addProblemInput['data']}', must be a dict or list, to be JSON encoded"
+            )
+        addProblemInput["data"] = json.dumps(addProblemInput["data"])
 
-        if addProblemInput['severity'] not in SEVERITY_VALUES:
+        if addProblemInput["severity"] not in SEVERITY_VALUES:
             raise AnsibleError(
-                f"Invalid problem severity {addProblemInput['severity']}, must be {', '.join(SEVERITY_VALUES)}")
+                f"Invalid problem severity {addProblemInput['severity']}, must be {', '.join(SEVERITY_VALUES)}"
+            )
 
-        if not (addProblemInput['severityScore'] >= 0 and addProblemInput['severityScore'] <= 1):
+        if not (
+            addProblemInput["severityScore"] >= 0
+            and addProblemInput["severityScore"] <= 1
+        ):
             raise AnsibleError(
-                f"Invalid problem severity score {addProblemInput['severityScore']}, must be between 0 and 1")
+                f"Invalid problem severity score {addProblemInput['severityScore']}, must be between 0 and 1"
+            )
 
         res = self.client.execute_query(
             """
@@ -187,7 +191,8 @@ class ActionModule(LagoonActionBase):
                 }) {
                     id
                 }
-            }""", addProblemInput
+            }""",
+            addProblemInput,
         )
 
         return res["addProblem"]

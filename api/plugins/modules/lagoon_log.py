@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: lagoon_log
 description: Add a log message to Lagoon logs.
 short_description: Add a log message to Lagoon logs.
@@ -48,9 +48,9 @@ options:
       - Extra data send along the log message.
     type: dict
     required: false
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Add Lagoon log message.
   lagoon.api.lagoon_log:
     message: 'A test log message'
@@ -66,4 +66,4 @@ EXAMPLES = r'''
     extra:
       project: "{{ project_name }}"
       gitlab: "{{ gitlab_id }}"
-'''
+"""

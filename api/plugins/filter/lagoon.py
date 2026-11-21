@@ -1,17 +1,25 @@
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import re
 from ansible.errors import AnsibleFilterError
 from functools import reduce
 
-class FilterModule(object):
 
+class FilterModule(object):
     def playbook_on_play_start(self, pattern):
         self.playbook = self.play.playbook
         self.inventory = self.playbook.inventory
 
-    def bulkDeployEnvironmentInput(self, hosts, hostvars=None, env_id_key="env_id", env_key="env_name", project_key="project_name"):
+    def bulkDeployEnvironmentInput(
+        self,
+        hosts,
+        hostvars=None,
+        env_id_key="env_id",
+        env_key="env_name",
+        project_key="project_name",
+    ):
         """
         Generate EnvironmentInput from the inventory to use for GraphQL queries.
         Examples:
@@ -39,12 +47,16 @@ class FilterModule(object):
                 if env_id_key and env_id_key in hv:
                     environments.append({"id": hv[env_id_key]})
                 else:
-                    environments.append({
-                        "name": reduce(lambda a, b: a[b], env_key.split("."), hv),
-                        "project": {
-                            "name": reduce(lambda a, b: a[b], project_key.split("."), hv),
-                        },
-                    })
+                    environments.append(
+                        {
+                            "name": reduce(lambda a, b: a[b], env_key.split("."), hv),
+                            "project": {
+                                "name": reduce(
+                                    lambda a, b: a[b], project_key.split("."), hv
+                                ),
+                            },
+                        }
+                    )
             except KeyError as e:
                 raise AnsibleFilterError(f"key {e} not found")
 
@@ -72,6 +84,6 @@ class FilterModule(object):
         return {
             "autogen_route": self.autogenRoute,
             "bulk_deploy_environment_input": self.bulkDeployEnvironmentInput,
-            "lagoon_autogen_route": self.autogenRoute, # DEPRECATED
-            "lagoon_environment_input": self.bulkDeployEnvironmentInput, # DEPRECATED
+            "lagoon_autogen_route": self.autogenRoute,  # DEPRECATED
+            "lagoon_environment_input": self.bulkDeployEnvironmentInput,  # DEPRECATED
         }

@@ -7,8 +7,8 @@ from .gqlResourceBase import ResourceBase
 from gql.dsl import DSLQuery
 from typing import List, Union
 
-class Metadata(ResourceBase):
 
+class Metadata(ResourceBase):
     def __init__(self, client: GqlClient, options: dict = {}) -> None:
         super().__init__(client, options)
 
@@ -21,8 +21,9 @@ class Metadata(ResourceBase):
                 field_queries = []
                 for pName in project_names:
                     # Build the main query.
-                    field_query = ds.Query.projectByName.args(
-                        name=pName).alias(self.sanitiseForQueryAlias(pName))
+                    field_query = ds.Query.projectByName.args(name=pName).alias(
+                        self.sanitiseForQueryAlias(pName)
+                    )
                     field_query.select(ds.Project.metadata)
                     field_queries.append(field_query)
 
@@ -30,9 +31,11 @@ class Metadata(ResourceBase):
 
             for pName in project_names:
                 try:
-                    metadata = resources.get(
-                        self.sanitiseForQueryAlias(pName)).get(
-                            'projectByName', {}).get('metadata', None)
+                    metadata = (
+                        resources.get(self.sanitiseForQueryAlias(pName))
+                        .get("projectByName", {})
+                        .get("metadata", None)
+                    )
                     if not isinstance(metadata, dict):
                         metadata = json.loads(metadata)
                     self.unpack(metadata)
@@ -48,16 +51,17 @@ class Metadata(ResourceBase):
                         name
                         metadata
                     }
-                }""")
-            if not resources.get('allProjects'):
+                }"""
+            )
+            if not resources.get("allProjects"):
                 return res
 
-            for p in resources.get('allProjects'):
-                metadata = p['metadata']
+            for p in resources.get("allProjects"):
+                metadata = p["metadata"]
                 if not isinstance(metadata, dict):
                     metadata = json.loads(metadata)
                 self.unpack(metadata)
-                res[p['name']] = metadata
+                res[p["name"]] = metadata
 
         return res
 
@@ -82,16 +86,11 @@ class Metadata(ResourceBase):
                     metadata
                 }
             }""",
-            {
-                "id": project_id,
-                "key": key,
-                "value": value
-            }
+            {"id": project_id, "key": key, "value": value},
         )
-        metadata = res.get('updateProjectMetadata',
-                               {}).get('metadata', None)
+        metadata = res.get("updateProjectMetadata", {}).get("metadata", None)
         if not metadata:
-            return f'{key}:null'
+            return f"{key}:null"
 
         if not isinstance(metadata, dict):
             metadata = json.loads(metadata)
@@ -106,7 +105,10 @@ class Metadata(ResourceBase):
                     id
                 }
             }""",
-            {"id": project_id, "key": key, }
+            {
+                "id": project_id,
+                "key": key,
+            },
         )
         return key
 

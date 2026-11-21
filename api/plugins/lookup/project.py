@@ -1,7 +1,9 @@
 from ansible.errors import AnsibleError
 from ansible_collections.lagoon.api.plugins.lookup import LagoonLookupBase
 from ansible_collections.lagoon.api.plugins.module_utils.gqlProject import Project
-from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import Environment
+from ansible_collections.lagoon.api.plugins.module_utils.gqlEnvironment import (
+    Environment,
+)
 
 DOCUMENTATION = """
   name: project
@@ -60,37 +62,38 @@ EXAMPLES = """
 
 
 class LookupModule(LagoonLookupBase):
+    def run(self, terms, variables=None, **kwargs):
 
-  def run(self, terms, variables=None, **kwargs):
+        ret = []
 
-    ret = []
+        self.set_options(var_options=variables, direct=kwargs)
 
-    self.set_options(var_options=variables, direct=kwargs)
+        self.createClient()
 
-    self.createClient()
+        lagoonProject = Project(self.client)
+        lagoonEnvironment = Environment(self.client)
 
-    lagoonProject = Project(self.client)
-    lagoonEnvironment = Environment(self.client)
+        for term in terms:
+            if self.get_option("from_environment"):
+                lagoonEnvironment.byNs(term, ["id"])
+                if not len(lagoonEnvironment.environments):
+                    raise AnsibleError(
+                        f"Unable to fetch environment {term}; errors: {lagoonEnvironment.errors}"
+                    )
 
-    for term in terms:
-      if self.get_option('from_environment'):
-        lagoonEnvironment.byNs(term, ['id'])
-        if not len(lagoonEnvironment.environments):
-          raise AnsibleError(
-              f"Unable to fetch environment {term}; errors: {lagoonEnvironment.errors}")
+                lagoonEnvironment.withProject()
+                lagoonProject.projects = [lagoonEnvironment.environments[0]["project"]]
+            else:
+                lagoonProject.byName(term)
+                if not len(lagoonProject.projects):
+                    return ret
 
-        lagoonEnvironment.withProject()
-        lagoonProject.projects = [lagoonEnvironment.environments[0]['project']]
-      else:
-        lagoonProject.byName(term)
-        if not len(lagoonProject.projects):
-            return ret
+            lagoonProject.withCluster().withEnvironments()
+            lagoonProject.withDeployTargetConfigs().withVariables().withGroups()
+            if len(lagoonProject.errors):
+                self._display.warning(
+                    f"The query partially succeeded, but the following errors were encountered:\n{lagoonProject.errors}"
+                )
+            ret.extend(lagoonProject.projects)
 
-      lagoonProject.withCluster().withEnvironments()
-      lagoonProject.withDeployTargetConfigs().withVariables().withGroups()
-      if len(lagoonProject.errors):
-        self._display.warning(
-            f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
-      ret.extend(lagoonProject.projects)
-
-    return ret
+        return ret

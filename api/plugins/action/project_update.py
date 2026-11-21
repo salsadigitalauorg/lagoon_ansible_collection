@@ -4,7 +4,6 @@ from ansible.plugins.action import ActionBase
 
 
 class ActionModule(ActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -15,8 +14,8 @@ class ActionModule(ActionBase):
 
         self._display.vvv("Task args: %s" % self._task.args)
 
-        project_name = self._task.args.get('project')
-        patch_values = self._task.args.get('values')
+        project_name = self._task.args.get("project")
+        patch_values = self._task.args.get("values")
 
         if not project_name:
             raise AnsibleError("Project name is required.")
@@ -25,9 +24,9 @@ class ActionModule(ActionBase):
             raise AnsibleError("No value to update.")
 
         lagoon = ApiClient(
-            self._templar.template(task_vars.get('lagoon_api_endpoint')).strip(),
-            self._templar.template(task_vars.get('lagoon_api_token')).strip(),
-            {'headers': self._task.args.get('headers', {})}
+            self._templar.template(task_vars.get("lagoon_api_endpoint")).strip(),
+            self._templar.template(task_vars.get("lagoon_api_token")).strip(),
+            {"headers": self._task.args.get("headers", {})},
         )
 
         project = lagoon.project(project_name)
@@ -42,11 +41,11 @@ class ActionModule(ActionBase):
                 break
 
         if not update_required:
-            result['update'] = project
+            result["update"] = project
             return result
 
-        result['update'] = lagoon.project_update(project['id'], patch_values)
-        result['changed'] = True
-        self._display.v("Update: %s" % result['update'])
+        result["update"] = lagoon.project_update(project["id"], patch_values)
+        result["changed"] = True
+        self._display.v("Update: %s" % result["update"])
 
         return result

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: project
 description: Manage a project
 short_description: Manage a project
@@ -79,9 +79,9 @@ options:
     type: str
     default: present
     choices: [ absent, present ]
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Create a project
   lagoon.api.project:
     state: present
@@ -91,4 +91,4 @@ EXAMPLES = r'''
     auto_idle: 1
     production_environment: master
     openshift: 1
-'''
+"""

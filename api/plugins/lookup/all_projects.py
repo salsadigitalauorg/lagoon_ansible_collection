@@ -49,26 +49,27 @@ EXAMPLES = """
 
 
 class LookupModule(LagoonLookupBase):
+    def run(self, _, variables=None, **kwargs):
 
-  def run(self, _, variables=None, **kwargs):
+        ret = []
 
-    ret = []
+        self.set_options(var_options=variables, direct=kwargs)
 
-    self.set_options(var_options=variables, direct=kwargs)
+        self.createClient()
 
-    self.createClient()
+        lagoonProject = Project(self.client).all()
+        if not len(lagoonProject.projects):
+            if len(lagoonProject.errors):
+                raise AnsibleError(
+                    f"Unable to fetch projects; encountered the following errors: {lagoonProject.errors}"
+                )
+            return ret
 
-    lagoonProject = Project(self.client).all()
-    if not len(lagoonProject.projects):
-      if len(lagoonProject.errors):
-        raise AnsibleError(
-            f"Unable to fetch projects; encountered the following errors: {lagoonProject.errors}")
-      return ret
+        lagoonProject.withCluster(batch_size=50).withEnvironments(batch_size=50)
+        if len(lagoonProject.errors):
+            self._display.warning(
+                f"The query partially succeeded, but the following errors were encountered:\n{lagoonProject.errors}"
+            )
+        ret = lagoonProject.projects
 
-    lagoonProject.withCluster(batch_size=50).withEnvironments(batch_size=50)
-    if len(lagoonProject.errors):
-      self._display.warning(
-          f"The query partially succeeded, but the following errors were encountered:\n{ lagoonProject.errors }")
-    ret = lagoonProject.projects
-
-    return ret
+        return ret

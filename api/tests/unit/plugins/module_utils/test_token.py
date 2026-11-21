@@ -127,10 +127,10 @@ class FetchTokenTester(unittest.TestCase):
 
     def test_key_path_added_to_argv(self):
         payload = json.dumps({"access_token": "abc123", "expires_in": 3600})
-        with patch("subprocess.run", return_value=_completed(rc=0, stdout=payload)) as run:
-            LagoonToken.fetch_token(
-                "ssh.lagoon.example", "32222", "", "/tmp/key"
-            )
+        with patch(
+            "subprocess.run", return_value=_completed(rc=0, stdout=payload)
+        ) as run:
+            LagoonToken.fetch_token("ssh.lagoon.example", "32222", "", "/tmp/key")
 
         argv = run.call_args.args[0]
         assert "-i" in argv

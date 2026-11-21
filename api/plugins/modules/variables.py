@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 module: variables
 description: Get variables for a project or environment.
 short_description: Get variables for a project or environment.
@@ -17,9 +17,9 @@ options:
       - The project name or enviroment namespace.
     type: str
     required: true
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Fetch environment vars.
   lagoon.api.variables:
     type: environment
@@ -31,4 +31,4 @@ EXAMPLES = r'''
     type: project
     name: '{{ project_name }}'
   register: project_vars_res
-'''
+"""

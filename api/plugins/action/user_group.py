@@ -3,7 +3,6 @@ from ansible.errors import AnsibleError
 
 
 class ActionModule(LagoonActionBase):
-
     def run(self, tmp=None, task_vars=None):
 
         if task_vars is None:
@@ -16,32 +15,31 @@ class ActionModule(LagoonActionBase):
 
         self.createClient(task_vars)
 
-        email = self._task.args.get('email')
-        group_name = self._task.args.get('group')
-        role = self._task.args.get('role')
+        email = self._task.args.get("email")
+        group_name = self._task.args.get("group")
+        role = self._task.args.get("role")
 
-        state = self._task.args.get('state', 'present')
+        state = self._task.args.get("state", "present")
 
         result = {}
 
         if group_name is None:
             raise AnsibleError("Missing required parameter 'group'")
 
-        if state == 'present':
-
+        if state == "present":
             if role is None:
                 raise AnsibleError("Missing required parameter 'role'")
 
-            result['result'] = self.user_add_group(email, group_name, role)
+            result["result"] = self.user_add_group(email, group_name, role)
 
-        if state == 'absent':
+        if state == "absent":
             result = self.user_remove_group(email, group_name)
 
-            if 'error' in result:
-                result['changed'] = False
+            if "error" in result:
+                result["changed"] = False
 
-        if 'changed' not in result:
-            result['changed'] = True
+        if "changed" not in result:
+            result["changed"] = True
 
         return result
 
@@ -65,10 +63,10 @@ class ActionModule(LagoonActionBase):
                 "email": email,
                 "group": group,
                 "role": role,
-            }
+            },
         )
         self._display.v(f"GraphQL query result: {res}")
-        return res['addUserToGroup']['id']
+        return res["addUserToGroup"]["id"]
 
     def user_remove_group(self, email: str, group: str):
         res = self.client.execute_query(
@@ -87,7 +85,7 @@ class ActionModule(LagoonActionBase):
             {
                 "email": email,
                 "group": group,
-            }
+            },
         )
         self._display.v(f"GraphQL query result: {res}")
-        return res['removeUserFromGroup']['id']
+        return res["removeUserFromGroup"]["id"]
