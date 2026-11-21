@@ -23,13 +23,12 @@ class Task(ResourceBase):
         super().__init__(client, options)
 
     def get(
-        self, env_names: List[str], fields: List[str] = None, limit: int = 50
-    ) -> dict:
+        self, env_name: str, fields: List[str] = None, limit: int = 50
+    ) -> List[dict]:
 
         if not fields or not len(fields):
             fields = TASK_FIELDS_COMMON
 
-        res = {}
         resources = {}
         with self.client as (_, ds):
             # Build the fragment.
@@ -51,24 +50,19 @@ class Task(ResourceBase):
                         )
                     )
 
-            field_queries = []
-            for ns in env_names:
-                # Build the main query.
-                field_query = ds.Query.environmentByKubernetesNamespaceName.args(
-                    kubernetesNamespaceName=ns
-                ).alias(self.sanitiseForQueryAlias(ns))
-                field_query.select(fragment_fields)
-                field_queries.append(field_query)
+            # Build the main query. No alias: a single root field per request
+            # means the response is keyed by the query name itself.
+            field_query = ds.Query.environmentByKubernetesNamespaceName.args(
+                kubernetesNamespaceName=env_name
+            )
+            field_query.select(fragment_fields)
 
-            resources = self.queryResources(DSLQuery(*field_queries))
+            resources = self.queryResources(DSLQuery(field_query))
 
-        for ns in env_names:
-            try:
-                res[ns] = resources.get(self.sanitiseForQueryAlias(ns))["tasks"]
-            except:
-                res[ns] = None
-
-        return res
+        try:
+            return resources["environmentByKubernetesNamespaceName"]["tasks"]
+        except (KeyError, TypeError):
+            return None
 
     def byId(self, id: int, fields: List[str] = None) -> dict:
         """

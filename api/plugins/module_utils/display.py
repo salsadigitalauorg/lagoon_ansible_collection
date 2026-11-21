@@ -208,6 +208,10 @@ class Display:
                 scrub(msg), color, stderr, screen_only, log_only, newline
             )
 
+    def warning(self, msg, formatted=False):
+        if self.display:
+            self.display.warning(scrub(msg), formatted)
+
     def v(self, msg, host=None):
         return self.verbose(msg, host=host, caplevel=0)
 
