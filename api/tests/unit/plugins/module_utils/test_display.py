@@ -1,5 +1,6 @@
 import unittest
 
+from .....plugins.module_utils import display as display_module
 from .....plugins.module_utils.display import (
     REDACTED,
     Display,
@@ -7,8 +8,9 @@ from .....plugins.module_utils.display import (
     redact_keys,
     redact_value,
     redacting,
+    register_secret,
 )
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 SENTINEL = "sup3r-s3cret-sentinel"
 
@@ -286,3 +288,105 @@ class CollectNoLogValuesTester(unittest.TestCase):
             collect_no_log_values({"command": dict(type="str", no_log=True)}, {})
             == set()
         )
+
+
+class RegisterSecretTester(unittest.TestCase):
+    """register_secret() must mask through this module's own scrub().
+
+    The backend alone is not enough: ansible-core only masks registered
+    secrets inside its own Display from 2.22, so on every earlier core a
+    token registered at runtime would otherwise be emitted verbatim.
+    """
+
+    def setUp(self):
+        # Permanent and process wide by design, so each test starts from a
+        # known set and leaves nothing behind for the next one.
+        self.original = set(display_module._registered_secrets)
+        display_module._registered_secrets.clear()
+        self.addCleanup(
+            lambda: (
+                display_module._registered_secrets.clear(),
+                display_module._registered_secrets.update(self.original),
+            )
+        )
+
+    def emitted(self, display):
+        return " ".join(str(c) for c in display.display.verbose.call_args_list)
+
+    def verbose_display(self):
+        display = Display()
+        display.display = MagicMock()
+        display.display.verbosity = 3
+        return display
+
+    def test_scrub_masks_a_registered_value_on_every_backend(self):
+        token = "minted-t0ken-value"
+
+        for native, remove_values in [
+            (True, True),
+            (False, True),
+            (False, False),
+        ]:
+            display_module._registered_secrets.clear()
+            with (
+                patch.object(display_module, "HAS_NATIVE_SECRETS", native),
+                patch.object(display_module, "HAS_REMOVE_VALUES", remove_values),
+            ):
+                register_secret(token)
+                scrubbed = display_module.scrub(f"Authorization: Bearer {token}")
+
+            assert token not in scrubbed, f"native={native} remove={remove_values}"
+            # Redaction, not muting: the surrounding message stays readable.
+            assert "Authorization:" in scrubbed
+
+    def test_the_gate_no_longer_short_circuits_on_an_empty_block_set(self):
+        """The specific regression: scrub() returned early whenever the
+        block-scoped set was empty, so a registered value never reached the
+        masking call."""
+
+        token = "minted-t0ken-value"
+        assert display_module._no_log_values == set()
+
+        with patch.object(display_module, "HAS_NATIVE_SECRETS", False):
+            register_secret(token)
+            assert display_module.scrub(token) != token
+
+    def test_a_registered_token_is_masked_in_display_output(self):
+        token = "minted-t0ken-value"
+        display = self.verbose_display()
+
+        with patch.object(display_module, "HAS_NATIVE_SECRETS", False):
+            register_secret(token)
+            display.v(f"using token {token}")
+
+        output = self.emitted(display)
+        assert token not in output
+        assert "using token" in output
+
+    def test_registration_outlives_a_redacting_block(self):
+        """A value registered inside a block must not be dropped when the
+        block restores the scoped set."""
+
+        token = "minted-t0ken-value"
+
+        with patch.object(display_module, "HAS_NATIVE_SECRETS", False):
+            with redacting({SENTINEL}):
+                register_secret(token)
+            scrubbed = display_module.scrub(f"{token} and {SENTINEL}")
+
+        assert token not in scrubbed
+        # The block-scoped value is released, which is what makes the two
+        # sets worth keeping apart.
+        assert SENTINEL in scrubbed
+
+    def test_redacting_does_not_leak_into_the_permanent_set(self):
+        with redacting({SENTINEL}):
+            pass
+
+        assert SENTINEL not in display_module._registered_secrets
+
+    def test_empty_values_are_not_registered(self):
+        for value in ["", None]:
+            register_secret(value)
+
+        assert display_module._registered_secrets == set()

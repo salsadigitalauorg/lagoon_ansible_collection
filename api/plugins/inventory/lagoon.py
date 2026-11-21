@@ -6,10 +6,8 @@ from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.inventory.data import InventoryData
 from ansible.module_utils._text import to_native
 from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
-from ..module_utils import token as LagoonToken
-from ..module_utils.gql import GqlClient
-from ..module_utils.gqlEnvironment import Environment
-from ..module_utils.gqlProject import Project
+from ..module_utils.auth import LagoonCredentials
+from ..module_utils.client import LagoonApiError, LagoonClient
 from typing import Any, Optional
 
 
@@ -49,10 +47,34 @@ DOCUMENTATION = """
                 - name: LAGOON_API_ENDPOINT
             api_token:
                 description:
-                - The lagoon API token
+                - The lagoon API token.
+                - Optional. When omitted, a token is fetched over SSH on first
+                  use, using C(ssh_private_key), C(ssh_private_key_file), or
+                  the machine's own SSH configuration and agent.
                 aliases: [ lagoon_api_token ]
                 env:
                 - name: LAGOON_API_TOKEN
+            ssh_host:
+                description: The Lagoon SSH host used to fetch an API token.
+                default: ssh.lagoon.amazeeio.cloud
+            ssh_port:
+                description: The Lagoon SSH port used to fetch an API token.
+                default: '32222'
+            ssh_private_key:
+                description:
+                - SSH private key content used to fetch an API token.
+                - Written to a private temporary file for the duration of the
+                  call and removed afterwards.
+            ssh_private_key_file:
+                description:
+                - Path to an SSH private key used to fetch an API token.
+            ssh_options:
+                description:
+                - Extra options passed to the C(ssh) command that fetches a
+                  token. A list is preferred; a string is split on whitespace.
+                - Left empty by default, so the machine's own C(~/.ssh/config),
+                  identities and C(known_hosts) apply.
+                type: raw
             headers:
               description: HTTP request headers
               type: dictionary
@@ -97,20 +119,40 @@ cache_plugin: ansible.builtin.jsonfile
 cache_timeout: 7200
 cache_connection: /tmp/lagoon_inventory
 cache_prefix: lagoon
+
+# Restoring the pre-3.0.0 ssh behaviour.
+#
+# Until 3.0.0 the token fetch always passed
+# `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`, which disabled
+# host key verification on the one call that hands over a bearer token. That is
+# no longer the default. Preferably add the Lagoon ssh host to known_hosts:
+#
+#   ssh-keyscan -p 32222 ssh.lagoon.amazeeio.cloud >> ~/.ssh/known_hosts
+#
+# If you must have the old behaviour, ask for it explicitly:
+plugin: lagoon.api.lagoon
+lagoons:
+  -
+    api_endpoint: 'https://api.lagoon.amazeeio.cloud/graphql'
+    ssh_options:
+      - -o
+      - UserKnownHostsFile=/dev/null
+      - -o
+      - StrictHostKeyChecking=no
 """
 
 
-# Batching was removed because the Lagoon GraphQL API degrades sharply on
-# queries carrying many aliased root fields. These options are still recognised
-# so that existing inventory files keep working, but they have no effect and
-# will be removed in a future major version.
-DEPRECATED_BATCH_OPTIONS = [
-    "api_batch_project_environments_size",
-    "api_batch_project_groups_size",
-    "api_batch_project_variables_size",
-    "api_batch_environment_project_size",
-    "api_batch_environment_cluster_size",
-    "api_batch_environment_variables_size",
+# What the inventory itself reads off an environment, which is narrower than
+# the client's default environment selection. Pinned here rather than taking
+# the default so that widening the default cannot silently widen every
+# per-environment request an inventory refresh makes.
+ENVIRONMENT_FIELDS = [
+    "id",
+    "name",
+    "kubernetesNamespaceName",
+    "environmentType",
+    "route",
+    "routes",
 ]
 
 
@@ -172,142 +214,160 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     def fetch_objects(self, lagoons):
 
-        if lagoons:
-            if not isinstance(lagoons, list):
-                raise AnsibleError("Expecting lagoons to be a list.")
+        if not lagoons:
+            return
 
-            for lagoon in lagoons:
-                if not isinstance(lagoon, dict):
-                    raise AnsibleError("Expecting lagoon to be a dictionary.")
+        if not isinstance(lagoons, list):
+            raise AnsibleError("Expecting lagoons to be a list.")
 
-                if "transport" not in lagoon:
-                    lagoon["transport"] = "ssh"
-                elif lagoon["transport"] != "ssh":
-                    # @TODO kubectl support.
-                    raise AnsibleError("Only ssh transport is supported.")
+        for lagoon in lagoons:
+            if not isinstance(lagoon, dict):
+                raise AnsibleError("Expecting lagoon to be a dictionary.")
 
-                # Set default connections details to public Lagoon.
-                lagoon["ssh_host"] = self.get_var(
-                    lagoon, "ssh_host", "ssh.lagoon.amazeeio.cloud"
-                )
-                lagoon["ssh_port"] = self.get_var(lagoon, "ssh_port", "32222")
+            if "transport" not in lagoon:
+                lagoon["transport"] = "ssh"
+            elif lagoon["transport"] != "ssh":
+                # @TODO kubectl support.
+                raise AnsibleError("Only ssh transport is supported.")
 
-                # Endpoint & token can be provided in the file directly
-                # or in --extra-vars. They could also be provided in separate
-                # places.
-                lagoon_api_endpoint = self.get_var(lagoon, "api_endpoint")
-                lagoon_api_token = self.get_var(lagoon, "api_token")
+            # Set default connections details to public Lagoon.
+            lagoon["ssh_host"] = self.get_var(
+                lagoon, "ssh_host", "ssh.lagoon.amazeeio.cloud"
+            )
+            lagoon["ssh_port"] = self.get_var(lagoon, "ssh_port", "32222")
 
-                if not lagoon_api_endpoint:
-                    raise AnsibleError("Expecting lagoon_api_endpoint.")
+            # Endpoint & token can be provided in the file directly
+            # or in --extra-vars. They could also be provided in separate
+            # places.
+            lagoon_api_endpoint = self.get_var(lagoon, "api_endpoint")
 
-                if not lagoon_api_token:
-                    # Try fetching a fresh token.
-                    lagoon_api_token = self.fetch_lagoon_api_token(lagoon)
+            if not lagoon_api_endpoint:
+                raise AnsibleError("Expecting lagoon_api_endpoint.")
 
-                # get_var also resolves LAGOON_* environment variables and
-                # lagoon_* host vars, so this catches all three config routes.
-                stale_options = [
-                    o for o in DEPRECATED_BATCH_OPTIONS if self.get_var(lagoon, o)
-                ]
-                if stale_options:
-                    self.display.warning(
-                        "[DEPRECATION WARNING] These options are deprecated and "
-                        "have no effect; the Lagoon API is now queried one "
-                        "project/environment at a time: "
-                        f"{', '.join(stale_options)}. Remove them - they will be "
-                        "rejected in a future release."
-                    )
+            # No token is fetched here: the client mints one lazily from
+            # whichever credentials are present, falling back to the machine's
+            # own SSH configuration and agent when none are.
+            self.lagoon_api = LagoonClient(
+                lagoon_api_endpoint,
+                LagoonCredentials(
+                    token=self.get_var(lagoon, "api_token"),
+                    ssh_private_key=self.get_var(lagoon, "ssh_private_key"),
+                    ssh_private_key_file=self.get_var(lagoon, "ssh_private_key_file"),
+                    ssh_host=lagoon["ssh_host"],
+                    ssh_port=lagoon["ssh_port"],
+                    ssh_options=self.get_var(lagoon, "ssh_options"),
+                ),
+                lagoon["headers"] if "headers" in lagoon else {},
+                exit_on_error=True,
+            )
 
-                self.lagoon_api = GqlClient(
-                    lagoon_api_endpoint,
-                    lagoon_api_token,
-                    lagoon["headers"] if "headers" in lagoon else {},
-                    self.display,
-                )
-                lagoonProject = Project(self.lagoon_api, {"exitOnError": True})
-                lagoonEnvironment = Environment(self.lagoon_api, {"exitOnError": True})
+            objects = {
+                # Only the two keys collect_host_vars reads. The lagoon config
+                # dict also holds api_token and ssh_private_key, and this
+                # payload is written to the fact cache in cleartext, where it
+                # would sit for cache_timeout seconds in a predictable path.
+                "lagoon": {
+                    "ssh_host": lagoon["ssh_host"],
+                    "ssh_port": lagoon["ssh_port"],
+                },
+                "project_list": [],
+                "project_environments": {},
+            }
 
-                objects = {
-                    "lagoon": lagoon,
-                    "project_list": [],
-                    "project_environments": {},
-                }
+            lagoon_groups = self.get_var(lagoon, "filter_groups")
+            # Backwards-compatibility.
+            if not lagoon_groups:
+                lagoon_groups = self.get_var(lagoon, "groups")
+            if isinstance(lagoon_groups, str):
+                lagoon_groups = lagoon_groups.split(",")
 
-                lagoon_groups = self.get_var(lagoon, "filter_groups")
-                # Backwards-compatibility.
-                if not lagoon_groups:
-                    lagoon_groups = self.get_var(lagoon, "groups")
-                if isinstance(lagoon_groups, str):
-                    lagoon_groups = lagoon_groups.split(",")
-
+            # Enumerate names only. Everything else is fetched per project,
+            # where a wide selection on a single record is cheap.
+            names = []
+            try:
                 if lagoon_groups:
                     self.display.v(
                         f"Fetching list of projects for these groups: [{', '.join(lagoon_groups)}]"
                     )
                     for group in lagoon_groups:
-                        lagoonProject.allInGroup(group)
+                        names.extend(
+                            p["name"]
+                            for p in self.lagoon_api.listProjectsInGroup(group) or []
+                        )
                 else:
                     self.display.v("Fetching list of all projects")
-                    lagoonProject.all()
+                    names.extend(
+                        p["name"] for p in self.lagoon_api.listProjects() or []
+                    )
+            except LagoonApiError as e:
+                self.display.error(
+                    f"Errors while fetching the project list: {e.errors}"
+                )
+                raise AnsibleError(
+                    "Encountered errors while fetching the list of projects; "
+                    "re-run with -vvv to see the queries and responses involved."
+                ) from e
 
-                project_names = []
-                # Ensure unique.
-                for project in lagoonProject.projects:
-                    if project["name"] not in project_names:
-                        objects["project_list"].append(project)
-                        project_names.append(project["name"])
-                lagoonProject.projects = objects["project_list"]
-
-                lagoonProject.withEnvironments(
-                    [
-                        "id",
-                        "name",
-                        "kubernetesNamespaceName",
-                        "environmentType",
-                        "route",
-                        "routes",
-                    ]
-                ).withGroups().withVariables()
-                if len(lagoonProject.errors):
+            # dict.fromkeys de-duplicates while preserving order, and does it
+            # before any subresource is fetched: a project appearing in two
+            # filter_groups costs one set of requests, not two.
+            for name in dict.fromkeys(names):
+                try:
+                    self.fetch_project(name, objects)
+                except LagoonApiError as e:
                     self.display.error(
-                        f"Errors while fetching project subresources: {lagoonProject.errors}"
+                        f"Errors while fetching subresources for '{name}': {e.errors}"
                     )
+                    # Stops at the first failing project rather than carrying
+                    # on: a partially built inventory is worse than no
+                    # inventory, since a play would silently run against a
+                    # subset of hosts.
                     raise AnsibleError(
-                        """Encountered errors while fetching project subresources.
-                        Each project is queried individually, so the errors above name the
-                        projects that failed; re-run with -vvv to see the queries and
-                        responses involved.""",
-                    )
+                        f"Encountered errors while fetching subresources for project "
+                        f"'{name}'. Each project is queried individually, so the "
+                        "errors above name the project that failed; re-run with "
+                        "-vvv to see the queries and responses involved."
+                    ) from e
 
-                for p in lagoonProject.projects:
-                    for e in p["environments"]:
-                        # If a project does not yet have an environment, `e`
-                        # might be None.
-                        if not e:
-                            continue
-                        lagoonEnvironment.environments.append(e)
+            self.all_objects.append(objects)
 
-                lagoonEnvironment.withProject(["name"]).withCluster().withVariables()
+    def fetch_project(self, name: str, objects: dict):
+        """Fetch one project and its environments into the cache payload."""
 
-                if len(lagoonEnvironment.errors):
-                    self.display.error(
-                        f"Errors while fetching environment subresources: {lagoonEnvironment.errors}"
-                    )
-                    raise AnsibleError(
-                        """Encountered errors while fetching environment subresources.
-                        Each environment is queried individually, so the errors above name
-                        the environments that failed; re-run with -vvv to see the queries
-                        and responses involved.""",
-                    )
+        project = self.lagoon_api.getProject(name)
+        if not project:
+            self.display.v(f"No project returned for '{name}', skipping")
+            return
 
-                for e in lagoonEnvironment.environments:
-                    pname = e["project"]["name"]
-                    if not pname in objects["project_environments"]:
-                        objects["project_environments"][pname] = []
-                    objects["project_environments"][pname].append(e)
+        project["metadata"] = self.lagoon_api.getProjectMetadata(name)
+        project["environments"] = self.lagoon_api.getProjectEnvironments(
+            name, ENVIRONMENT_FIELDS
+        )
+        project["groups"] = self.lagoon_api.getProjectGroups(name)
+        project["envVariables"] = self.lagoon_api.getProjectVariables(name)
 
-                self.all_objects.append(objects)
+        for environment in project["environments"] or []:
+            # If a project does not yet have an environment, this might be None.
+            if not environment:
+                continue
+
+            namespace = environment["kubernetesNamespaceName"]
+
+            # Set locally rather than queried: iterating projects already
+            # establishes which project an environment belongs to, and this key
+            # is part of the lagoon_environment host var.
+            environment["project"] = {"name": name}
+
+            cluster = self.lagoon_api.getEnvironmentCluster(namespace)
+            environment["kubernetes"] = cluster
+            environment["openshift"] = cluster
+            environment["envVariables"] = self.lagoon_api.getEnvironmentVariables(
+                namespace
+            )
+
+            objects["project_environments"].setdefault(name, []).append(environment)
+
+        objects["project_list"].append(project)
 
     def get_var(self, lagoon, name: str, default: Optional[Any] = None):
         """
@@ -416,58 +476,3 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
     def sanitised_name(self, name):
         return re.sub(r"[\W_-]+", "-", name)
-
-    def fetch_lagoon_api_token(self, lagoon):
-        lagoon_ssh_private_key = self.get_var(lagoon, "ssh_private_key")
-        lagoon_ssh_private_key_file = self.get_var(lagoon, "ssh_private_key_file")
-
-        if lagoon_ssh_private_key:
-            if not lagoon_ssh_private_key_file:
-                lagoon_ssh_private_key_file = "/tmp/lagoon_ssh_private_key"
-            LagoonToken.write_ssh_key(
-                lagoon_ssh_private_key, lagoon_ssh_private_key_file
-            )
-
-        ssh_host = lagoon.get("ssh_host")
-        ssh_port = lagoon.get("ssh_port")
-        lagoon_name = lagoon.get("name", ssh_host)
-
-        self.display.v(
-            f"Fetching Lagoon API token for '{lagoon_name}' via {ssh_host}:{ssh_port}"
-        )
-
-        rc, token, error = LagoonToken.fetch_token(
-            ssh_host, ssh_port, self._ssh_options(), lagoon_ssh_private_key_file
-        )
-
-        if rc > 0:
-            raise AnsibleError(
-                f"Failed to fetch Lagoon API token for '{lagoon_name}' ({ssh_host}:{ssh_port}):\n{error}"
-            )
-
-        if not isinstance(token, dict) or not token.get("access_token"):
-            raise AnsibleError(
-                f"Lagoon API token response for '{lagoon_name}' did not contain an access_token"
-            )
-
-        return token["access_token"].strip()
-
-    def _ssh_options(self):
-        """ssh options for the token grant call.
-
-        No -q: it suppresses the ssh diagnostics (auth/connection/host key
-        failures) needed to explain a failure. Verbosity is mapped onto
-        Ansible's so -vvv/-vvvv also surfaces ssh's own -v/-vv output.
-        """
-        options = [
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "StrictHostKeyChecking=no",
-        ]
-        verbosity = getattr(self.display, "verbosity", 0)
-        if verbosity >= 4:
-            options.append("-vv")
-        elif verbosity >= 3:
-            options.append("-v")
-        return options

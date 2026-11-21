@@ -18,7 +18,8 @@ except:
 # only True when the real import succeeded - but this lets a test force a
 # given backend by patching the flag alone, on any ansible-core version.
 try:
-    from ansible.module_utils.secrets import mask_secrets, register_secret
+    from ansible.module_utils.secrets import mask_secrets
+    from ansible.module_utils.secrets import register_secret as _backend_register_secret
 
     HAS_NATIVE_SECRETS = True
 except ImportError:
@@ -26,7 +27,7 @@ except ImportError:
 
     _fallback_registered_secrets = set()
 
-    def register_secret(value):
+    def _backend_register_secret(value):
         _fallback_registered_secrets.add(str(value))
 
     def mask_secrets(value):
@@ -76,6 +77,26 @@ SENSITIVE_FIELD_NAMES = frozenset(
 # globalClient singleton pattern and Ansible's per-fork process model.
 _no_log_values = set()
 
+# Values registered permanently, rather than for the duration of a block.
+# Separate from _no_log_values so that a value registered while a redacting()
+# block is open is not discarded when that block restores the scoped set.
+_registered_secrets = set()
+
+
+def register_secret(value):
+    """Scrub this value from all Display output from here on.
+
+    Permanent and process wide, for a secret obtained at runtime - a minted
+    API token - where there is no surrounding block to scope it to. Feeds
+    this module's own scrub() as well as the backend, because on ansible-core
+    below 2.22 the backend alone does not mask our output.
+    """
+    if not value:
+        return
+
+    _registered_secrets.add(str(value))
+    _backend_register_secret(value)
+
 
 @contextmanager
 def redacting(values):
@@ -97,8 +118,12 @@ def redacting(values):
         # (it only ever masks more, never less) and matches how ansible-core
         # treats vault secrets, but it does mean the block scoping below is
         # belt-and-braces on these versions.
+        #
+        # Goes to the backend rather than through register_secret(), so these
+        # block-scoped values stay out of _registered_secrets and the scoping
+        # below still means something.
         for value in added:
-            register_secret(value)
+            _backend_register_secret(value)
 
     _no_log_values = previous | added
     try:
@@ -114,7 +139,8 @@ def scrub(msg):
     raises TypeError on types it does not recognise, so handing it a DSL
     object or a GraphQL type would crash the task rather than log it.
     """
-    if not _no_log_values:
+    active = _no_log_values | _registered_secrets
+    if not active:
         return msg
 
     if not isinstance(msg, str):
@@ -124,10 +150,10 @@ def scrub(msg):
         return mask_secrets(msg)
 
     if HAS_REMOVE_VALUES:
-        return remove_values(msg, _no_log_values)
+        return remove_values(msg, active)
 
     # Neither is importable (target-side test group with no ansible).
-    for value in _no_log_values:
+    for value in active:
         msg = msg.replace(value, "*" * 8)
     return msg
 
