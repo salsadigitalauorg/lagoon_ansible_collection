@@ -3,7 +3,7 @@ import unittest
 from ....common import dsl_exes_to_str, get_mock_gql_client
 from .....plugins.module_utils.gqlProject import Project
 from gql.dsl import DSLQuery
-from unittest.mock import MagicMock
+import unittest.mock
 
 import sys
 
@@ -99,45 +99,6 @@ class GqlProjectNoBatchingTester(unittest.TestCase):
             assert project["kubernetes"] == {"id": 7, "name": "cluster-a"}
             # openshift is kept as an alias of kubernetes for compatibility.
             assert project["openshift"] == {"id": 7, "name": "cluster-a"}
-
-    def test_batch_size_is_accepted_but_warns(self):
-        """
-        batch_size is retained so existing playbooks keep working, but it must
-        have no effect and must tell the user it is going away.
-        """
-        client = get_mock_gql_client(
-            query_dynamic_return_value={
-                "projectByName": {"kubernetes": {"id": 7, "name": "cluster-a"}}
-            }
-        )
-
-        lagoonProject = Project(client)
-        lagoonProject.display = MagicMock()
-        lagoonProject.projects = [{"name": "p1"}, {"name": "p2"}]
-        lagoonProject.withCluster(batch_size=50)
-
-        # Still one request per project - the argument did not re-enable batching.
-        assert client.execute_query_dynamic.call_count == 2, (
-            f"expected 2 calls, got {client.execute_query_dynamic.call_count}"
-        )
-
-        lagoonProject.display.warning.assert_called_once()
-        warned = str(lagoonProject.display.warning.call_args)
-        assert "batch_size is deprecated" in warned, f"got {warned}"
-
-    def test_no_batch_size_does_not_warn(self):
-        client = get_mock_gql_client(
-            query_dynamic_return_value={
-                "projectByName": {"kubernetes": {"id": 7, "name": "cluster-a"}}
-            }
-        )
-
-        lagoonProject = Project(client)
-        lagoonProject.display = MagicMock()
-        lagoonProject.projects = [{"name": "p1"}]
-        lagoonProject.withCluster()
-
-        lagoonProject.display.warning.assert_not_called()
 
     def test_getCluster_returns_none_when_project_missing(self):
         """

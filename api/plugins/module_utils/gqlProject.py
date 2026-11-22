@@ -64,14 +64,13 @@ class Project(ResourceBase):
             self.projects, "projectByName", "Project", args, fields
         )
 
-    def withCluster(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withCluster(self, fields: List[str] = None) -> Self:
         """
         Retrieve cluster information for the projects.
 
-        One query per project - see warnIfBatchSize for why batching was removed.
+        One query per project: the Lagoon API degrades sharply on queries
+        carrying many aliased root fields.
         """
-
-        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self
@@ -92,14 +91,10 @@ class Project(ResourceBase):
 
         return self
 
-    def withEnvironments(
-        self, fields: List[str] = None, batch_size: int = None
-    ) -> Self:
+    def withEnvironments(self, fields: List[str] = None) -> Self:
         """
         Retrieve the projects' environments.
         """
-
-        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self
@@ -116,14 +111,10 @@ class Project(ResourceBase):
 
         return self
 
-    def withDeployTargetConfigs(
-        self, fields: List[str] = None, batch_size: int = None
-    ) -> Self:
+    def withDeployTargetConfigs(self, fields: List[str] = None) -> Self:
         """
         Retrieve the projects' deploy target configs.
         """
-
-        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self
@@ -142,12 +133,10 @@ class Project(ResourceBase):
 
         return self
 
-    def withVariables(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withVariables(self, fields: List[str] = None) -> Self:
         """
         Retrieve the projects' variables.
         """
-
-        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self
@@ -168,12 +157,10 @@ class Project(ResourceBase):
 
         return self
 
-    def withGroups(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withGroups(self, fields: List[str] = None) -> Self:
         """
         Retrieve the projects' groups.
         """
-
-        self.warnIfBatchSize(batch_size, "project")
 
         if not len(self.projects):
             return self

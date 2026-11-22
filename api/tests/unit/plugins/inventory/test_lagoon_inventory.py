@@ -403,16 +403,6 @@ class ValidationTester(unittest.TestCase):
         module.fetch_objects(None)
         assert module.all_objects == []
 
-    def test_deprecated_batch_options_still_warn(self):
-        module = inventory_module()
-        api = mock_api()
-
-        with patch(f"{MODULE}.LagoonClient", return_value=api):
-            with patch(f"{MODULE}.LagoonCredentials"):
-                module.fetch_objects([lagoon_config(api_batch_project_groups_size=10)])
-
-        assert "DEPRECATION WARNING" in str(module.display.warning.call_args)
-
 
 class HostVarsTester(unittest.TestCase):
     def test_collect_host_vars_consumes_what_fetch_objects_produces(self):
