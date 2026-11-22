@@ -22,15 +22,13 @@ class Environment(ResourceBase):
         super().__init__(client, options)
         self.environments = []
 
-    def all(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def all(self, fields: List[str] = None) -> Self:
         """
         Get a list of all environments, but only top level fields.
 
         This method first tries using the allEnvironments query, and if it fails
         due to lack of permissions, it fetches all projects instead.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         if not fields:
             fields = ENVIRONMENTS_FIELDS
@@ -63,14 +61,10 @@ class Environment(ResourceBase):
 
         return self
 
-    def allThroughProjects(
-        self, fields: List[str] = None, batch_size: int = None
-    ) -> Self:
+    def allThroughProjects(self, fields: List[str] = None) -> Self:
         """
         Get a list of all environments, but going through projects first.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         projects = (
             Project(self.client, self.options).all().withEnvironments(fields).projects
@@ -145,15 +139,13 @@ class Environment(ResourceBase):
 
         return self
 
-    def withCluster(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withCluster(self, fields: List[str] = None) -> Self:
         """
         Retrieve cluster information for the environments.
 
-        One query per environment - see warnIfBatchSize for why batching was
-        removed.
+        One query per environment: the Lagoon API degrades sharply on
+        queries carrying many aliased root fields.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         if not len(self.environments):
             return self
@@ -174,12 +166,10 @@ class Environment(ResourceBase):
 
         return self
 
-    def withVariables(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withVariables(self, fields: List[str] = None) -> Self:
         """
         Retrieve the environments' variables.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         if not len(self.environments):
             return self
@@ -196,12 +186,10 @@ class Environment(ResourceBase):
 
         return self
 
-    def withProject(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withProject(self, fields: List[str] = None) -> Self:
         """
         Retrieve the environments' project.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         if not len(self.environments):
             return self
@@ -218,12 +206,10 @@ class Environment(ResourceBase):
 
         return self
 
-    def withDeployments(self, fields: List[str] = None, batch_size: int = None) -> Self:
+    def withDeployments(self, fields: List[str] = None) -> Self:
         """
         Retrieve the environments' deployments.
         """
-
-        self.warnIfBatchSize(batch_size, "environment")
 
         if not len(self.environments):
             return self

@@ -27,13 +27,6 @@ class ActionModule(LagoonActionBase):
         resource = self._task.args.get("resource")
         environment = self._task.args.get("environment")
 
-        if self._task.args.get("batch_size") is not None:
-            self._display.warning(
-                "[DEPRECATION WARNING] batch_size is deprecated and has no "
-                "effect; the Lagoon API is now queried one resource at a time. "
-                "Remove the argument - it will be rejected in a future release."
-            )
-
         if resource not in SUPPORTED_RESOURCES:
             result["failed"] = True
             supported_resources_str = ", ".join(SUPPORTED_RESOURCES)

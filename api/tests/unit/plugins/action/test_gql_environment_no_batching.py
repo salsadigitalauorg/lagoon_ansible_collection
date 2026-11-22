@@ -2,7 +2,7 @@ import unittest
 
 from ....common import dsl_exes_to_str, get_mock_gql_client
 from gql.dsl import DSLQuery
-from unittest.mock import MagicMock
+import unittest.mock
 
 import sys
 
@@ -105,32 +105,6 @@ class GqlEnvironmentNoBatchingTester(unittest.TestCase):
 
         for environment in lagoonEnvironment.environments:
             assert environment["project"] == {"name": "test-project"}
-
-    def test_batch_size_is_accepted_but_warns(self):
-        client = get_mock_gql_client(
-            query_dynamic_return_value={
-                "environmentByKubernetesNamespaceName": {
-                    "kubernetes": {"id": 7, "name": "cluster-a"}
-                }
-            }
-        )
-
-        lagoonEnvironment = Environment(client)
-        lagoonEnvironment.display = MagicMock()
-        lagoonEnvironment.environments = [
-            {"kubernetesNamespaceName": "p1-master"},
-            {"kubernetesNamespaceName": "p2-dev"},
-        ]
-        lagoonEnvironment.withCluster(batch_size=50)
-
-        # Still one request per environment.
-        assert client.execute_query_dynamic.call_count == 2, (
-            f"expected 2 calls, got {client.execute_query_dynamic.call_count}"
-        )
-
-        lagoonEnvironment.display.warning.assert_called_once()
-        warned = str(lagoonEnvironment.display.warning.call_args)
-        assert "batch_size is deprecated" in warned, f"got {warned}"
 
     def test_getDeployments_returns_none_when_environment_missing(self):
         client = get_mock_gql_client(
