@@ -56,6 +56,13 @@ Agent, port and X11 forwarding and terminal allocation are always disabled on
 this call and cannot be re-enabled through `ssh_options`; `grant` is a single
 non-interactive command that needs none of them.
 
+`lagoon_ssh_options` is the single place to set ssh options for token
+fetching - the `roles/token` role and the `fetch_token` action both read it,
+alongside the inventory and every other plugin that mints a token. An
+explicit `ssh_options` task arg still overrides it. Prefer the list form over
+a string: a string is split on whitespace, so `-o "Foo=bar"` keeps its
+literal quotes in argv.
+
 ## Testing
 
 Updating the schema:

@@ -1,51 +1,64 @@
-from ..module_utils.api_client import ApiClient
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
+
+from ..modules.project_update import ARGUMENT_SPEC
+from . import LagoonClientActionBase
+
+# openshift/kubernetes are Int in the patch but Openshift/Kubernetes objects
+# on Project, so they need a sub-selection rather than a scalar.
+OBJECT_PATCH_KEYS = ("openshift", "kubernetes")
 
 
-class ActionModule(ActionBase):
-    def run(self, tmp=None, task_vars=None):
+def comparison_fields(patch: dict) -> list:
+    """Field selection to compare a patch against the current project.
 
-        if task_vars is None:
-            task_vars = dict()
+    Selects exactly the keys being patched, so the comparison works for
+    every patchable key rather than a fixed subset. privateKey is never
+    selected: reading a private key back into the comparison path and the
+    task result is not worth doing, so a patch containing it is always
+    treated as changed.
+    """
+    fields = []
+    for key in patch:
+        if key == "privateKey":
+            continue
+        if key in OBJECT_PATCH_KEYS:
+            fields.append({key: ["id"]})
+        else:
+            fields.append(key)
+    return fields
 
-        result = super(ActionModule, self).run(tmp, task_vars)
-        del tmp  # tmp no longer has any effect
 
-        self._display.vvv("Task args: %s" % self._task.args)
+def current_value(project: dict, key: str):
+    if key in OBJECT_PATCH_KEYS:
+        return (project.get(key) or {}).get("id")
+    return project.get(key)
 
-        project_name = self._task.args.get("project")
-        patch_values = self._task.args.get("values")
 
-        if not project_name:
-            raise AnsibleError("Project name is required.")
+class ActionModule(LagoonClientActionBase):
+    argSpec = ARGUMENT_SPEC
 
-        if not patch_values:
-            raise AnsibleError("No value to update.")
+    def execute(self, args, lagoon, result):
+        name = args["project"]
+        patch = args["values"]
 
-        lagoon = ApiClient(
-            self._templar.template(task_vars.get("lagoon_api_endpoint")).strip(),
-            self._templar.template(task_vars.get("lagoon_api_token")).strip(),
-            {"headers": self._task.args.get("headers", {})},
+        fields = ["id"] + comparison_fields(patch)
+        project = lagoon.getProject(name, fields=fields)
+        if project is None:
+            raise AnsibleError(
+                f"Unable to get details for project {name}; please make sure "
+                "the project name is correct"
+            )
+
+        changed = "privateKey" in patch or any(
+            str(value) != str(current_value(project, key))
+            for key, value in patch.items()
+            if key != "privateKey"
         )
 
-        project = lagoon.project(project_name)
-
-        update_required = False
-        for key, value in patch_values.items():
-            if not key in project:
-                update_required = True
-                break
-            if str(value) != str(project[key]):
-                update_required = True
-                break
-
-        if not update_required:
+        if not changed:
             result["update"] = project
-            return result
+            result["changed"] = False
+            return
 
-        result["update"] = lagoon.project_update(project["id"], patch_values)
+        result["update"] = lagoon.updateProject(project["id"], patch)
         result["changed"] = True
-        self._display.v("Update: %s" % result["update"])
-
-        return result

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import re
+from typing import List
+
+from ansible.errors import AnsibleError
+from ansible.plugins.action import ActionBase
+from gql.dsl import DSLMutation
 
 from ..module_utils.argspec import auth_argument_spec, generate_argspec_from_mutation
+from ..module_utils.auth import LagoonCredentials
+from ..module_utils.client import LagoonClient
 from ..module_utils.display import (
-    Display,
     REDACTED,
     SENSITIVE_FIELD_NAMES,
+    Display,
     collect_no_log_values,
     redact_keys,
     redact_value,
@@ -15,10 +22,6 @@ from ..module_utils.display import (
 from ..module_utils.gql import GetClientInstance, ProxyLookup, input_args_to_field_list
 from ..module_utils.gqlEnvironment import Environment
 from ..module_utils.gqlProject import Project
-from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
-from gql.dsl import DSLMutation
-from typing import List
 
 
 class LagoonActionBase(ActionBase):
@@ -76,6 +79,74 @@ class LagoonActionBase(ActionBase):
         if not len(lagoonEnvironment.environments):
             raise AnsibleError(f"Environment '{ns}' not found")
         return lagoonEnvironment.environments[0]["id"]
+
+
+class LagoonClientActionBase(ActionBase):
+    """Action plugins that validate task args against a module's declared
+    ARGUMENT_SPEC, then run their logic against LagoonClient.
+
+    Sits alongside LagoonActionBase; the gql-based plugins are untouched.
+    Subclasses set argSpec to their module's ARGUMENT_SPEC and implement
+    execute().
+    """
+
+    argSpec: dict = {}
+
+    def run(self, tmp=None, task_vars=None):
+        if task_vars is None:
+            task_vars = dict()
+
+        result = super(LagoonClientActionBase, self).run(tmp, task_vars)
+        del tmp
+
+        validationResult, args = self.validate_argument_spec(self.argSpec)
+        args = {k: v for k, v in args.items() if v is not None}
+        self.moduleArgs = args
+
+        with redacting(self._noLogValues(validationResult)):
+            Display().vvv(f"Validated task args: {args}\n\n")
+            lagoon = self.createLagoonClient(args, task_vars)
+            self.execute(args, lagoon, result)
+
+        return result
+
+    def createLagoonClient(self, args: dict, task_vars: dict) -> LagoonClient:
+        endpoint = args.get("api_endpoint") or task_vars.get("lagoon_api_endpoint")
+        if not endpoint:
+            raise AnsibleError("lagoon_api_endpoint is required")
+        endpoint = self._templar.template(endpoint).strip()
+
+        token = args.get("api_token") or task_vars.get("lagoon_api_token")
+        credentials = LagoonCredentials(
+            token=self._templar.template(token).strip() if token else None,
+            ssh_private_key=task_vars.get("lagoon_ssh_private_key"),
+            ssh_private_key_file=task_vars.get("lagoon_ssh_private_key_file"),
+            ssh_host=task_vars.get("lagoon_ssh_host"),
+            ssh_port=task_vars.get("lagoon_ssh_port"),
+            ssh_options=task_vars.get("lagoon_ssh_options"),
+        )
+
+        return LagoonClient(
+            endpoint,
+            credentials,
+            args.get("headers", {}),
+            check_mode=self._task.check_mode,
+        )
+
+    def execute(self, args: dict, lagoon: LagoonClient, result: dict) -> None:
+        raise NotImplementedError
+
+    def _noLogValues(self, validationResult) -> set:
+        """The values to scrub from output, from the argspec's no_log flags.
+
+        ValidationResult._no_log_values is private and may disappear in a
+        future ansible-core, so fall back to recomputing it rather than
+        silently logging secrets.
+        """
+        values = getattr(validationResult, "_no_log_values", None)
+        if values is None:
+            return collect_no_log_values(self.argSpec, self.moduleArgs)
+        return values
 
 
 class MutationConfig:

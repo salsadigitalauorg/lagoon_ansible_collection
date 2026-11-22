@@ -1,63 +1,33 @@
-from ..module_utils.api_client import ApiClient
 from ansible.errors import AnsibleError
-from ansible.plugins.action import ActionBase
+
+from ..modules.project_notification import ARGUMENT_SPEC
+from . import LagoonClientActionBase
 
 
-class ActionModule(ActionBase):
-    def run(self, tmp=None, task_vars=None):
+class ActionModule(LagoonClientActionBase):
+    argSpec = ARGUMENT_SPEC
 
-        if task_vars is None:
-            task_vars = dict()
-
-        result = super(ActionModule, self).run(tmp, task_vars)
-        del tmp  # tmp no longer has any effect
-
-        self._display.v("Task args: %s" % self._task.args)
-
-        lagoon = ApiClient(
-            self._templar.template(task_vars.get("lagoon_api_endpoint")).strip(),
-            self._templar.template(task_vars.get("lagoon_api_token")).strip(),
-            {"headers": self._task.args.get("headers", {})},
-        )
-
-        project = self._task.args.get("project")
-        notification = self._task.args.get("notification")
-        type = self._task.args.get("type", "SLACK")
-
-        state = self._task.args.get("state", "present")
-
-        result = {}
-
-        if not notification:
-            raise AnsibleError(
-                "Notification name is required when adding a notification to a project"
-            )
-
-        if not project:
-            raise AnsibleError("Project is required when adding a notification")
-
-        # -- @TODO: Support other notification types.
-        if type != "SLACK":
-            raise AnsibleError("Invalid notification type")
+    def execute(self, args, lagoon, result):
+        project = args["project"]
+        notification = args["notification"]
+        type = args["type"]
+        state = args["state"]
 
         if state == "present":
-            api_result = lagoon.add_project_notification(project, notification, type)
+            lagoon.addProjectNotification(
+                project, notification, type, raise_on_error=False
+            )
+            if any("Duplicate" in str(e) for e in lagoon.errors):
+                result["changed"] = False
+                return
+            if lagoon.errors:
+                raise AnsibleError(f"Unable to add notification: {lagoon.errors}")
+            result["changed"] = True
+            return
 
-            if "errors" in api_result:
-                message = api_result["errors"][0]["message"]
-
-                if "Duplicate" in message:
-                    result["changed"] = False
-                    return result
-
-                raise AnsibleError(
-                    "Unable to add notification %s"
-                    % (api_result["errors"][0]["message"])
-                )
-
-        elif state == "absent":
-            lagoon.remove_project_notification(project, notification, type)
-
-        result["changed"] = True
-
-        return result
+        removed = lagoon.removeProjectNotification(
+            project, notification, type, raise_on_error=False
+        )
+        if lagoon.errors:
+            raise AnsibleError(f"Unable to remove notification: {lagoon.errors}")
+        result["changed"] = removed is not None
