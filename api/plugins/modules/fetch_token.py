@@ -15,12 +15,15 @@ options:
 
 EXAMPLES = r"""
 - name: Fetch a Lagoon token.
-  lagoon.api.fetch_token:
-    ssh_options: "-q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+  lagoon.api.fetch_token: {}
   register: token
   vars:
     lagoon_ssh_host: ssh.lagoon.amazeeio.cloud
     lagoon_ssh_port: 32222
+    # ssh_options is also a task arg, which overrides this when set.
+    lagoon_ssh_options:
+      - -o
+      - ConnectTimeout=5
 - name: Verify the user.
   lagoon.api.whoami: {}
   vars:

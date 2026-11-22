@@ -1,5 +1,4 @@
 import json
-import os
 import shlex
 import subprocess
 from typing import List, Union
@@ -37,18 +36,6 @@ HARDENED_SSH_OPTIONS = [
     "-o",
     "RequestTTY=no",
 ]
-
-
-def write_ssh_key(key_content: str, key_path: str):
-    """Helper function for writing a private key to a file."""
-    try:
-        with open(key_path, "w") as fh:
-            fh.write(key_content)
-        # Set permissions to 0600 (read/write for owner only)
-        os.chmod(key_path, 0o600)
-    except IOError as e:
-        Display().v(f"unable to write ssh key to file: {e}")
-        raise
 
 
 def _truncated(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:

@@ -1,7 +1,6 @@
 import os
 import stat
 import unittest
-from unittest.mock import patch
 
 from .....plugins.module_utils import token as LagoonToken
 from .....plugins.module_utils.auth import LagoonAuthError
@@ -137,15 +136,12 @@ class KeyFileTester(AuthTestCase):
         assert observed["path"] != FIXED_PATH
         assert not os.path.exists(FIXED_PATH)
 
-    def test_the_old_helper_is_not_used(self):
+    def test_the_old_helper_is_gone(self):
         """write_ssh_key open()s before it chmod()s, leaving the key
-        world-readable in the window between."""
+        world-readable in the window between. Its only caller was
+        fetch_token, which now goes through LagoonCredentials.grant()."""
 
-        with patch.object(LagoonToken, "write_ssh_key") as write_ssh_key:
-            self.observe()
-            self.credentials(ssh_private_key=KEY_CONTENT).token()
-
-        write_ssh_key.assert_not_called()
+        assert not hasattr(LagoonToken, "write_ssh_key")
 
 
 if __name__ == "__main__":

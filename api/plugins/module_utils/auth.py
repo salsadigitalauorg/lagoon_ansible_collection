@@ -29,14 +29,24 @@ DEFAULT_SSH_PORT = "32222"
 
 ENV_TOKEN = "LAGOON_API_TOKEN"
 
-# ssh options that make ssh run a command. The value is playbook-author
-# controlled rather than end-user controlled, so this is defence in depth, but
-# a free string reaching ssh's argv is arbitrary command execution.
+# Catches the two ssh options that run a command directly in an ssh_options
+# value. Defence in depth, not a boundary: -F <file> loads an arbitrary ssh
+# config that may itself set ProxyCommand, and that passes this check
+# untouched. An allowlist would close that gap but is a larger change.
 FORBIDDEN_SSH_OPTIONS = ("proxycommand", "localcommand")
 
 
 class LagoonAuthError(Exception):
-    """Raised when no usable API token could be obtained."""
+    """Raised when no usable API token could be obtained.
+
+    Carries the ssh exit code and raw diagnostic so a caller reporting a
+    task result can surface them without re-running the fetch.
+    """
+
+    def __init__(self, message, rc=None, diagnostic=None):
+        self.rc = rc
+        self.diagnostic = diagnostic
+        super().__init__(message)
 
 
 def normalise_ssh_options(
@@ -151,7 +161,22 @@ class LagoonCredentials(Display):
         token_cache.discard(self.cache_key(), self)
 
     def mint(self) -> tuple[str, int]:
-        """Obtain a fresh token over ssh, as (token, expires_in)."""
+        """Obtain a fresh token over ssh, as (token, expires_in).
+
+        The two-tuple shape token_cache.resolve expects; grant() carries
+        everything else a caller such as fetch_token's "grant: true" mode
+        needs (refresh_token, and so on).
+        """
+        grant = self.grant()
+        return grant["access_token"], grant.get("expires_in", 0)
+
+    def grant(self) -> dict:
+        """Obtain a fresh grant dict over ssh: access_token, expires_in,
+        refresh_token and whatever else the grant command returns.
+
+        Handles the private key file dance itself, so a caller never
+        touches key material directly.
+        """
 
         if self.ssh_private_key:
             # mkstemp, never a caller-supplied path: 0600 at creation, in the
@@ -162,14 +187,14 @@ class LagoonCredentials(Display):
             try:
                 with os.fdopen(fd, "w") as fh:
                     fh.write(self.ssh_private_key)
-                return self.grant(key_file)
+                return self._request_grant(key_file)
             finally:
                 try:
                     os.unlink(key_file)
                 except OSError:
                     pass
 
-        return self.grant(self.ssh_private_key_file)
+        return self._request_grant(self.ssh_private_key_file)
 
     def ssh_argv_options(self) -> list[str]:
         """Caller-supplied ssh options, plus ssh verbosity matched to Ansible's.
@@ -189,7 +214,7 @@ class LagoonCredentials(Display):
 
         return options
 
-    def grant(self, key_file: Optional[str]) -> tuple[str, int]:
+    def _request_grant(self, key_file: Optional[str]) -> dict:
         self.vvv(
             f"Fetching a Lagoon API token from {self.ssh_host}:{self.ssh_port}"
             f"{' with a supplied key' if key_file else ' using the local ssh configuration'}"
@@ -212,11 +237,13 @@ class LagoonCredentials(Display):
             where = self.endpoint or f"{self.ssh_host}:{self.ssh_port}"
             raise LagoonAuthError(
                 f"Failed to fetch a Lagoon API token for {where} (error code: {rc}):\n"
-                f"{_text(diagnostic)}"
+                f"{_text(diagnostic)}",
+                rc=rc,
+                diagnostic=_text(diagnostic),
             )
 
         try:
-            token = grant["access_token"].strip()
+            grant["access_token"] = grant["access_token"].strip()
         except (KeyError, TypeError, AttributeError) as e:
             raise LagoonAuthError(
                 "Lagoon grant response carried no access_token."
@@ -224,14 +251,14 @@ class LagoonCredentials(Display):
 
         # Registered the moment it exists, so it stays masked even if a later
         # request or traceback is dumped.
-        register_secret(token)
+        register_secret(grant["access_token"])
 
         try:
-            expires_in = int(grant.get("expires_in", 0))
+            grant["expires_in"] = int(grant.get("expires_in", 0))
         except (TypeError, ValueError):
-            expires_in = 0
+            grant["expires_in"] = 0
 
-        return token, expires_in
+        return grant
 
 
 def _text(value) -> str:
