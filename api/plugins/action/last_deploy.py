@@ -1,31 +1,50 @@
-from ..module_utils.api_client import ApiClient
-from ansible.plugins.action import ActionBase
+import time
+
+from ansible.errors import AnsibleError
+
+from ..module_utils.display import Display
+from ..modules.last_deploy import ARGUMENT_SPEC
+from . import LagoonClientActionBase
+
+TERMINAL_STATUSES = {"complete", "failed", "new", "cancelled"}
 
 
-class ActionModule(ActionBase):
-    def run(self, tmp=None, task_vars=None):
+class ActionModule(LagoonClientActionBase):
+    argSpec = ARGUMENT_SPEC
 
-        if task_vars is None:
-            task_vars = dict()
+    def execute(self, args, lagoon, result):
+        namespace = args["project"] + "-" + self.sanitiseBranch(args["branch"])
+        wait = args["wait"]
+        retries = args["retries"]
 
-        result = super(ActionModule, self).run(tmp, task_vars)
-        del tmp  # tmp no longer has any effect
+        result["changed"] = False
 
-        self._display.v("Task args: %s" % self._task.args)
+        for attempt in range(1, retries + 1):
+            if wait:
+                time.sleep(args["delay"])
 
-        lagoon = ApiClient(
-            self._templar.template(task_vars.get("lagoon_api_endpoint")).strip(),
-            self._templar.template(task_vars.get("lagoon_api_token")).strip(),
-            {"headers": self._task.args.get("headers", {})},
-        )
+            deployments = lagoon.getEnvironmentDeployments(namespace, limit=1)
+            if deployments is None:
+                raise AnsibleError(
+                    f"Unable to get details for environment {namespace}; please "
+                    "make sure the environment name is correct"
+                )
 
-        result["deploy_status"] = lagoon.project_check_deploy_status(
-            self._task.args.get("project"),
-            self._task.args.get("branch"),
-            self._task.args.get("wait", False),
-            self._task.args.get("delay", 60),
-            self._task.args.get("retries", 30),
-        )
-        self._display.v("Deploy status: %s" % result["deploy_status"])
+            if not deployments:
+                Display().v(f"Environment {namespace} has no deployments yet")
+                deploy_status = None
+            else:
+                deploy_status = deployments[0].get("status")
 
-        return result
+            if not wait or deploy_status in TERMINAL_STATUSES:
+                result["deploy_status"] = deploy_status
+                return
+
+            if attempt == retries:
+                raise AnsibleError(
+                    "Maximium number of retries reached; view deployment logs "
+                    "for more information."
+                )
+
+    def sanitiseBranch(self, branch: str) -> str:
+        return branch.replace("/", "-").replace("_", "-").replace(".", "-")
