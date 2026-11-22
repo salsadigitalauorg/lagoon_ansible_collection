@@ -11,8 +11,11 @@ from typing import Any, Optional
 from .clientProject import sub
 from .fields import (
     CLUSTER_FIELDS,
+    DEPLOYMENTS_FIELDS,
     ENVIRONMENTS_FIELDS,
     VARIABLES_FIELDS,
+    check_name,
+    render_fields,
     resolve_fields,
 )
 
@@ -68,3 +71,37 @@ class EnvironmentMethods:
             )
 
         return sub(result, "envVariables")
+
+    def getEnvironmentDeployments(
+        self,
+        namespace: str,
+        fields: Optional[Sequence[Any]] = None,
+        extra_fields: Optional[Sequence[Any]] = None,
+        limit: Optional[int] = None,
+        raise_on_error: Optional[bool] = None,
+    ) -> Optional[list]:
+        """An environment's deployments, newest first.
+
+        Environment.deployments(limit: Int) takes an argument, which a field
+        spec cannot express - see render_fields' documented limitation - so
+        this writes its own document rather than going through query().
+        limit=None serialises as a JSON null, which GraphQL treats as
+        "argument not supplied", so one code path covers both. Returns None
+        when the environment itself does not exist, distinct from [] for one
+        with no deployments.
+        """
+
+        selection = resolve_fields(DEPLOYMENTS_FIELDS, fields, extra_fields)
+        check_name(BY_NAMESPACE)
+        document = (
+            "query environmentDeployments"
+            "($kubernetesNamespaceName: String!, $limit: Int) "
+            f"{{ {BY_NAMESPACE}(kubernetesNamespaceName: $kubernetesNamespaceName) "
+            f"{{ deployments(limit: $limit) {{ {render_fields(selection)} }} }} }}"
+        )
+        data = self.execute(
+            document,
+            {"kubernetesNamespaceName": namespace, "limit": limit},
+            raise_on_error,
+        )
+        return sub((data or {}).get(BY_NAMESPACE), "deployments")

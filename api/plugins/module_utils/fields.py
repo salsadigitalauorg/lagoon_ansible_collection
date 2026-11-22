@@ -101,6 +101,20 @@ GROUPS_FIELDS = [
     "type",
 ]
 
+# The default selection for a project update result, matching the shape
+# playbooks have historically read off result["update"].
+PROJECT_UPDATE_FIELDS = [
+    "id",
+    "name",
+    "autoIdle",
+    "branches",
+    "gitUrl",
+    "metadata",
+    {"openshift": CLUSTER_FIELDS},
+    {"kubernetes": CLUSTER_FIELDS},
+    {"environments": ["name"]},
+]
+
 
 def check_name(name: str) -> str:
     """Return name if it is a usable GraphQL name, else raise ValueError."""

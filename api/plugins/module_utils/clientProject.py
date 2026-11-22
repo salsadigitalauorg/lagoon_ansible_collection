@@ -18,6 +18,7 @@ from .fields import (
     GROUPS_FIELDS,
     PROJECT_FIELDS_NO_METADATA,
     PROJECT_LIST_FIELDS,
+    PROJECT_UPDATE_FIELDS,
     VARIABLES_FIELDS,
     resolve_fields,
 )
@@ -144,4 +145,63 @@ class ProjectMethods:
         return sub(
             self.query("projectByName", {"name": name}, [{"kubernetes": selection}]),
             "kubernetes",
+        )
+
+    def updateProject(
+        self,
+        id: int,
+        patch: dict,
+        fields: Optional[Sequence[Any]] = None,
+        extra_fields: Optional[Sequence[Any]] = None,
+    ) -> Optional[dict]:
+        """Apply a patch to a project. patch travels as a declared variable,
+        so enums, booleans and ints serialise as plain JSON rather than
+        through a hand-rolled literal renderer."""
+
+        return self.mutate(
+            "updateProject",
+            {"input": {"id": id, "patch": patch}},
+            resolve_fields(PROJECT_UPDATE_FIELDS, fields, extra_fields),
+        )
+
+    def addProjectNotification(
+        self,
+        project: str,
+        notification: str,
+        type: str = "SLACK",
+        fields: Optional[Sequence[Any]] = ("id", "name"),
+        raise_on_error: Optional[bool] = None,
+    ) -> Optional[dict]:
+        return self.mutate(
+            "addNotificationToProject",
+            {
+                "input": {
+                    "project": project,
+                    "notificationType": type,
+                    "notificationName": notification,
+                }
+            },
+            fields,
+            raise_on_error=raise_on_error,
+        )
+
+    def removeProjectNotification(
+        self,
+        project: str,
+        notification: str,
+        type: str = "SLACK",
+        fields: Optional[Sequence[Any]] = ("id",),
+        raise_on_error: Optional[bool] = None,
+    ) -> Optional[dict]:
+        return self.mutate(
+            "removeNotificationFromProject",
+            {
+                "input": {
+                    "project": project,
+                    "notificationType": type,
+                    "notificationName": notification,
+                }
+            },
+            fields,
+            raise_on_error=raise_on_error,
         )

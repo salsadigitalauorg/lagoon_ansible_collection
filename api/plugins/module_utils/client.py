@@ -21,6 +21,7 @@ from requests.adapters import HTTPAdapter
 
 from .auth import LagoonCredentials
 from .clientEnvironment import EnvironmentMethods
+from .clientGroup import GroupMethods
 from .clientProject import ProjectMethods
 from .display import Display, redact_keys
 from .fields import FIELD_NAME, check_name, render_fields
@@ -54,7 +55,7 @@ def is_type_reference(value) -> bool:
     return bool(FIELD_NAME.match(value.strip("[]!")))
 
 
-class LagoonClient(ProjectMethods, EnvironmentMethods, Display):
+class LagoonClient(ProjectMethods, EnvironmentMethods, GroupMethods, Display):
     def __init__(
         self,
         endpoint: str,
