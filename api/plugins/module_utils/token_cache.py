@@ -38,6 +38,12 @@ ENV_DIR = "LAGOON_TOKEN_CACHE_DIR"
 # clock skew and the time between reading it and the API using it.
 EXPIRY_SKEW = 60
 
+# Upper bound on how long a token is kept at rest, regardless of what the
+# server says its expires_in is. The "short-lived credential" argument behind
+# caching a bearer token at all should not rest entirely on server
+# configuration.
+MAX_CACHED_LIFETIME = 4 * 3600
+
 DISABLED_VALUES = frozenset({"0", "false", "no", "off"})
 
 # Per-process fallback, and the write-through tier for the on-disk cache. Keyed
@@ -161,7 +167,7 @@ def put(key: str, token: str, expires_in, display=None) -> None:
         return
 
     try:
-        expires_at = time.time() + float(expires_in)
+        expires_at = time.time() + min(float(expires_in), MAX_CACHED_LIFETIME)
     except (TypeError, ValueError):
         if display:
             display.vv(f"Not caching Lagoon token: unusable expires_in {expires_in!r}")

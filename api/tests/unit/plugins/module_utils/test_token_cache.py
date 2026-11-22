@@ -130,6 +130,22 @@ class ExpiryTester(TokenCacheTestCase):
         assert token_cache.get("k") is None
         assert not os.path.exists(self.entry_path("k"))
 
+    def test_expires_in_beyond_the_cap_is_stored_capped(self):
+        token_cache.put("k", TOKEN, 24 * 3600)
+        with open(self.entry_path("k")) as fh:
+            entry = json.load(fh)
+
+        assert entry["expires_at"] <= time.time() + token_cache.MAX_CACHED_LIFETIME
+        assert entry["expires_at"] > time.time() + token_cache.MAX_CACHED_LIFETIME - 60
+
+    def test_expires_in_below_the_cap_is_stored_unchanged(self):
+        token_cache.put("k", TOKEN, 3600)
+        with open(self.entry_path("k")) as fh:
+            entry = json.load(fh)
+
+        assert entry["expires_at"] <= time.time() + 3600
+        assert entry["expires_at"] > time.time() + 3600 - 60
+
 
 class CorruptEntryTester(TokenCacheTestCase):
     def write_raw(self, key, content):
