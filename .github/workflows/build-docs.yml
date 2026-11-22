@@ -1,7 +1,7 @@
 name: Build ansible docs
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   build-ansible-docs:
